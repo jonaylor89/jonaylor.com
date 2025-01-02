@@ -1,0 +1,17 @@
+{
+  "name": "jonaylor.com",
+  "version": "1.0.0",
+  "description": "personal website monorepo",
+  "main": "index.js",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev"
+  },
+  "keywords": [],
+  "author": "Johannes Naylor <jonaylor89@gmail.com>",
+  "license": "MIT",
+  "packageManager": "pnpm@9.12.2",
+  "devDependencies": {
+    "turbo": "^2.3.3"
+  }
+}

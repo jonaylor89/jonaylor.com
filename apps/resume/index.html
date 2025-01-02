@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html moznomarginboxes lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Resume - John Naylor</title>
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+    <link rel="stylesheet" href="css/resume.css">
+    <link rel="stylesheet" href="font-awesome/css/font-awesome.min.css">
+    <!-- <link href="https://fonts.googleapis.com/css?family=Nunito&display=swap" rel="stylesheet">  -->
+
+</head>
+
+<body>
+    <div class="container print">
+        <header>
+            
+            <div class="alert alert-info text-center">
+            <strong>Go ahead and print me!</strong> Best printed in <i data-bind="html: getIcon('safari','','24px')"></i> or <i data-bind="html: getIcon('chrome','','24px')"></i>
+            </div>
+            <div class="row">
+                <table class="w-100">
+                    <tr>
+                        <td data-bind="html: phone"></td>
+                        <td rowspan="2" class="text-xs-center">
+                            <h2 data-bind="html: fullName" class="text-uppercase text-letter-spacing-1px"></h2>
+                        </td>
+                        <td class="text-xs-right">
+                            <a data-bind="html: getIcon('github','black','24px') + github, attr: {href: github}"></a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <a data-bind="html: email, attr: {href: 'email:' + email}"></a>
+                        </td>
+                        <td class="text-xs-right">
+                            <a data-bind="html: website, attr: {href: website}"></a>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </header>
+        <main data-bind="foreach: sections, handlePageBreak: false">
+            <div class="row" data-bind="css: { 'no-print': $data.noPrint }">
+                <table class="table table-sm section">
+                    <thead class="font-weight-bold">
+                        <tr>
+                            <td class="w-100">
+                                <div class="row text-uppercase text-letter-spacing-1px" data-bind="foreach: header">
+                                    <div data-bind="attr: { class: classesFromArray($index(), $parent.header) }">
+                                        <span data-bind="html: $data"></span>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    </thead>
+                    <tbody data-bind="foreach: $data.subsections">
+                        <tr class="subsection" data-bind="css: { 'no-print': $data.noPrint }">
+                            <td>
+                                <!-- ko if: $data.header != undefined -->
+                                <div class="row font-weight-bold" data-bind="foreach: header">
+                                    <div data-bind="attr: { class: classesFromArray($index(), $parent.header) }">
+                                        <!-- ko if: $index() == 0 -->
+                                        <!-- ko if: $parent.decorators && $parent.decorators.url -->
+                                            <a data-bind="attr: {href: $parent.decorators.url }">
+                                                <span data-bind="html: getIcon($parent.decorators ? $parent.decorators.icon : '','black') + $data"></span>
+                                            </a>
+                                        <!-- /ko -->
+                                        <!-- ko ifnot: $parent.decorators && $parent.decorators.url -->
+                                        <span data-bind="html: getIcon($parent.decorators ? $parent.decorators.icon : '','black') + $data"></span>
+                                        <!-- /ko -->
+                                        <!-- /ko -->
+                                        <!--ko ifnot: $index() == 0 -->
+                                        <span data-bind="html: $data"></span>
+                                        <!-- /ko -->
+                                    </div>
+                                </div>
+                                <!-- /ko -->
+                                <div class="row small" data-bind="if: $data.bullets != undefined">
+                                    <ul data-bind="foreach: bullets">
+                                        <!-- ko if: typeof $data === "string" -->
+                                        <li data-bind="html: removeMarkup($data), css: { 'no-print': shouldHide($data) }"></li>
+                                        <!-- /ko -->
+                                        <!-- ko if: $data.constructor === Array -->
+                                        <ul data-bind="foreach: $data">
+                                            <li data-bind="html: removeMarkup($data), css: { 'no-print': shouldHide($data) }"></li>
+                                        </ul>
+                                        <!-- /ko -->
+                                    </ul>
+                                </div>
+                                <div class="row small" data-bind="if: $data.notes != undefined">
+                                    <ul data-bind="foreach: notes" class="font-italic">
+                                        <li data-bind="html: removeMarkup($data), css: { 'no-print': shouldHide($data) }" class="list-inline-item"></li>
+                                    </ul>
+                                </div>
+                                <div class="row small font-weight-bold" data-bind="if: $data.list != undefined">
+                                    <div class="col-xs-12 text-xs-center list" data-bind="html: createList($data.list), trimList: true"></div>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+                <footer>
+            <span class="footer">
+            <span class="fa-stack">
+                <i class="fa fa-circle fa-stack-2x"></i>
+                <strong class="fa-stack-1x page-number" style="color:white"></strong>
+            </span>
+            of
+            <span class="fa-stack">
+                <i class="fa fa-circle-o fa-stack-2x"></i>
+                <strong class="fa-stack-1x page-count"></strong>
+            </span>
+            </span>
+        </footer>
+    </div>
+
+    <script src="js/jquery-3.1.1.min.js"></script>
+    <script src="js/tether.min.js"></script>
+    <script src="js/bootstrap.min.js"></script>
+    <script src="js/knockout-3.4.0.js"></script>
+    <script src="js/PDFreactor.js"></script>
+    <script src="js/resume.js"></script>
+    <script src="js/helper-functions.js"></script>
+</body>
+
+</html>
