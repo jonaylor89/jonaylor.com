@@ -1,26 +1,36 @@
-# Links : A beautiful Single Page Application made with React (Alternative to linktr.ee)
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-[![Generic badge](https://img.shields.io/badge/Build-Success-<COLOR>.svg)](https://vercel.com/jonaylor89/bio/deployments) 
+## Getting Started
 
+First, run the development server:
 
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
 
-![preview](https://user-images.githubusercontent.com/70798495/139570712-a6641781-9bee-4702-8100-0e5a8bb1efb1.jpg)
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-## How to use
-1. Fork the Repo
-2. Go to assets/items and add your own items and links
-3. Go to public/index.html and add your preferred title
-4. Add your Banners in assets, or use mine
-5. Deploy to Vercel and Profit!
-<br>
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/git/external?repository-url=https%3A%2F%2Fgithub.com%2Fjonaylor89%2Flinktree)
+## Learn More
 
-## Contributing
-We always welcome contributions; big or small, it can be documentation updates, adding new checks or something bigger. Please check the Contributing Guide for details on how to help out.
+To learn more about Next.js, take a look at the following resources:
 
-## 🙏🏽 Thanks to Some People who have contributed
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-<a><img width="150px" src="https://contrib.rocks/image?repo=jonaylor89/linktree" /></a>
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

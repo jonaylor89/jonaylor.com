@@ -9,8 +9,16 @@ import twitter from "../assets/twitter.png";
 import blog from "../assets/blog.png";
 import intheloop from "../assets/intheloop.png";
 import tapped from "../assets/tapped.png";
+import type { StaticImageData } from "next/image";
 
-const items = [
+export type Item = {
+  title: string;
+  subtitle: string;
+  image: StaticImageData;
+  link: string;
+};
+
+export const items: Item[] = [
   {
     title: "Website",
     subtitle: "Look at my work!",
@@ -21,7 +29,7 @@ const items = [
     title: "Blog",
     subtitle: "The latest content for what I've written",
     image: blog,
-    link: "https://blog.jonaylor.xyz", // Blog link
+    link: "https://blog.jonaylor.com", // Blog link
   },
   {
     title: "GitHub",
