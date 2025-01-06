@@ -3,10 +3,23 @@
   <head>
     <title>good morning</title>
     <style>
+    body {
+      background-color: #222;
+      overflow: hidden;
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
     .text {
       font-size: 36;
       font-weight: bold;
       font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+      color: #fff;
+      z-index: 1;
+      position: relative;
     }
 
     .centerVertical {
@@ -21,13 +34,43 @@
       flex-direction: row;
       justify-content: center;
     }
+
+    .snowflake {
+      position: absolute;
+      color: white;
+      font-size: 1em;
+      user-select: none;
+      z-index: 0;
+      top: 0;
+    }
   </style>
   </head> 
   <body>
-    <div class="centerVertical">
-      <div class="centerHorizontal">
-          <h1 class="text">good morning</h1>
-      </div> 
-    </div>
+       <script>
+        function createSnowflake() {
+            const snowflake = document.createElement('div');
+            snowflake.innerHTML = '❄';
+            snowflake.className = 'snowflake';
+            snowflake.style.left = Math.random() * 100 + 'vw';
+            snowflake.style.animationDuration = Math.random() * 3 + 2 + 's';
+            snowflake.style.opacity = Math.random();
+            snowflake.style.fontSize = (Math.random() * 10 + 10) + 'px';
+            
+            document.body.appendChild(snowflake);
+            
+            const animation = snowflake.animate([
+                { transform: 'translate(0, -10px)' },
+                { transform: `translate(${Math.random() * 100 - 50}px, ${window.innerHeight}px)` }
+            ], {
+                duration: Math.random() * 3000 + 3000,
+                easing: 'linear'
+            });
+            
+            animation.onfinish = () => snowflake.remove();
+        }
+        
+        setInterval(createSnowflake, 100);
+    </script>
+    <h1 class="text">good morning</h1>
   </body>
   </html>
