@@ -71,7 +71,7 @@ function viewModel() {
         {
           header: ["New York City, NY", "Udio", "Fall 2024 - Present"],
           bullets: [
-            "Product Engineer (Contract)",
+            "Product Engineer",
             "Developed on and manage machine learning pipelines on GCP",
             "Build A/B testing into webapp",
             "Used product-analytics to guide feature development",
