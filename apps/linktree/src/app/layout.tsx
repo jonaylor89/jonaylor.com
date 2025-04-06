@@ -1,5 +1,5 @@
-import { Analytics } from "@vercel/analytics/next";
 import type { Metadata } from "next";
+import PlausibleProvider from 'next-plausible'
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,8 +15,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        {children}
-        <Analytics />;
+        <PlausibleProvider domain="bio.jonaylor.com">
+          {children}
+        </PlausibleProvider>
       </body>
     </html>
   );
