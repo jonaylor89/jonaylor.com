@@ -9,6 +9,7 @@ import twitter from "../assets/twitter.png";
 import blog from "../assets/blog.png";
 import intheloop from "../assets/intheloop.png";
 import tapped from "../assets/tapped.png";
+import housefly from "../assets/housefly.png";
 import type { StaticImageData } from "next/image";
 
 export type Item = {
@@ -48,6 +49,12 @@ export const items: Item[] = [
     subtitle: "The platform tailored for artists and producers to collaborate",
     image: intheloop,
     link: "https://intheloopstudio.com", // In The Loop landing page
+  },
+  {
+    title: "Housefly",
+    subtitle: "An interactive project designed to teach web scraping",
+    image: housefly,
+    link: "https://housefly.cc",
   },
   {
     title: "Apps",
