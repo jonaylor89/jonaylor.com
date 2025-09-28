@@ -67,4 +67,4 @@ Your blog posts will be automatically built and served as static pages for optim
 - Edit `src/app/page.tsx` to customize the homepage
 - Modify `src/app/layout.tsx` to change the overall layout
 - Update `tailwind.config.js` to adjust styling
-- Add custom MDX components in `src/app/posts/[slug]/page.tsx`
+- Add custom MDX components in `src/app/[slug]/page.tsx`

@@ -91,7 +91,7 @@ export default function Home() {
                   itemType="https://schema.org/Article"
                 >
                   <Link
-                    href={`/posts/${post.slug}`}
+                    href={`/${post.slug}`}
                     className="blog-post-link block no-underline text-black dark:text-white"
                   >
                     <div className="md:flex md:gap-6 md:items-start">

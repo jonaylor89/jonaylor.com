@@ -113,7 +113,7 @@ export function generatePostMetadata(post: Post): Metadata {
   return generateMetadata({
     title: post.frontmatter.title,
     description: post.frontmatter.excerpt,
-    path: `/posts/${post.slug}`,
+    path: `/${post.slug}`,
     image: coverImageUrl,
     article: true,
     publishedTime: new Date(post.frontmatter.date).toISOString(),
@@ -181,7 +181,7 @@ export function generateJSONLD(
       "@type": "Article",
       headline: data.title,
       description: data.description,
-      url: `${siteConfig.url}/posts/${data.slug}`,
+      url: `${siteConfig.url}/${data.slug}`,
       datePublished: new Date(data.date).toISOString(),
       dateModified: new Date(data.date).toISOString(),
       keywords: data.tags?.join(", "),

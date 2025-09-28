@@ -100,7 +100,7 @@ export default async function PostPage({ params }: Props) {
           </div>
 
           <ShareButtons
-            url={`${siteConfig.url}/posts/${post.slug}`}
+            url={`${siteConfig.url}/${post.slug}`}
             title={post.frontmatter.title}
             description={post.frontmatter.excerpt}
           />
