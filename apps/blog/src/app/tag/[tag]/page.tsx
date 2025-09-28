@@ -1,11 +1,11 @@
-import Link from 'next/link';
-import Image from 'next/image';
-import { notFound } from 'next/navigation';
-import { getAllPosts, formatDate } from '@/lib/posts';
-import { formatReadTime } from '@/lib/readTime';
-import Footer from '@/components/Footer';
-import { generateMetadata as generateSEOMetadata } from '@/lib/seo';
-import { Metadata } from 'next';
+import Link from "next/link";
+import Image from "next/image";
+import { notFound } from "next/navigation";
+import { getAllPosts, formatDate } from "@/lib/posts";
+import { formatReadTime } from "@/lib/readTime";
+import Footer from "@/components/Footer";
+
+import { Metadata } from "next";
 
 interface Props {
   params: Promise<{
@@ -18,10 +18,10 @@ export default async function TagPage({ params }: Props) {
   const decodedTag = decodeURIComponent(tag);
 
   const allPosts = getAllPosts();
-  const filteredPosts = allPosts.filter(post =>
-    post.frontmatter.tags?.some(t =>
-      t.toLowerCase() === decodedTag.toLowerCase()
-    )
+  const filteredPosts = allPosts.filter((post) =>
+    post.frontmatter.tags?.some(
+      (t) => t.toLowerCase() === decodedTag.toLowerCase(),
+    ),
   );
 
   if (filteredPosts.length === 0) {
@@ -36,7 +36,8 @@ export default async function TagPage({ params }: Props) {
             Posts tagged: #{decodedTag}
           </h1>
           <p className="text-lg text-gray-600 dark:text-gray-400">
-            {filteredPosts.length} post{filteredPosts.length !== 1 ? 's' : ''} found
+            {filteredPosts.length} post{filteredPosts.length !== 1 ? "s" : ""}{" "}
+            found
           </p>
           <Link
             href="/"
@@ -54,7 +55,7 @@ export default async function TagPage({ params }: Props) {
             {filteredPosts.map((post, index) => (
               <article
                 key={post.slug}
-                className={`${index !== filteredPosts.length - 1 ? 'border-b border-gray-200 dark:border-gray-700' : ''} pb-8`}
+                className={`${index !== filteredPosts.length - 1 ? "border-b border-gray-200 dark:border-gray-700" : ""} pb-8`}
                 itemScope
                 itemType="https://schema.org/Article"
               >
@@ -69,7 +70,10 @@ export default async function TagPage({ params }: Props) {
                         <div className="mb-4 overflow-hidden rounded-md">
                           <Image
                             src={post.frontmatter.coverImage}
-                            alt={post.frontmatter.coverImageAlt || post.frontmatter.title}
+                            alt={
+                              post.frontmatter.coverImageAlt ||
+                              post.frontmatter.title
+                            }
                             width={800}
                             height={400}
                             className="w-full h-48 object-cover transition-transform duration-200 hover:scale-105"
@@ -82,11 +86,17 @@ export default async function TagPage({ params }: Props) {
                     {/* Content */}
                     <div className="md:flex-1">
                       <header className="mb-4">
-                        <h3 className="post-title text-2xl font-bold mb-3 transition-opacity duration-200 text-black dark:text-white" itemProp="headline">
+                        <h3
+                          className="post-title text-2xl font-bold mb-3 transition-opacity duration-200 text-black dark:text-white"
+                          itemProp="headline"
+                        >
                           {post.frontmatter.title}
                         </h3>
                         <div className="flex items-center gap-4 text-sm text-black dark:text-white">
-                          <time dateTime={post.frontmatter.date} itemProp="datePublished">
+                          <time
+                            dateTime={post.frontmatter.date}
+                            itemProp="datePublished"
+                          >
                             {formatDate(post.frontmatter.date)}
                           </time>
                           <span className="text-gray-500 dark:text-gray-400">
@@ -94,7 +104,10 @@ export default async function TagPage({ params }: Props) {
                           </span>
                         </div>
                       </header>
-                      <p className="text-black dark:text-white mb-4 text-base leading-relaxed" itemProp="description">
+                      <p
+                        className="text-black dark:text-white mb-4 text-base leading-relaxed"
+                        itemProp="description"
+                      >
                         {post.frontmatter.excerpt}
                       </p>
                     </div>
@@ -105,7 +118,10 @@ export default async function TagPage({ params }: Props) {
                         <div className="w-48 h-32 overflow-hidden rounded-md">
                           <Image
                             src={post.frontmatter.coverImage}
-                            alt={post.frontmatter.coverImageAlt || post.frontmatter.title}
+                            alt={
+                              post.frontmatter.coverImageAlt ||
+                              post.frontmatter.title
+                            }
                             width={800}
                             height={400}
                             className="w-full h-full object-cover transition-transform duration-200 hover:scale-105"
@@ -141,8 +157,8 @@ export function generateStaticParams() {
   const posts = getAllPosts();
   const tags = new Set<string>();
 
-  posts.forEach(post => {
-    post.frontmatter.tags?.forEach(tag => {
+  posts.forEach((post) => {
+    post.frontmatter.tags?.forEach((tag) => {
       tags.add(tag);
     });
   });

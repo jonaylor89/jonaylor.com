@@ -40,7 +40,14 @@ function YouTube({ url }: { url: string }) {
 export const mdxComponents = {
   Callout,
   YouTube,
-  a: ({ href, children, ...props }: any) => {
+  a: ({
+    href,
+    children,
+    ...props
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+    href?: string;
+    children?: React.ReactNode;
+  }) => {
     const isExternal = href?.startsWith("http");
     return (
       <a
@@ -53,12 +60,12 @@ export const mdxComponents = {
       </a>
     );
   },
-  ul: ({ children, ...props }: any) => (
+  ul: ({ children, ...props }: React.HTMLAttributes<HTMLUListElement>) => (
     <ul className="list-disc list-inside space-y-2 my-4" {...props}>
       {children}
     </ul>
   ),
-  li: ({ children, ...props }: any) => (
+  li: ({ children, ...props }: React.LiHTMLAttributes<HTMLLIElement>) => (
     <li className="ml-0" {...props}>
       {children}
     </li>
