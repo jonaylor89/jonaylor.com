@@ -1,8 +1,8 @@
-import Link from 'next/link';
-import Image from 'next/image';
-import { getAllPosts, formatDate } from '@/lib/posts';
-import { formatReadTime } from '@/lib/readTime';
-import Footer from '@/components/Footer';
+import Link from "next/link";
+import Image from "next/image";
+import { getAllPosts, formatDate } from "@/lib/posts";
+import { formatReadTime } from "@/lib/readTime";
+import Footer from "@/components/Footer";
 
 export default function Home() {
   const posts = getAllPosts();
@@ -20,6 +20,51 @@ export default function Home() {
           <p className="text-lg text-black dark:text-white">
             By Johannes Naylor
           </p>
+          <nav
+            aria-label="External links"
+            className="flex flex-wrap justify-center gap-4 text-sm"
+          >
+            <Link
+              href="https://jonaylor.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-black dark:text-white underline hover:opacity-70 transition-opacity duration-200"
+            >
+              about me
+            </Link>
+            <Link
+              href="https://bio.jonaylor.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-black dark:text-white underline hover:opacity-70 transition-opacity duration-200"
+            >
+              projects
+            </Link>
+            <Link
+              href="https://github.com/jonaylor89"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-black dark:text-white underline hover:opacity-70 transition-opacity duration-200"
+            >
+              github
+            </Link>
+            <Link
+              href="https://linkedin.com/in/john-naylor"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-black dark:text-white underline hover:opacity-70 transition-opacity duration-200"
+            >
+              linkedin
+            </Link>
+            <Link
+              href="https://x.com/jonaylor89"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-black dark:text-white underline hover:opacity-70 transition-opacity duration-200"
+            >
+              X/twitter
+            </Link>
+          </nav>
         </div>
       </header>
 
@@ -27,10 +72,10 @@ export default function Home() {
         {posts.length === 0 ? (
           <section className="text-center py-12">
             <p className="text-black dark:text-white text-lg">
-              No posts yet. Add some markdown files to the{' '}
+              No posts yet. Add some markdown files to the{" "}
               <code className="bg-gray-100 dark:bg-gray-800 text-black dark:text-white px-1 py-0.5 rounded">
                 content/posts
-              </code>{' '}
+              </code>{" "}
               directory to get started.
             </p>
           </section>
@@ -41,7 +86,7 @@ export default function Home() {
               {posts.map((post, index) => (
                 <article
                   key={post.slug}
-                  className={`${index !== posts.length - 1 ? 'border-b border-gray-200 dark:border-gray-700' : ''} pb-8`}
+                  className={`${index !== posts.length - 1 ? "border-b border-gray-200 dark:border-gray-700" : ""} pb-8`}
                   itemScope
                   itemType="https://schema.org/Article"
                 >
@@ -56,7 +101,10 @@ export default function Home() {
                           <div className="mb-4 overflow-hidden rounded-md">
                             <Image
                               src={post.frontmatter.coverImage}
-                              alt={post.frontmatter.coverImageAlt || post.frontmatter.title}
+                              alt={
+                                post.frontmatter.coverImageAlt ||
+                                post.frontmatter.title
+                              }
                               width={800}
                               height={400}
                               className="w-full h-48 object-cover transition-transform duration-200 hover:scale-105"
@@ -69,11 +117,17 @@ export default function Home() {
                       {/* Content */}
                       <div className="md:flex-1">
                         <header className="mb-4">
-                          <h3 className="post-title text-2xl font-bold mb-3 transition-opacity duration-200 text-black dark:text-white" itemProp="headline">
+                          <h3
+                            className="post-title text-2xl font-bold mb-3 transition-opacity duration-200 text-black dark:text-white"
+                            itemProp="headline"
+                          >
                             {post.frontmatter.title}
                           </h3>
                           <div className="flex items-center gap-4 text-sm text-black dark:text-white">
-                            <time dateTime={post.frontmatter.date} itemProp="datePublished">
+                            <time
+                              dateTime={post.frontmatter.date}
+                              itemProp="datePublished"
+                            >
                               {formatDate(post.frontmatter.date)}
                             </time>
                             <span className="text-gray-500 dark:text-gray-400">
@@ -81,7 +135,10 @@ export default function Home() {
                             </span>
                           </div>
                         </header>
-                        <p className="text-black dark:text-white mb-4 text-base leading-relaxed" itemProp="description">
+                        <p
+                          className="text-black dark:text-white mb-4 text-base leading-relaxed"
+                          itemProp="description"
+                        >
                           {post.frontmatter.excerpt}
                         </p>
                       </div>
@@ -92,7 +149,10 @@ export default function Home() {
                           <div className="w-48 h-32 overflow-hidden rounded-md">
                             <Image
                               src={post.frontmatter.coverImage}
-                              alt={post.frontmatter.coverImageAlt || post.frontmatter.title}
+                              alt={
+                                post.frontmatter.coverImageAlt ||
+                                post.frontmatter.title
+                              }
                               width={800}
                               height={400}
                               className="w-full h-full object-cover transition-transform duration-200 hover:scale-105"

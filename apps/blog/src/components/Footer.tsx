@@ -1,5 +1,5 @@
-import Link from 'next/link'
-import SponsorButton from './SponsorButton'
+import Link from "next/link";
+import SponsorButton from "./SponsorButton";
 
 export default function Footer() {
   return (
@@ -7,49 +7,52 @@ export default function Footer() {
       <div className="flex flex-col items-center gap-6">
         <SponsorButton username="jonaylor89" />
 
-        <nav aria-label="External links" className="flex flex-wrap justify-center gap-4 text-sm">
-          <a
+        <nav
+          aria-label="External links"
+          className="flex flex-wrap justify-center gap-4 text-sm"
+        >
+          <Link
             href="https://jonaylor.com"
             target="_blank"
             rel="noopener noreferrer"
             className="text-black dark:text-white underline hover:opacity-70 transition-opacity duration-200"
           >
             about me
-          </a>
-          <a
+          </Link>
+          <Link
             href="https://bio.jonaylor.com"
             target="_blank"
             rel="noopener noreferrer"
             className="text-black dark:text-white underline hover:opacity-70 transition-opacity duration-200"
           >
             projects
-          </a>
-          <a
+          </Link>
+          <Link
             href="https://github.com/jonaylor89"
             target="_blank"
             rel="noopener noreferrer"
             className="text-black dark:text-white underline hover:opacity-70 transition-opacity duration-200"
           >
             github
-          </a>
-          <a
+          </Link>
+          <Link
             href="https://linkedin.com/in/john-naylor"
             target="_blank"
             rel="noopener noreferrer"
             className="text-black dark:text-white underline hover:opacity-70 transition-opacity duration-200"
           >
             linkedin
-          </a>
-          <a
+          </Link>
+          <Link
             href="https://x.com/jonaylor89"
             target="_blank"
             rel="noopener noreferrer"
             className="text-black dark:text-white underline hover:opacity-70 transition-opacity duration-200"
           >
             X/twitter
-          </a>
+          </Link>
         </nav>
       </div>
     </footer>
-  )
+  );
 }

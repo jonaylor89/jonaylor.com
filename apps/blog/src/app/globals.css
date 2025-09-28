@@ -6,7 +6,7 @@
 }
 
 body {
-    font-family: "Trebuchet MS", Arial, sans-serif;
+    font-family: var(--font-serif), "Trebuchet MS", Arial, sans-serif;
     @apply bg-white dark:bg-gray-900 text-black dark:text-white;
     transition:
         background-color 0.3s ease,
@@ -129,8 +129,8 @@ body {
     background: none !important;
     padding: 0 !important;
     font-family:
-        ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas,
-        "DejaVu Sans Mono", monospace;
+        var(--font-mono), ui-monospace, "Cascadia Code", "Source Code Pro",
+        Menlo, Consolas, "DejaVu Sans Mono", monospace;
 }
 
 /* Language label */

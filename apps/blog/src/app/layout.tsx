@@ -1,18 +1,21 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { generateMetadata as generateSEOMetadata, generateJSONLD, siteConfig } from '@/lib/seo';
-import { ThemeProvider } from '@/components/ThemeProvider';
-import PlausibleAnalytics from '@/components/PlausibleAnalytics';
-import ProgressBar from '@/components/ProgressBar';
+import { JetBrains_Mono, PT_Serif } from "next/font/google";
+import {
+  generateMetadata as generateSEOMetadata,
+  generateJSONLD,
+} from "@/lib/seo";
+import { ThemeProvider } from "@/components/ThemeProvider";
+import PlausibleAnalytics from "@/components/PlausibleAnalytics";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const cormorantGaramond = PT_Serif({
+  variable: "--font-serif",
+  weight: "400",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-mono",
   subsets: ["latin"],
 });
 
@@ -24,26 +27,29 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${cormorantGaramond.variable} ${jetbrainsMono.variable} antialiased`}
+    >
       <head>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify(generateJSONLD('website'))
+            __html: JSON.stringify(generateJSONLD("website")),
           }}
         />
-        <PlausibleAnalytics domain={process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN || ''} />
+        <PlausibleAnalytics
+          domain={process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN || ""}
+        />
       </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body>
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
           enableSystem
           disableTransitionOnChange
         >
-          <ProgressBar />
           {children}
         </ThemeProvider>
       </body>
