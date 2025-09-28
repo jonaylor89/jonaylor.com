@@ -6,7 +6,7 @@ import {
   generateJSONLD,
 } from "@/lib/seo";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import PlausibleAnalytics from "@/components/PlausibleAnalytics";
+import PlausibleProvider from "next-plausible";
 
 const cormorantGaramond = PT_Serif({
   variable: "--font-serif",
@@ -39,19 +39,18 @@ export default function RootLayout({
             __html: JSON.stringify(generateJSONLD("website")),
           }}
         />
-        <PlausibleAnalytics
-          domain={process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN || ""}
-        />
       </head>
       <body>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="dark"
-          enableSystem
-          disableTransitionOnChange
-        >
-          {children}
-        </ThemeProvider>
+        <PlausibleProvider domain="blog.jonaylor.com">
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="dark"
+            enableSystem
+            disableTransitionOnChange
+          >
+            {children}
+          </ThemeProvider>
+        </PlausibleProvider>
       </body>
     </html>
   );
