@@ -43,7 +43,7 @@ export function generateMetadata({
   const url = `${siteConfig.url}${path}`;
   const metaTitle = title ? `${title} | ${siteConfig.name}` : siteConfig.name;
   const metaDescription = description || siteConfig.description;
-  const metaImage = image || `${siteConfig.url}/og-image.png`;
+  const metaImage = image || `${siteConfig.url}/og-image.jpg`;
 
   const metadata: Metadata = {
     title: metaTitle,

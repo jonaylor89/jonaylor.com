@@ -84,7 +84,7 @@ public/
 │   └── posts/           # Inline images for post content
 │       ├── code-example.png
 │       └── screenshot.jpg
-└── og-image.png         # Default Open Graph image
+└── og-image.jpg         # Default Open Graph image
 ```
 
 ## 🚀 Performance Features

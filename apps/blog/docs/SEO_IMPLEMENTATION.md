@@ -27,7 +27,7 @@ This document outlines all the SEO optimizations implemented in your Next.js blo
 ### 🖼️ Open Graph & Twitter Cards
 - **✅ Open Graph**: Complete OG meta tags for social sharing
 - **✅ Twitter Cards**: Large image cards with proper metadata
-- **✅ Images**: Placeholder OG image at `/public/og-image.png`
+- **✅ Images**: Placeholder OG image at `/public/og-image.jpg`
 
 ## Structured Data (Schema.org)
 
