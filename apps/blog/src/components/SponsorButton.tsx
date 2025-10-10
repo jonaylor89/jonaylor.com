@@ -19,7 +19,7 @@ export default function SponsorButton({ username, className = '' }: SponsorButto
       title={`Sponsor ${username} on GitHub`}
     >
       <HeartIcon className="w-4 h-4" />
-      <span>Buy me a coffee</span>
+      <span>Buy me some shawarma</span>
     </a>
   )
 }
