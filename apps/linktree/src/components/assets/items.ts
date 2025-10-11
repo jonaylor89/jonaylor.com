@@ -10,6 +10,7 @@ import blog from "../assets/blog.png";
 import intheloop from "../assets/intheloop.png";
 import tapped from "../assets/tapped.png";
 import housefly from "../assets/housefly.png";
+import moments from "../assets/moments-fm.jpg";
 import type { StaticImageData } from "next/image";
 
 export type Item = {
@@ -55,6 +56,12 @@ export const items: Item[] = [
     subtitle: "An interactive project designed to teach web scraping",
     image: housefly,
     link: "https://housefly.cc",
+  },
+  {
+    title: "Moments",
+    subtitle: "Transform life’s precious memories into beautiful, personalized melodies.",
+    image: moments,
+    link: "https://moments.fm",
   },
   {
     title: "Apps",
