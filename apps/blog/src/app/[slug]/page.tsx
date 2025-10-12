@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { getPostBySlug, getAllPosts, formatDate } from "@/lib/posts";
+import { getPostBySlug, getAllPosts, formatDate, getSuggestedPosts } from "@/lib/posts";
 import { formatReadTime } from "@/lib/readTime";
 import { generatePostMetadata, generateJSONLD } from "@/lib/seo";
 import { MDXRemote } from "next-mdx-remote/rsc";
@@ -12,6 +12,7 @@ import ShareButtons from "@/components/ShareButtons";
 import { siteConfig } from "@/lib/seo";
 import { mdxComponents } from "@/components/mdx";
 import Footer from "@/components/Footer";
+import SuggestedPosts from "@/components/SuggestedPosts";
 
 interface Props {
   params: Promise<{
@@ -26,6 +27,12 @@ export default async function PostPage({ params }: Props) {
   if (!post) {
     notFound();
   }
+
+  const suggestedPosts = getSuggestedPosts(
+    post.slug,
+    post.frontmatter.tags || [],
+    3
+  );
 
   const jsonLd = generateJSONLD("article", {
     title: post.frontmatter.title,
@@ -121,6 +128,8 @@ export default async function PostPage({ params }: Props) {
             </div>
           )}
         </article>
+
+        <SuggestedPosts posts={suggestedPosts} />
 
         <div className="mt-8 mb-4">
           <Link

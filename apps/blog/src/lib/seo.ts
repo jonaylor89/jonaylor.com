@@ -76,7 +76,10 @@ export function generateMetadata({
       creator: siteConfig.author.twitter,
       title: metaTitle,
       description: metaDescription,
-      images: [metaImage],
+      images: {
+        url: metaImage,
+        alt: metaTitle,
+      },
     },
     robots: {
       index: true,
@@ -99,6 +102,8 @@ export function generateMetadata({
       modifiedTime: modifiedTime || publishedTime,
       authors: [siteConfig.author.name],
       tags,
+      section: "Technology",
+      locale: "en_US",
     };
   }
 
@@ -108,7 +113,7 @@ export function generateMetadata({
 export function generatePostMetadata(post: Post): Metadata {
   const coverImageUrl = post.frontmatter.coverImage
     ? `${siteConfig.url}${post.frontmatter.coverImage}`
-    : undefined;
+    : `${siteConfig.url}/og-image.jpg`;
 
   return generateMetadata({
     title: post.frontmatter.title,

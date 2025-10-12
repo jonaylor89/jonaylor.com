@@ -77,3 +77,28 @@ export function getPostBySlug(slug: string): Post | null {
 export function formatDate(dateString: string): string {
   return format(new Date(dateString), 'MMMM d, yyyy');
 }
+
+export function getSuggestedPosts(currentSlug: string, currentTags: string[] = [], limit: number = 3): Post[] {
+  const allPosts = getAllPosts().filter(post => post.slug !== currentSlug);
+
+  if (currentTags.length === 0) {
+    return allPosts.slice(0, limit);
+  }
+
+  // Find posts with matching tags
+  const postsWithMatchingTags = allPosts.filter(post =>
+    post.frontmatter.tags?.some(tag => currentTags.includes(tag))
+  );
+
+  if (postsWithMatchingTags.length >= limit) {
+    return postsWithMatchingTags.slice(0, limit);
+  }
+
+  // If not enough posts with matching tags, fill with latest posts
+  const remainingCount = limit - postsWithMatchingTags.length;
+  const remainingPosts = allPosts
+    .filter(post => !postsWithMatchingTags.includes(post))
+    .slice(0, remainingCount);
+
+  return [...postsWithMatchingTags, ...remainingPosts];
+}
