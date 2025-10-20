@@ -69,13 +69,14 @@ function viewModel() {
           ],
         },
         {
-          header: ["New York City, NY", "Udio", "Fall 2024 - Present"],
+          header: ["New York City, NY", "Udio", "Fall 2024 - Fall 2025"],
           bullets: [
-            "Product Engineer",
+            "Product/Growth Engineer",
             "Developed on and manage machine learning pipelines on GCP",
-            "Build A/B testing into webapp",
+            "Built A/B testing into web+mobile app+api",
+            "Built Udio mobile app from scratch with React Native + Expo",
             "Used product-analytics to guide feature development",
-            ["Nextjs, Supabase, Golang, k8s, GCP, LLMs, Mixpanel"],
+            ["Nextjs, Supabase, Golang, k8s, GCP, LLMs, Mixpanel", "React Native"],
           ],
         },
         {
