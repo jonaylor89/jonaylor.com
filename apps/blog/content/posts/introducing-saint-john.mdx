@@ -1,0 +1,65 @@
+---
+title: "Introducing Saint John"
+date: "2025-10-26"
+excerpt: "The First Android Home Screen with a Built In LLM Agent"
+tags: ["ai", "android", "launcher", "minimalism", "personal-software", "design", "kotlin", "indie-dev", "claude"]
+coverImage: "/images/covers/introducing-saint-john-cover.png"
+coverImageAlt: "blog post cover image"
+---
+
+# SAINt JHN
+
+*“Ἀρχὴ ἀρετῆς ἐστιν ἐγκράτεια, διάνοιαν σωφρονεῖν, καὶ ἔλεγχος εἰς τὰ πάθη”*
+
+I switched to an iPhone for the first time in 2022 to do app developer for [Audius](http://audius.co/) and later [Tapped Ai](https://tapped.ai/) and [Udio](https://udio.com/). Every since I’ve felt 10x more glued to my phone. Not necessarily in a “ios is better than android” kinda way but it seemed like the funnel or slope leading to my distractions was much more slippery on my iPhone. The past few months I’ve been on a campaign to filter many other distractions in my life so addressing this problem with iPhones was now priority.
+
+**Step one**:  buy an android; I’ll still have the iPhone for development but android is now, once again, my daily driver.
+
+**Step two**: make it focused.
+
+Thus, Saint John, my very own Android launcher (i.e. default home screen) was realized. It’s a launcher *by me, for me* where I can quickly do what I’d like without spiraling into oblivion. Named after Saint John the Ascetic, I wanted this launcher to be minimal and focused but not ugly or frustrating.
+
+## Freedom Is Priceless
+
+*"Those who are slaves of the passions are the enemies of their own souls."*
+
+Nobody likes getting website popups, ads, aggressive call to actions, etc. etc. and taking this further, I don’t like user experiences that enable me to do something unrelated to the task I’m doing at the moment. What I mean by that is if i’m, for example, writing a blog post then I don’t want to be able to constantly open twitter or youtube or even perplexity in case I end up down some unrelated research rabbit hole. For a phone this is extra important since on most days I’m constantly pulling it out to look at texts, calls, duolingo notifications, etc. etc. If I get a text message and the user experience is anything other than reading+responding to that message, that’s a recipe for constant distractions basically every 10-15 minutes.
+
+In my opinion, Android does a better job at this in general (because of things like better notifications) but in pursuit of something better I created my custom launcher Saint John. Taking inspiration from [Blloc](https://blloc.com) from a few years ago, I was able to achieve this because of my favorite founding engineer (claude code)
+
+## Time For Demons
+
+*“Many times the demon does not come as a roaring beast, but as a subtle whisper.”*
+
+Similar to Blloc, with Saint John your phone has three screens: **root, drawer, chat**.
+
+The **drawer screen** is the first screen you see when you install Saint John and it’s where all your app are located in a minimal and easy to find way. The app icons are automatically greyscaled and automatically grouped by category which includes usage times for how long you’ve used the apps in that category.
+
+The **root screen** is where quick actions / information glads stand. For me, I need the weather, the calendar, and a quick way to take notes. There’s a lot of customization potential for this page but because I’m building this for myself, those 3 things stand.
+
+The **chat screen** is where I’m trying something new by embedding a multi-model chatbot into directly into my phone’s home screen. While testing this launcher I’ve turned to really like it so it’s made the cut. There’s also a million variations and extensions to this I’ve got on my mind for example the obvious next step is to make this an agent that can control parts of my phone or a [vibetunnel](https://vibetunnel.sh/) connection. tbd what happens here. Many know me as a privacy nut so I’ll want to have a locally run model on my server sooner rather than later to hook up to this (as well as perhaps connect it to a gateway like [tensorzero](https://www.tensorzero.com/) to A/B test models or agent prompts.
+
+This setup, adapted from Blloc’s design, I found empirically to be helpful for keeping tasks focused. Named after **Saint John the Ascetic (Ἰωάννης ὁ Ἀσκητής)** this was designed with an ascetic mindset: remove everything unnecessary until what remains feels essential - *Via Negativa*
+
+![Saint John Screens.png](/images/posts/introducing-saint-john-image-1.png)
+
+## God Bless the Internet
+
+*“By the providence of God I was led to withdraw myself from the world.”*
+
+Claude code is pretty ass at writing mobile apps because of things like SDK inconsistencies, opaque xml configs, weird footguns, etc. etc. but I’ve been practicing with a few android+iOS apps to figure out how to do it affectively. Saint John is the furthest along and the first to actually get launched. After I finish a few more apps on different platforms then I’ll publish some of my findings. (the short version is you can get 80% there with a good `AGENTS.md` file.
+I’m pretty bullish on this since most of the time I don’t have a laptop on me and most normal people don’t have a laptop on them at all unless they’re at work so having control over your phone and what’s on it feels…different. It feels more liberating then just being able to vibe code websites. Personal software right on your phone is crazy.
+
+## Pray 4 Me
+
+*"Solitude is the school of virtue.”*
+
+I mentioned [in my last blog post](https://blog.jonaylor.com/i-quit-my-500k-software-job) the growing trend of fast fashion software and in my mind this speed means the majority of software that sticks will either be associated with some sort of brand or be hyper-personalized. Saint John is the start of this proof of concept. Ai agents making websites is just the start. Apps are something much more personal and useful to most people and I don’t think anyone has a great grasp on how to effectively use ai to make them outside of insane react native apps. Hell even as I’m writing this, [v0 just launched their mobile app](https://v0.app/ios) to create apps right on your phone so suffice to say this is bleeding edge. This won’t be the first mobile app I launch nor will I lock myself into android.
+
+## Roses
+
+*"He who wishes to live a spiritually free life must cut off all worldly attachments."*
+
+Saint John is available [https://saintjohn.jonaylor.com/](https://saintjohn.jonaylor.com/) - I’m charging $4.99 for it because fuck you pay me if you’re too lazy to generate it yourself (or don’t know how to install it from the open source github repo)
+
+Built for myself but maybe it helps others who want to take back their home screen.
