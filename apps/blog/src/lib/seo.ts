@@ -43,7 +43,6 @@ export function generateMetadata({
   const url = `${siteConfig.url}${path}`;
   const metaTitle = title ? `${title} | ${siteConfig.name}` : siteConfig.name;
   const metaDescription = description || siteConfig.description;
-  const metaImage = image || `${siteConfig.url}/og-image.jpg`;
 
   const metadata: Metadata = {
     title: metaTitle,
@@ -61,14 +60,6 @@ export function generateMetadata({
       title: metaTitle,
       description: metaDescription,
       siteName: siteConfig.name,
-      images: [
-        {
-          url: metaImage,
-          width: 1200,
-          height: 630,
-          alt: metaTitle,
-        },
-      ],
     },
     twitter: {
       card: "summary_large_image",
@@ -76,10 +67,6 @@ export function generateMetadata({
       creator: siteConfig.author.twitter,
       title: metaTitle,
       description: metaDescription,
-      images: {
-        url: metaImage,
-        alt: metaTitle,
-      },
     },
     robots: {
       index: true,
@@ -93,6 +80,25 @@ export function generateMetadata({
       },
     },
   };
+
+  // Only set images if explicitly provided
+  if (image) {
+    metadata.openGraph = {
+      ...metadata.openGraph,
+      images: [
+        {
+          url: image,
+          width: 1200,
+          height: 630,
+          alt: metaTitle,
+        },
+      ],
+    };
+    metadata.twitter = {
+      ...metadata.twitter,
+      images: [image],
+    };
+  }
 
   if (article && publishedTime) {
     metadata.openGraph = {
@@ -111,9 +117,10 @@ export function generateMetadata({
 }
 
 export function generatePostMetadata(post: Post): Metadata {
+  // Only set image if post has a cover image, otherwise Next.js will use the file-based opengraph-image.png
   const coverImageUrl = post.frontmatter.coverImage
     ? `${siteConfig.url}${post.frontmatter.coverImage}`
-    : `${siteConfig.url}/og-image.jpg`;
+    : undefined;
 
   return generateMetadata({
     title: post.frontmatter.title,
