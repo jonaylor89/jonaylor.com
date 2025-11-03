@@ -13,6 +13,7 @@ export interface PostMatter {
   tags: string[];
   coverImage?: string;
   coverImageAlt?: string;
+  draft?: boolean;
 }
 
 export interface Post {
@@ -24,6 +25,7 @@ export interface Post {
 
 export function getAllPosts(): Post[] {
   const fileNames = fs.readdirSync(postsDirectory);
+  const includeDrafts = isDraftInclusionEnabled();
   const allPosts = fileNames
     .filter(fileName => fileName.endsWith('.md') || fileName.endsWith('.mdx'))
     .map((fileName) => {
@@ -31,17 +33,22 @@ export function getAllPosts(): Post[] {
       const fullPath = path.join(postsDirectory, fileName);
       const fileContents = fs.readFileSync(fullPath, 'utf8');
       const { data, content } = matter(fileContents);
+      const frontmatter = normalizeFrontmatter(data);
 
       return {
         slug,
-        frontmatter: data as PostMatter,
+        frontmatter,
         content,
         readTime: calculateReadTime(content),
       };
     });
 
+  const publishedPosts = includeDrafts
+    ? allPosts
+    : allPosts.filter(post => !post.frontmatter.draft);
+
   // Sort posts by date (newest first)
-  return allPosts.sort((a, b) => {
+  return publishedPosts.sort((a, b) => {
     const dateA = new Date(a.frontmatter.date);
     const dateB = new Date(b.frontmatter.date);
     return dateB.getTime() - dateA.getTime();
@@ -62,10 +69,16 @@ export function getPostBySlug(slug: string): Post | null {
     }
 
     const { data, content } = matter(fileContents);
+    const frontmatter = normalizeFrontmatter(data);
+    const includeDrafts = isDraftInclusionEnabled();
+
+    if (frontmatter.draft && !includeDrafts) {
+      return null;
+    }
 
     return {
       slug,
-      frontmatter: data as PostMatter,
+      frontmatter,
       content,
       readTime: calculateReadTime(content),
     };
@@ -101,4 +114,130 @@ export function getSuggestedPosts(currentSlug: string, currentTags: string[] = [
     .slice(0, remainingCount);
 
   return [...postsWithMatchingTags, ...remainingPosts];
+}
+
+function normalizeFrontmatter(data: unknown): PostMatter {
+  const record = ensureRecord(data, 'frontmatter');
+
+  const title = getRequiredString(record, 'title');
+  const date = getDateString(record, 'date');
+  const excerpt = getOptionalString(record, 'excerpt', { allowEmpty: true }) ?? '';
+  const tags = getStringArray(record, 'tags');
+  const coverImage = getOptionalString(record, 'coverImage');
+  const coverImageAlt = getOptionalString(record, 'coverImageAlt');
+  const draft = parseDraft(record.draft);
+
+  return {
+    title,
+    date,
+    excerpt,
+    tags,
+    coverImage,
+    coverImageAlt,
+    draft,
+  };
+}
+
+function parseDraft(value: unknown): boolean {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'number') {
+    return value !== 0;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', 'yes', '1', 'y', 'on'].includes(normalized)) {
+      return true;
+    }
+    if (['false', 'no', '0', 'n', 'off'].includes(normalized)) {
+      return false;
+    }
+  }
+
+  return false;
+}
+
+function isDraftInclusionEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_INCLUDE_DRAFTS === 'true';
+}
+
+function ensureRecord(value: unknown, context: string): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  throw new Error(`Invalid ${context}: expected an object.`);
+}
+
+function getRequiredString(record: Record<string, unknown>, key: string): string {
+  const value = getOptionalString(record, key);
+  if (value === undefined) {
+    throw new Error(`Invalid frontmatter: "${key}" is required and must be a non-empty string.`);
+  }
+  return value;
+}
+
+function getOptionalString(
+  record: Record<string, unknown>,
+  key: string,
+  options: { allowEmpty?: boolean } = {},
+): string | undefined {
+  const { allowEmpty = false } = options;
+  const value = record[key];
+
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== 'string') {
+    throw new Error(`Invalid frontmatter: "${key}" must be a string.`);
+  }
+
+  const trimmed = value.trim();
+
+  if (!allowEmpty && trimmed.length === 0) {
+    return undefined;
+  }
+
+  return trimmed;
+}
+
+function getDateString(record: Record<string, unknown>, key: string): string {
+  const value = getRequiredString(record, key);
+  const timestamp = Date.parse(value);
+
+  if (Number.isNaN(timestamp)) {
+    throw new Error(`Invalid frontmatter: "${key}" must be a valid date string.`);
+  }
+
+  return value;
+}
+
+function getStringArray(record: Record<string, unknown>, key: string): string[] {
+  const value = record[key];
+
+  if (value === undefined || value === null) {
+    return [];
+  }
+
+  if (!Array.isArray(value)) {
+    throw new Error(`Invalid frontmatter: "${key}" must be an array of strings.`);
+  }
+
+  return value.map((item, index) => {
+    if (typeof item !== 'string') {
+      throw new Error(`Invalid frontmatter: "${key}" array entry at index ${index} is not a string.`);
+    }
+
+    const trimmed = item.trim();
+
+    if (!trimmed) {
+      throw new Error(`Invalid frontmatter: "${key}" array entry at index ${index} cannot be empty.`);
+    }
+
+    return trimmed;
+  });
 }

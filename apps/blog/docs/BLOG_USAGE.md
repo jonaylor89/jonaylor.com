@@ -13,11 +13,14 @@ title: "Your Blog Post Title"
 date: "2024-01-20"
 excerpt: "Brief description of your post"
 tags: ["tag1", "tag2", "tag3"]
+# draft: true
 ---
 ```
 
 3. Write your content in Markdown below the frontmatter
 4. The file name (without extension) will become the URL slug
+
+> The `draft` field is optional. When set to `true`, the post is hidden from all listings, feeds, and generated pages. Set `NEXT_PUBLIC_INCLUDE_DRAFTS=true` before starting the dev server if you need to preview drafts locally.
 
 ## File Structure
 
@@ -48,6 +51,7 @@ npm start      # Start production server
 - **File-based content**: All posts are markdown files
 - **Frontmatter support**: Add metadata to your posts
 - **Dark mode ready**: Styled for both light and dark themes
+- **Draft mode**: Add `draft: true` to hide posts from all builds (set `NEXT_PUBLIC_INCLUDE_DRAFTS=true` to preview)
 - **Responsive design**: Works on all device sizes
 - **SEO friendly**: Proper meta tags and structure
 - **Static generation**: Fast loading with Next.js SSG
