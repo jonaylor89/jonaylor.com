@@ -4,7 +4,7 @@ import { Post } from "./posts";
 const siteConfig = {
   name: "Buried Treasure | Johannes Naylor",
   description: "Da Beep Boops",
-  url: process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
+  url: "https://blog.jonaylor.com",
   author: {
     name: "Johannes Naylor",
     email: "jonaylor89@gmail.com",
