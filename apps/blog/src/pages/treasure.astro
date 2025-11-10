@@ -1,0 +1,75 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="You Found the Treasure! - Buried Treasure"
+  description="Congratulations on discovering the hidden treasure at the bottom of the ocean"
+>
+  <div class="max-w-3xl mx-auto px-5 md:px-10 py-20 min-h-screen">
+    <div class="text-center">
+      <div class="mb-8">
+        <svg width="160" height="140" viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="mx-auto">
+          <!-- Chest base -->
+          <rect x="10" y="45" width="100" height="50" fill="#FFD700" stroke="#B8860B" stroke-width="2" rx="2"/>
+          <!-- Chest lid (curved top, open position) -->
+          <path d="M 10 45 Q 60 15 110 45" fill="none" stroke="#B8860B" stroke-width="2"/>
+          <path d="M 10 45 L 10 50 Q 60 20 110 50 L 110 45 Q 60 15 10 45 Z" fill="#FFD700" stroke="#B8860B" stroke-width="2"/>
+          <!-- Lock plate -->
+          <circle cx="60" cy="70" r="8" fill="#B8860B"/>
+          <!-- Keyhole -->
+          <ellipse cx="60" cy="70" rx="3" ry="4" fill="#8B7500"/>
+          <!-- Decorative bands -->
+          <line x1="10" y1="60" x2="110" y2="60" stroke="#B8860B" stroke-width="1.5"/>
+          <line x1="10" y1="80" x2="110" y2="80" stroke="#B8860B" stroke-width="1.5"/>
+          <!-- Corner details -->
+          <circle cx="15" cy="50" r="2" fill="#B8860B"/>
+          <circle cx="105" cy="50" r="2" fill="#B8860B"/>
+          <circle cx="15" cy="90" r="2" fill="#B8860B"/>
+          <circle cx="105" cy="90" r="2" fill="#B8860B"/>
+          <!-- Sparkles -->
+          <circle cx="60" cy="25" r="2" fill="#FFD700" opacity="0.8">
+            <animate attributeName="opacity" values="0.3;1;0.3" dur="2s" repeatCount="indefinite"/>
+          </circle>
+          <circle cx="50" cy="30" r="1.5" fill="#FFD700" opacity="0.6">
+            <animate attributeName="opacity" values="0.2;0.8;0.2" dur="2.5s" repeatCount="indefinite"/>
+          </circle>
+          <circle cx="70" cy="28" r="1.5" fill="#FFD700" opacity="0.6">
+            <animate attributeName="opacity" values="0.2;0.8;0.2" dur="1.8s" repeatCount="indefinite"/>
+          </circle>
+        </svg>
+      </div>
+
+      <h1 class="text-4xl md:text-5xl font-bold mb-6 text-black dark:text-white">
+        You Found the Treasure!
+      </h1>
+
+      <p class="text-xl mb-8 text-black dark:text-white opacity-90">
+        Congratulations on discovering this hidden gem.<br />
+        You took the deep dive and found what was buried beneath.
+      </p>
+
+      <div class="prose prose-lg mx-auto text-black dark:text-white max-w-2xl mb-12">
+        <p class="text-lg leading-relaxed">
+          Welcome to the seabed! This hidden page is a reward for the curious explorers who scroll
+          beyond the surface.
+        </p>
+      </div>
+
+      <div class="mt-12">
+        <a
+          href="/"
+          class="inline-block text-black dark:text-white underline hover:opacity-70 transition-opacity duration-200 text-lg"
+        >
+          ← Back to the surface
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    svg {
+      filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.4));
+    }
+  </style>
+</BaseLayout>

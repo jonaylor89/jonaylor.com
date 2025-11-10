@@ -181,6 +181,146 @@ function formatReadTime(minutes: number): string {
       )}
     </main>
 
+    <!-- Ocean Descent Easter Egg -->
+    <div id="ocean-descent" class="relative">
+      <div id="descent-zone" style="height: 9000px;"></div>
+
+      <div id="seabed" class="flex items-center justify-center py-16">
+        <a href="/treasure" id="treasure-chest" aria-label="Discover hidden treasure">
+          <svg width="120" height="100" viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Chest base -->
+            <rect x="10" y="45" width="100" height="50" fill="#FFD700" stroke="#B8860B" stroke-width="2" rx="2"/>
+            <!-- Chest lid (curved top) -->
+            <path d="M 10 45 Q 60 20 110 45 L 110 50 Q 60 25 10 50 Z" fill="#FFD700" stroke="#B8860B" stroke-width="2"/>
+            <!-- Lock plate -->
+            <circle cx="60" cy="70" r="8" fill="#B8860B"/>
+            <!-- Keyhole -->
+            <ellipse cx="60" cy="70" rx="3" ry="4" fill="#8B7500"/>
+            <!-- Decorative bands -->
+            <line x1="10" y1="60" x2="110" y2="60" stroke="#B8860B" stroke-width="1.5"/>
+            <line x1="10" y1="80" x2="110" y2="80" stroke="#B8860B" stroke-width="1.5"/>
+            <!-- Corner details -->
+            <circle cx="15" cy="50" r="2" fill="#B8860B"/>
+            <circle cx="105" cy="50" r="2" fill="#B8860B"/>
+            <circle cx="15" cy="90" r="2" fill="#B8860B"/>
+            <circle cx="105" cy="90" r="2" fill="#B8860B"/>
+          </svg>
+        </a>
+      </div>
+    </div>
+
     <Footer />
   </div>
+
+  <style>
+    #treasure-chest {
+      display: block;
+      transition: transform 0.3s ease;
+      animation: pulse-glow 3s ease-in-out infinite;
+      filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.6)) drop-shadow(0 0 40px rgba(255, 215, 0, 0.4));
+    }
+
+    #treasure-chest:hover {
+      transform: scale(1.1);
+      filter: drop-shadow(0 0 30px rgba(255, 215, 0, 0.8)) drop-shadow(0 0 60px rgba(255, 215, 0, 0.6));
+    }
+
+    @keyframes pulse-glow {
+      0%, 100% {
+        filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.6)) drop-shadow(0 0 40px rgba(255, 215, 0, 0.4));
+      }
+      50% {
+        filter: drop-shadow(0 0 25px rgba(255, 215, 0, 0.7)) drop-shadow(0 0 50px rgba(255, 215, 0, 0.5));
+      }
+    }
+  </style>
+
+  <script>
+    // Ocean descent scroll effect
+    const descentZone = document.getElementById('descent-zone');
+    const body = document.body;
+
+    if (!descentZone) {
+      console.error('Descent zone not found');
+    } else {
+      // Color definitions for light and dark modes
+      const colors = {
+        light: {
+          start: { r: 255, g: 255, b: 255 },  // White
+          end: { r: 0, g: 20, b: 40 }          // Dark ocean blue
+        },
+        dark: {
+          start: { r: 17, g: 24, b: 39 },      // gray-900
+          end: { r: 0, g: 10, b: 25 }          // Darker ocean blue
+        }
+      };
+
+      // Check if dark mode is active
+      function isDarkMode() {
+        return window.matchMedia('(prefers-color-scheme: dark)').matches;
+      }
+
+      // Interpolate between two colors
+      function interpolateColor(color1, color2, progress) {
+        const r = Math.round(color1.r + (color2.r - color1.r) * progress);
+        const g = Math.round(color1.g + (color2.g - color1.g) * progress);
+        const b = Math.round(color1.b + (color2.b - color1.b) * progress);
+        return `rgb(${r}, ${g}, ${b})`;
+      }
+
+      // Update background gradient based on scroll position
+      function updateGradient() {
+        const rect = descentZone.getBoundingClientRect();
+        const zoneTop = rect.top + window.scrollY;
+        const zoneHeight = rect.height;
+        const currentScroll = window.scrollY;
+
+        // Calculate progress through the descent zone (0 to 1)
+        const scrollProgress = (currentScroll - zoneTop) / zoneHeight;
+        const progress = Math.max(0, Math.min(1, scrollProgress));
+
+        // Get appropriate color scheme
+        const colorScheme = isDarkMode() ? colors.dark : colors.light;
+
+        // Interpolate and apply color
+        const newColor = interpolateColor(colorScheme.start, colorScheme.end, progress);
+        body.style.backgroundColor = newColor;
+      }
+
+      // Scroll handler with requestAnimationFrame
+      let rafId = null;
+      function handleScroll() {
+        if (rafId) return;
+        rafId = requestAnimationFrame(() => {
+          updateGradient();
+          rafId = null;
+        });
+      }
+
+      // Intersection Observer to only listen to scroll when descent zone is visible
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              window.addEventListener('scroll', handleScroll, { passive: true });
+              body.style.willChange = 'background-color';
+              updateGradient(); // Initial update when entering viewport
+            } else {
+              window.removeEventListener('scroll', handleScroll);
+              body.style.willChange = 'auto';
+            }
+          });
+        },
+        { threshold: 0 }
+      );
+
+      observer.observe(descentZone);
+
+      // Listen for dark mode changes
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        updateGradient();
+      });
+    }
+  </script>
+
 </BaseLayout>
