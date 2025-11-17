@@ -133,14 +133,9 @@ So there's way more data in the notebook but it's pretty predictable how this pe
 - Deep generative stress testing for synthesizing adversarial paths.
 - I'm basically just a shill for [Fat Tails Statistics](https://arxiv.org/abs/2001.10488) and thus recommend Taleb's work
 
-
-* [Colab Companion Notebook](https://colab.research.google.com/github/jonaylor89/fat-tail-backtesting/blob/main/convex.ipynb)
-* [Github Repo](https://github.com/jonaylor89/fat-tail-backtesting)
-
-
 ## Appendix: Beyond Trading
 
-Tail awareness matters anywhere you rely on historical logs. My friend Viraj and his team over at [Tensorzero](https://www.tensorzero.com/) (I hope he doesn't mind me flaming him for a sec) just wrote a great blog post on adaptive experimentation using [multi-armed bandits](https://en.wikipedia.org/wiki/Multi-armed_bandit) ([Bandits in Your LLM Gateway](https://www.tensorzero.com/blog/bandits-in-your-llm-gateway/)). Their Track-and-Stop implementation is well engineered, statistically principled, and, crucially, beats vanilla A/Bs by ~37% in their sims. But while reading it, I couldn't help but notice that every statistical guarantee they rely on implicitly assumes bounded or subgaussian rewards.
+Tail awareness matters anywhere you rely on historical logs. My friend Viraj and his team over at [TensorZero](https://www.tensorzero.com/) (I hope he doesn't mind me flaming him for a sec) just wrote a great blog post on adaptive experimentation using [multi-armed bandits](https://en.wikipedia.org/wiki/Multi-armed_bandit) ([Bandits in Your LLM Gateway](https://www.tensorzero.com/blog/bandits-in-your-llm-gateway/)). Their Track-and-Stop implementation is well engineered, statistically principled, and, crucially, beats vanilla A/Bs by ~37% in their sims. But while reading it, I couldn't help but notice that every statistical guarantee they rely on implicitly assumes bounded or subgaussian rewards.
 
 The lesson with quant finance is: offline prompt evals ("backtests") are stable only until users drift or a new regime arrives. The bandit layer gives you a live falsification loop, constantly re-testing prompts and reallocating traffic as the surface shifts, which is absolutely the right instinct. But if your reward distribution is fat-tailed, the bandit's confidence bounds can think it’s converging when it’s actually smoothing away the very shocks you care about.
 
