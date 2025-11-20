@@ -52,6 +52,9 @@
             src="https://plausible.io/js/script.js"
         ></script>
         <style>
+            @page {
+                margin: 20mm 18mm 22mm;
+            }
             :root {
                 color-scheme: light;
                 --accent: #0b0b0b;
@@ -93,11 +96,36 @@
                 margin-bottom: 48px;
             }
 
+            .header-top {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 18px;
+            }
+
             header span {
                 font-size: 13px;
                 letter-spacing: 0.18em;
                 text-transform: uppercase;
                 color: var(--muted);
+            }
+
+            .print-button {
+                border: 1px solid rgba(0, 0, 0, 0.12);
+                background: #ffffff;
+                color: var(--accent);
+                padding: 10px 20px;
+                border-radius: 999px;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                box-shadow: 0 10px 25px -22px rgba(0, 0, 0, 0.6);
+                transition: transform 0.18s ease, box-shadow 0.18s ease;
+            }
+
+            .print-button:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 16px 35px -28px rgba(0, 0, 0, 0.65);
             }
 
             h1 {
@@ -201,7 +229,7 @@
                 color: var(--muted);
                 display: flex;
                 flex-wrap: wrap;
-                gap: 12px;
+                gap: 14px;
                 align-items: center;
             }
 
@@ -215,7 +243,118 @@
                 border-bottom-color: currentColor;
             }
 
+            footer nav {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 12px;
+                align-items: center;
+            }
+
+            footer nav a {
+                margin: 0;
+            }
+
+            @media print {
+                body {
+                    padding: 0;
+                    background: #ffffff;
+                    color: #000000;
+                    font-size: 12pt;
+                    line-height: 1.58;
+                }
+
+                .page {
+                    margin: 0;
+                    padding: 0;
+                    max-width: none;
+                    width: auto;
+                    border: none;
+                    border-radius: 0;
+                    box-shadow: none;
+                }
+
+                .header-top {
+                    margin-bottom: 12px;
+                }
+
+                .print-button {
+                    display: none !important;
+                }
+
+                h1 {
+                    font-size: 28pt;
+                    letter-spacing: -0.01em;
+                }
+
+                section {
+                    margin-top: 24px;
+                }
+
+                section h2 {
+                    font-size: 18pt;
+                    margin-bottom: 10px;
+                }
+
+                .qa {
+                    padding: 16px 0;
+                    page-break-inside: avoid;
+                }
+
+                figure {
+                    display: none !important;
+                }
+
+                a {
+                    color: inherit;
+                    text-decoration: none;
+                }
+
+                footer {
+                    margin-top: 40px;
+                    padding-top: 18px;
+                    border-top: 1px solid #d0d0d0;
+                    font-size: 11pt;
+                    display: block;
+                }
+
+                footer span {
+                    display: block;
+                    margin-bottom: 8px;
+                    letter-spacing: 0.12em;
+                }
+
+                footer nav {
+                    display: block;
+                    column-count: 2;
+                    column-gap: 22px;
+                    column-fill: balance;
+                }
+
+                footer nav a {
+                    display: inline-block;
+                    width: 100%;
+                    margin-bottom: 6px;
+                    border-bottom: none;
+                }
+
+                footer nav a::after {
+                    content: " — " attr(data-print);
+                    font-weight: 400;
+                }
+            }
+
             @media (max-width: 720px) {
+                .header-top {
+                    flex-direction: column;
+                    align-items: flex-start;
+                    gap: 10px;
+                }
+
+                .print-button {
+                    width: 100%;
+                    text-align: center;
+                }
+
                 body {
                     padding: 0;
                     background-color: #ffffff;
@@ -242,7 +381,16 @@
     <body>
         <div class="page">
             <header>
-                <span>User Manual</span>
+                <div class="header-top">
+                    <span>User Manual</span>
+                    <button
+                        class="print-button"
+                        type="button"
+                        onclick="window.print()"
+                    >
+                        Print / Save PDF
+                    </button>
+                </div>
                 <h1>Working with Johannes Naylor</h1>
                 <p>
                     I'm Johannes Naylor. I love building cool things with people
@@ -251,7 +399,6 @@
                     collaborate smoothly.
                 </p>
             </header>
-
             <section>
                 <h2>Values &amp; Motivations</h2>
                 <div class="qa">
@@ -264,7 +411,7 @@
                         <li>Integrity i.e. don’t surprise me</li>
                         <li>Drive and strong passion</li>
                     </ul>
-                </div>
+               </div>
                 <figure>
                     <img
                         src="/images/tappedai_team_billboard.jpg"
@@ -520,31 +667,39 @@
             </section>
             <footer>
                 <span>Shortcuts:</span>
-                <a href="/index.html">Home</a>
-                <a
-                    href="https://blog.jonaylor.com"
-                    target="_blank"
-                    rel="noopener"
-                    >Blog</a
-                >
-                <a
-                    href="https://x.com/jonaylor89"
-                    target="_blank"
-                    rel="noopener"
-                    >X/Twitter</a
-                >
-                <a
-                    href="https://github.com/jonaylor89"
-                    target="_blank"
-                    rel="noopener"
-                    >GitHub</a
-                >
-                <a
-                    href="https://linkedin.com/in/john-naylor"
-                    target="_blank"
-                    rel="noopener"
-                    >LinkedIn</a
-                >
+                <nav>
+                    <a href="/index.html" data-print="https://www.jonaylor.com"
+                        >Home</a
+                    >
+                    <a
+                        href="https://blog.jonaylor.com"
+                        target="_blank"
+                        rel="noopener"
+                        data-print="https://blog.jonaylor.com"
+                        >Blog</a
+                    >
+                    <a
+                        href="https://x.com/jonaylor89"
+                        target="_blank"
+                        rel="noopener"
+                        data-print="https://x.com/jonaylor89"
+                        >X/Twitter</a
+                    >
+                    <a
+                        href="https://github.com/jonaylor89"
+                        target="_blank"
+                        rel="noopener"
+                        data-print="https://github.com/jonaylor89"
+                        >GitHub</a
+                    >
+                    <a
+                        href="https://linkedin.com/in/john-naylor"
+                        target="_blank"
+                        rel="noopener"
+                        data-print="https://linkedin.com/in/john-naylor"
+                        >LinkedIn</a
+                    >
+                </nav>
             </footer>
         </div>
     </body>
