@@ -12,6 +12,7 @@ import tapped from "../assets/tapped.png";
 import housefly from "../assets/housefly.png";
 import moments from "../assets/moments-fm.jpg";
 import saintjohn from "../assets/saintjohn.png";
+import languagehub from "../assets/languagehub.jpeg";
 import type { StaticImageData } from "next/image";
 
 export type Item = {
@@ -69,6 +70,12 @@ export const items: Item[] = [
     subtitle: "Your new distraction-free Android home screen",
     image: saintjohn,
     link: "https://saintjohn.jonaylor.com",
+  },
+  {
+    title: "Notion Language Hub",
+    subtitle: "Language Hub turns Notion into a center for language learning",
+    image: languagehub,
+    link: "https://language-hub.jonaylor.com",
   },
   {
     title: "Apps",
