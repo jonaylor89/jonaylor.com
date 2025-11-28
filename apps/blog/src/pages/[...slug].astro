@@ -1,0 +1,128 @@
+---
+import { getCollection } from 'astro:content';
+import type { CollectionEntry } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { format } from 'date-fns';
+import ShareButtons from '../components/ShareButtons.astro';
+import Footer from '../components/Footer.astro';
+import Breadcrumb from '../components/Breadcrumb.astro';
+import { mdxComponents } from '../components/mdx';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('posts', ({ data }) => {
+    const includeDrafts = import.meta.env.PUBLIC_INCLUDE_DRAFTS === 'true';
+    return includeDrafts || !data.draft;
+  });
+
+  return posts.map((post) => ({
+    params: { slug: post.slug },
+    props: { post },
+  }));
+}
+
+interface Props {
+  post: CollectionEntry<'posts'>;
+}
+
+const { post } = Astro.props;
+const { Content } = await post.render();
+
+function calculateReadTime(content: string): number {
+  const wordsPerMinute = 200;
+  const wordCount = content.trim().split(/\s+/).length;
+  return Math.ceil(wordCount / wordsPerMinute);
+}
+
+function formatReadTime(minutes: number): string {
+  return `${minutes} min read`;
+}
+
+const readTime = calculateReadTime(post.body);
+const siteUrl = Astro.site?.toString() || 'http://localhost:4321';
+const postUrl = `${siteUrl}${post.slug}`;
+---
+
+<BaseLayout
+  title={post.data.title}
+  description={post.data.excerpt}
+  image={post.data.coverImage}
+  type="article"
+  publishedTime={post.data.date}
+  tags={post.data.tags}
+>
+  <div class="max-w-3xl mx-auto px-5 md:px-10 py-5 min-h-screen">
+    <Breadcrumb
+      items={[
+        { label: "Home", href: "/" },
+        { label: "Posts", href: "/" },
+        { label: post.data.title },
+      ]}
+    />
+
+    <article>
+      <header class="mb-8">
+        <h1 class="text-3xl md:text-4xl font-bold mb-4 text-black dark:text-white leading-tight">
+          {post.data.title}
+        </h1>
+        {post.data.coverImage && (
+          <div class="mb-6 overflow-hidden rounded-md">
+            <img
+              src={post.data.coverImage}
+              alt={post.data.coverImageAlt || post.data.title}
+              class="w-full h-64 md:h-80 object-cover"
+            />
+          </div>
+        )}
+        <div class="flex items-center gap-4 text-black dark:text-white mb-6">
+          <time class="text-base" datetime={post.data.date.toISOString()}>
+            {format(post.data.date, 'MMMM d, yyyy')}
+          </time>
+          <span class="text-gray-500 dark:text-gray-400">
+            {formatReadTime(readTime)}
+          </span>
+        </div>
+        {post.data.excerpt && (
+          <p class="text-xl text-black dark:text-white italic mb-8">
+            {post.data.excerpt}
+          </p>
+        )}
+      </header>
+
+      <div class="prose prose-lg max-w-none dark:prose-invert">
+        <Content components={mdxComponents} />
+      </div>
+
+      <ShareButtons
+        url={postUrl}
+        title={post.data.title}
+        description={post.data.excerpt}
+      />
+
+      {post.data.tags && post.data.tags.length > 0 && (
+        <div class="mt-6 pt-6">
+          <div class="flex flex-wrap gap-2">
+            {post.data.tags.map((tag) => (
+              <a
+                href={`/tag/${encodeURIComponent(tag)}`}
+                class="bg-gray-100 dark:bg-gray-800 text-black dark:text-white px-3 py-1 rounded-full text-sm hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors duration-200"
+              >
+                {tag}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+    </article>
+
+    <div class="mt-8 mb-4">
+      <a
+        href="/"
+        class="nav-link inline-block text-black dark:text-white underline transition-opacity duration-200"
+      >
+        ← Back to all posts
+      </a>
+    </div>
+
+    <Footer />
+  </div>
+</BaseLayout>

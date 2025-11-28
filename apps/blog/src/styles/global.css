@@ -1,0 +1,172 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+@import "highlight.js/styles/github.css";
+
+@media (prefers-color-scheme: dark) {
+    @import "highlight.js/styles/github-dark.css";
+}
+
+body {
+    font-family: 'PT Serif', Georgia, 'Times New Roman', serif;
+    @apply bg-white dark:bg-gray-900 text-black dark:text-white;
+    transition:
+        background-color 0.3s ease,
+        color 0.3s ease;
+}
+
+.prose {
+    @apply text-black dark:text-white leading-relaxed;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+    @apply text-black dark:text-white font-bold mt-8 mb-4;
+}
+
+.prose h1 {
+    @apply text-4xl;
+}
+.prose h2 {
+    @apply text-3xl;
+}
+.prose h3 {
+    @apply text-2xl;
+}
+
+.prose p {
+    @apply mb-6 text-black dark:text-white;
+}
+
+.prose a {
+    @apply text-black dark:text-white underline transition-opacity duration-200 hover:opacity-70;
+}
+
+.prose code {
+    @apply bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-sm text-black dark:text-white;
+}
+
+.prose pre {
+    @apply bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md p-4 overflow-x-auto my-6;
+}
+
+.prose pre code {
+    @apply bg-transparent p-0 text-sm;
+    font-family: 'JetBrains Mono', ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+}
+
+.prose ul,
+.prose ol {
+    @apply ml-8 mb-6;
+}
+
+.prose ul {
+    @apply list-disc;
+}
+
+.prose ul li {
+    @apply ml-0 mb-2;
+    list-style-position: outside;
+}
+
+.prose ol {
+    @apply list-decimal;
+}
+
+.prose ol li {
+    @apply ml-0 mb-2;
+    list-style-position: outside;
+}
+
+.prose blockquote {
+    @apply border-l-4 border-gray-200 dark:border-gray-700 pl-4 my-6 italic;
+}
+
+.prose table {
+    @apply w-full border-collapse my-8 mx-auto;
+    max-width: 100%;
+}
+
+.prose table th {
+    @apply bg-gray-50 dark:bg-gray-800 text-black dark:text-white font-semibold text-left px-4 py-3 border border-gray-200 dark:border-gray-700;
+}
+
+.prose table td {
+    @apply text-black dark:text-white px-4 py-3 border border-gray-200 dark:border-gray-700;
+}
+
+.prose table tbody tr:nth-child(even) {
+    @apply bg-gray-50/50 dark:bg-gray-800/30;
+}
+
+.prose table tbody tr:hover {
+    @apply bg-gray-100/70 dark:bg-gray-700/50;
+    transition: background-color 0.2s ease;
+}
+
+/* Syntax highlighting adjustments */
+[data-rehype-pretty-code-fragment] {
+    position: relative;
+}
+
+[data-rehype-pretty-code-fragment] pre {
+    background-color: #f8f8f8 !important;
+    border: 1px solid #e5e5e5;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+.dark [data-rehype-pretty-code-fragment] pre {
+    background-color: #1f2937 !important;
+    border: 1px solid #374151;
+}
+
+[data-rehype-pretty-code-fragment] code {
+    background: none !important;
+    padding: 0 !important;
+    font-family: 'JetBrains Mono', ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+}
+
+/* Language label */
+[data-rehype-pretty-code-fragment] [data-rehype-pretty-code-title] {
+    background-color: #e5e5e5;
+    color: #374151;
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    border-top-left-radius: 0.5rem;
+    border-top-right-radius: 0.5rem;
+    border: 1px solid #e5e5e5;
+    border-bottom: none;
+}
+
+.dark [data-rehype-pretty-code-fragment] [data-rehype-pretty-code-title] {
+    background-color: #374151;
+    color: #d1d5db;
+    border: 1px solid #374151;
+    border-bottom: none;
+}
+
+/* Highlighted lines */
+[data-rehype-pretty-code-fragment] [data-highlighted-line] {
+    background-color: rgba(59, 130, 246, 0.1);
+    border-left: 2px solid #3b82f6;
+    padding-left: 0.75rem;
+    margin-left: -1rem;
+    padding-right: 1rem;
+}
+
+/* Link hover effects */
+.blog-post-link:hover .post-title {
+    @apply opacity-70;
+}
+
+.nav-link:hover {
+    @apply opacity-70;
+}

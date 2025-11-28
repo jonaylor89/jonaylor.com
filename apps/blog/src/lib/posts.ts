@@ -3,8 +3,10 @@ import path from 'path';
 import matter from 'gray-matter';
 import { format } from 'date-fns';
 import { calculateReadTime } from './readTime';
+import type { MDXRemoteSerializeResult } from 'next-mdx-remote';
 
 const postsDirectory = path.join(process.cwd(), 'content/posts');
+const cacheDirectory = path.join(process.cwd(), '.next/cache/compiled-posts');
 
 export interface PostMatter {
   title: string;
@@ -21,6 +23,10 @@ export interface Post {
   frontmatter: PostMatter;
   content: string;
   readTime: number;
+}
+
+export interface CompiledPost extends Omit<Post, 'content'> {
+  serializedContent: MDXRemoteSerializeResult;
 }
 
 export function getAllPosts(): Post[] {
@@ -83,6 +89,36 @@ export function getPostBySlug(slug: string): Post | null {
       readTime: calculateReadTime(content),
     };
   } catch {
+    return null;
+  }
+}
+
+export function getCompiledPostBySlug(slug: string): CompiledPost | null {
+  try {
+    const cachePath = path.join(cacheDirectory, `${slug}.json`);
+
+    if (!fs.existsSync(cachePath)) {
+      return null;
+    }
+
+    const cacheContent = fs.readFileSync(cachePath, 'utf8');
+    const compiledPost = JSON.parse(cacheContent);
+
+    const frontmatter = normalizeFrontmatter(compiledPost.frontmatter);
+    const includeDrafts = isDraftInclusionEnabled();
+
+    if (frontmatter.draft && !includeDrafts) {
+      return null;
+    }
+
+    return {
+      slug: compiledPost.slug,
+      frontmatter,
+      serializedContent: compiledPost.serializedContent,
+      readTime: compiledPost.readTime,
+    };
+  } catch (error) {
+    console.error(`Error reading compiled post ${slug}:`, error);
     return null;
   }
 }
