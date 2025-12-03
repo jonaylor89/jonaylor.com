@@ -1,0 +1,125 @@
+---
+title: "Should you rewrite your machine learning pipelines in Zig?"
+date: "2025-12-03"
+excerpt: "Writing audio ML preprocessing pipelines in Zig to get of magnitude speedups from native ffmpeg bindings?"
+tags: [zig, audio, machine-learning, ffmpeg, performance, optimization, native-bindings, bindgen]
+coverImage: "/images/covers/audio-preprocessing-pipeline-zig-cover.jpg"
+coverImageAlt: "Should you rewrite your ML audio preprocessing pipeline in Zig cover"
+---
+
+I've worked at a fair amount of music tech companies at this point and it goes without saying that all of them used [FFmpeg](https://github.com/FFmpeg/FFmpeg) _extensively_: [Audius](https://audius.co) used it for transcoding uploads for streaming, [Tapped](https://tapped.ai) used it for experimenting with live music recordings, and [Udio](https://udio.com) used it ML research preprocessing, any audio manipulation that didn't involve the model (e.g. trimming), and transcoding generations for streaming. I can say with certainty that all these FFmpeg uses just forked a call to the `ffmpeg` binary in whatever app/service that needed it thus FFmpeg became a requirement in most containers (sidenote: this also means that, because python monorepos are a pain-in-the-ass, ffmpeg is shipped with _every_ python service regardless of if the service needs it or not). We live in 2025 so none of these companies codebases are in C/C++ so forking is definitely the most convenient way to interact with FFmpeg but...could it be better? 
+
+![ffmpeg meme](/images/posts/audio-preprocessing-pipeline-zig-image-1.jpg)
+
+I've tried using [Zig](https://ziglang.org/), the new trendy programming language, a couple times but never found it too compelling to use but perhaps its fancy [@cImport()](https://ziglang.org/documentation/master/#cImport) and [`build.zig`](https://ziglang.org/learn/overview/#zig-build-system) file can make working directly with FFmpeg intuitive enough to quit forking all the time? (and perhaps yield some speed gains)
+
+[Experiment Github Link](https://github.com/jonaylor89/audio_preprocessor_test)
+
+# The Control
+
+The dummy-project I'll use to experiment with is an audio preprocessing pipeline that'd look similar to that which one could use before training some ML model. Basically the script will resample and clip/pad the audio to all be a specific duration and I'll use the [MusicNet dataset](https://www.kaggle.com/datasets/imsparsh/musicnet-dataset). The control for this experiment will be this [bash script](https://github.com/jonaylor89/audio_preprocessor_test/blob/main/shell_test.sh) that naively forks `ffmpeg` to do the processing while using `xargs` for concurrency.
+
+```sh
+# bash_test.sh
+# ...
+process_file() {
+    # ...
+    ffmpeg -y -v error -i "$input_file" \
+        -t "$max_dur" \
+        -af "$filter" \
+        -ar "$sample_rate" \
+        -c:a pcm_f32le \
+        "$output_file"
+    # ...
+}
+
+echo "$AUDIO_FILES" | xargs \
+    -P "$NUM_THREADS" \
+    -I {} bash \
+    -c "process_file '{}' '$OUTPUT_DIR' '$SAMPLE_RATE' '$MIN_DURATION' '$MAX_DURATION'" 
+# ...
+```
+
+On MusicNet's training data, this takes about 7s with 8 threads. 
+
+```sh
+32.71s user 14.71s system 664% cpu 7.141 total
+```
+
+# Zig + libavcodec
+
+To create the same script in Zig, I linked a few FFmpeg c libs in the [`build.zig`](https://github.com/jonaylor89/audio_preprocessor_test/blob/main/build.zig#L17) file which let me create a little bindings file `ffmpeg.zig` using `@cImport()`.
+
+```zig
+// ffmpeg.zig
+pub const c = @cImport({
+    @cInclude("libavcodec/avcodec.h");
+    @cInclude("libavformat/avformat.h");
+    @cInclude("libavutil/avutil.h");
+    @cInclude("libavutil/opt.h");
+    @cInclude("libavutil/channel_layout.h");
+    @cInclude("libavutil/samplefmt.h");
+    @cInclude("libswresample/swresample.h");
+});
+
+// ...
+```
+
+and continue with normaly sketchy C-esque code 
+
+```zig 
+// processor.zig
+pub fn processFile(input_path: [:0]const u8, output_path: [:0]const u8, config: ProcessorConfig) !void {
+    var format_ctx: ?*c.AVFormatContext = null;
+    var ret = c.avformat_open_input(&format_ctx, input_path.ptr, null, null);
+    if (ret < 0) return error.OpenInputFailed;
+    defer c.avformat_close_input(&format_ctx); // we get defers! 
+
+    // ...
+}
+```
+
+The result? 400ms 🤯 or ~18x speedup... not too bad
+
+```sh
+2.76s user 0.25s system 621% cpu 0.484 total
+```
+
+No too shabby for ~521 lines of Zig code vs the ~144 lines of bash. 
+
+And although it's not a big project, it's still refreshing to have it compile in 100ms when I'm used to Rust's long ass compilation time
+```sh
+zig build  0.09s user 0.08s system 93% cpu 0.188 total
+```
+
+# Takeaways
+
+Should all your AI researchers be learning Zig now? Or, should AI researchers be vibecoding preprocessing scripts in Zig now? The latter question could be fun to consider but the answer to the former is almost definitely: no. It was hard enough getting ML folks to use [Swift](https://github.com/tensorflow/swift) so Zig is almost certainly not the answer. 
+
+What about backend services forking `ffmpeg` written in Node, Python, or Go like the one's written at Audius or Udio? This isn't completely out of the question because I'm sure someone could do the math on how much it costs to fork `ffmpeg` so often. Hell, at Udio we had an `AudioWorker` service whose purpose was just to run FFmpeg jobs for other services since we hated when random IO-bound services would suddenly become CPU-bound during traffic spikes. If that service were rewritten from Go to Zig (or used `cgo` to bind with FFmpeg 🤮), the potential savings in time could be really good. On top of that, Zig could be used to create static binaries so deployment pipelines would get simpler and perhaps faster (`zig build` go zoom). The answer is likely still no for most people since I suppose all projects have had the option to just write their transcoding or preprocessing pipelines in C to avoid any overhead so I'm skeptical most folks will switch just because of cost or speed. Food-for-thought really.
+
+This was fun though, I enourage people to try other FFmpeg setups or whatever other C CLIs you find yourself forking inside of calling natively, with Zig to see what the results are and for the bold to take the risk on switching prod FFmpeg calls to be native to measure. Take the risk. 😈 
+
+[Experiment Github Link](https://github.com/jonaylor89/audio_preprocessor_test)
+
+# Appendix 1: Why stop at Zig?
+
+I decided to give a few other languages a try. I did C in a very similar way to how I did Zig and it was ofc very fast. It also reminded me why I don't like programming C very much lol. 
+
+Next, since I'm such a Rust fanboy, I had to try it with Rust which was actually the first time I've had to do C bindings myself in Rust. I did so because I wanted the test to be a little fair and needing to use a library for bindings is cheating (although I did use `rayon` for concurrency). Definitely a bit more of a pain in the ass than Zig to bind with but not the worst tbh. I was more intimidated than I needed to be and the result were ofc also very fast.
+
+The last was Python but to make it interesting, instead of just forking like Bash (which would probably have about the same results) or using some random binding from a library, I decided to use numpy and [librosa](https://librosa.org/) bindings instead since it's also a fairly popular library to use for python work. Unfortunately, the results were very disappointing so I can't recommend doing something like this.
+
+| Implementation | Time | Speedup |
+|----------------|------|---------|
+| Python (librosa) | 14.19s | 1x |
+| Bash (ffmpeg CLI) | 8.45s | 1.7x |
+| Zig (FFmpeg bindings) | 1.29s | 11x |
+| Rust (FFmpeg bindings) | 0.93s | 15x |
+| C (FFmpeg bindings) | 0.85s | 17x |
+
+# Appendix 2: RIIR but Zig?
+
+I've written about [other languages](https://blog.jonaylor.com/my-switch-away-from-python) before and my general preferences and since this is one of the more positive experiences I've had with it, will I start considering Zig for more projects? nah, I'm good. It's cool and convenient for this usecase but the little bit of extra effort I had to do in the [`build.rs`](https://github.com/jonaylor89/audio_preprocessor_test/blob/main/rust_src/build.rs) was fine. Even the `unsafe` blocks used when calling C code didn't give me _too_ much pause. 
+
+Oddly enough, the thing that I liked the most was how fast it compiled. I never understood why everyone complained about Rust compile times until the Zig compiler zoomed. I appreciate good engineering when I see it and I love when tech's fast.
