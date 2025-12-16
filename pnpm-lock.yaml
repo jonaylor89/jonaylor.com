@@ -3721,7 +3721,7 @@ snapshots:
       fast-glob: 3.3.2
       is-glob: 4.0.3
       minimatch: 9.0.5
-      semver: 7.6.3
+      semver: 7.7.2
       ts-api-utils: 1.4.3(typescript@5.1.6)
       typescript: 5.1.6
     transitivePeerDependencies:
