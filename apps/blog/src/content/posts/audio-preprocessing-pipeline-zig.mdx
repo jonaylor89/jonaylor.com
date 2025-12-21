@@ -3,13 +3,13 @@ title: "Should you rewrite your machine learning pipelines in Zig?"
 date: "2025-12-03"
 excerpt: "Writing audio ML preprocessing pipelines in Zig to get of magnitude speedups from native ffmpeg bindings?"
 tags: [zig, audio, machine-learning, ffmpeg, performance, optimization, native-bindings, bindgen]
-coverImage: "/images/covers/audio-preprocessing-pipeline-zig-cover.jpg"
+coverImage: "../../assets/images/covers/audio-preprocessing-pipeline-zig-cover.jpg"
 coverImageAlt: "Should you rewrite your ML audio preprocessing pipeline in Zig cover"
 ---
 
 I've worked at a fair amount of music tech companies at this point and it goes without saying that all of them used [FFmpeg](https://github.com/FFmpeg/FFmpeg) _extensively_: [Audius](https://audius.co) used it for transcoding uploads for streaming, [Tapped](https://tapped.ai) used it for experimenting with live music recordings, and [Udio](https://udio.com) used it ML research preprocessing, any audio manipulation that didn't involve the model (e.g. trimming), and transcoding generations for streaming. I can say with certainty that all these FFmpeg uses just forked a call to the `ffmpeg` binary in whatever app/service that needed it thus FFmpeg became a requirement in most containers (sidenote: this also means that, because python monorepos are a pain-in-the-ass, ffmpeg is shipped with _every_ python service regardless of if the service needs it or not). We live in 2025 so none of these companies codebases are in C/C++ so forking is definitely the most convenient way to interact with FFmpeg but...could it be better? 
 
-![ffmpeg meme](/images/posts/audio-preprocessing-pipeline-zig-image-1.jpg)
+![ffmpeg meme](../../assets/images/posts/audio-preprocessing-pipeline-zig-image-1.jpg)
 
 I've tried using [Zig](https://ziglang.org/), the new trendy programming language, a couple times but never found it too compelling to use but perhaps its fancy [@cImport()](https://ziglang.org/documentation/master/#cImport) and [`build.zig`](https://ziglang.org/learn/overview/#zig-build-system) file can make working directly with FFmpeg intuitive enough to quit forking all the time? (and perhaps yield some speed gains)
 

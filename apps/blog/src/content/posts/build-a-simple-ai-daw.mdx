@@ -3,7 +3,7 @@ title: "Build a Simple Ai DAW"
 date: "2025-01-23"
 excerpt: "Program an Ai Audio Manipulation Agent with Python & Langchain"
 tags: ["music", "ai", "ai-agents", "python", "audio", "langchain", "tutorial", "ffmpeg"]
-coverImage: "/images/covers/build-a-simple-ai-daw-cover.jpg"
+coverImage: "../../assets/images/covers/build-a-simple-ai-daw-cover.jpg"
 coverImageAlt: "Build a Simple Ai DAW cover image"
 ---
 
@@ -11,15 +11,15 @@ coverImageAlt: "Build a Simple Ai DAW cover image"
 
 Well first, wtf is a DAW? For the non-musicians, a Digital Audio Workstation (DAW) is a program one uses to create music such as Logic Pro, Ableton, FL Studio, even Garage Band.
 
-![a screenshot of Logic Pro](/images/posts/build-a-simple-ai-daw-image-3.png)
+![a screenshot of Logic Pro](../../assets/images/posts/build-a-simple-ai-daw-image-3.png)
 
 They can be a bit complicated but this is the modern studio and where many musicians spend a ton of time.
 So whats an *Ai DAW*? Somewhat of a general term because just about anything can be labels Ai or a DAW so the term itself isn’t very helpful but commonly accepted examples of Ai DAW or just DAWs with Ai enhancements are Bandlabs *song starter* that lets one start off with something for inspiration before building out the rest of a track. Another controversial example can be like Udio or Suno’s Ai song creations tools which let one generate entire songs, extend them, and remix or edit sections. Ai in music is still in its infancy and there’s plenty of room of improvement, specialization, and potential new players.
 
-![a screenshot of Udio](/images/posts/build-a-simple-ai-daw-image-4.png)
+![a screenshot of Udio](../../assets/images/posts/build-a-simple-ai-daw-image-4.png)
 
 
-![a screenshot of Bandlab](/images/posts/build-a-simple-ai-daw-image-5.jpg)
+![a screenshot of Bandlab](../../assets/images/posts/build-a-simple-ai-daw-image-5.jpg)
 
 Today though, we’ll focus on something simpler. An Ai Agent written with the help of Langchain that makes use of a custom FFmpeg tool to manipulate and edit your local music library.
 
@@ -34,11 +34,11 @@ One of the best explanations of an agent is from the LangChain website itself
 Thus a simple example of a agent would be asking like asking ChatGPT “what’s the 500th number in the fibonacci sequence, think in terms of steps you’d take to solve this given you have access to a python interpreter” where it would reply something like the following
 
 
-![a screenshot of ChatGPT](/images/posts/build-a-simple-ai-daw-image-6.png)
+![a screenshot of ChatGPT](../../assets/images/posts/build-a-simple-ai-daw-image-6.png)
 
 and if we were to run the codeblock is provided, then replied with the result, it would accurately know what the 500th number in the fibonacci sequence was (which btw it got **WRONG**, there’s a bug in the code so it actually returned the 501st fibonacci number). And while that’s a simple example, using various prompting strategies, these agents can accomplish really sophisticated reasoning.
 
-![a screenshot of ChatGPT](/images/posts/build-a-simple-ai-daw-image-7.png)
+![a screenshot of ChatGPT](../../assets/images/posts/build-a-simple-ai-daw-image-7.png)
 
 One of the more famous examples if using *Reasoning and Acting* or [ReAct](https://arxiv.org/abs/2210.03629) prompting. This is the description from the ReAct paper on the strategy.
 While large language models (LLMs) have demonstrated impressive capabilities across tasks in language understanding and interactive decision making, their abilities for reasoning (e.g. chain-of-thought prompting) and acting (e.g. action plan generation) have primarily been studied as separate topics. In this paper, we explore the use of LLMs to generate both reasoning traces and task-specific actions in an interleaved manner, allowing for greater synergy between the two: reasoning traces help the model induce, track, and update action plans as well as handle exceptions, while actions allow it to interface with external sources, such as knowledge bases or environments, to gather additional information
@@ -88,7 +88,7 @@ for chunk in agent_executor.stream(
 ```
 Running this in a virtual environment with all the necessary packages installed as well as environment variables set, you find in the wall of messy json text, the text contents the model is spitting out
 
-![a screenshot of the agent](/images/posts/build-a-simple-ai-daw-image-8.png)
+![a screenshot of the agent](../../assets/images/posts/build-a-simple-ai-daw-image-8.png)
 
 and if you parse just the agent messages from the mess, this is the conversation
 
@@ -409,7 +409,7 @@ add some echo the audio file located at `./samples/ratatat.mp3` and save it as a
 
 trying all of these examples it and playing them with `ffplay`…kinda works? At least for me, it definitely isn’t perfect nor does it get it right the first time but I got some kind of output that was kind of correct every time.
 
-![a screenshot of the file created](/images/posts/build-a-simple-ai-daw-image-9.png)
+![a screenshot of the file created](../../assets/images/posts/build-a-simple-ai-daw-image-9.png)
 
 
 <YouTube url="https://youtu.be/omvvklmtyt8" />

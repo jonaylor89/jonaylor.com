@@ -3,7 +3,7 @@ title: "Create a Wine Recommender Using NLP on AWS"
 date: "2022-07-18"
 excerpt: "Use AWS SageMaker to create sentence-BERT embeddings and run realtime Nearest Neighbors inferences"
 tags: ["machine-learning", "aws", "python", "nlp", "recommender-systems", "sagemaker", "bert", "tutorial"]
-coverImage: "/images/covers/getting-started-cover.jpg"
+coverImage: "../../assets/images/covers/getting-started-cover.jpg"
 coverImageAlt: "Getting Started cover image"
 ---
 
@@ -11,7 +11,7 @@ coverImageAlt: "Getting Started cover image"
 
 In this tutorial, we’ll build a simple machine learning pipeline using a [BERT](https://en.wikipedia.org/wiki/BERT_(language_model)) word embedding model and the [Nearest Neighbor](https://en.wikipedia.org/wiki/Nearest_neighbor_search) algorithm to recommend wines based on user inputted preferences. To create and power this recommendation engine, we’ll leverage AWS’s [SageMaker](https://aws.amazon.com/pm/sagemaker/) platform, which provides a fully managed way for us to train and deploy our service.
 
-![diagram of how the search works](/images/posts/create-a-wine-recommender-using-nlp-on-aws-image-3.png)
+![diagram of how the search works](../../assets/images/posts/create-a-wine-recommender-using-nlp-on-aws-image-3.png)
 
 [The dataset we'll use](https://www.kaggle.com/zynicide/wine-reviews/code) includes more than 130,000 different wines and corresponding reviews. We'll use BERT to convert the wine reviews into [embeddings](https://en.wikipedia.org/wiki/Word_embedding) (i.e. vectors) and store those embeddings in AWS S3. We’ll then use that as our dataset for the Nearest Neighbor search, which will then be able to accept new user input, create an embedding for it, and find the K closest embeddings to that user input. The ultimate outcome Identifying and recommending wines with reviews most similar to the input the user provided.
 
@@ -60,7 +60,7 @@ inputs = boto3.resource("s3").Bucket(bucket).upload_file(
 *Note:* this requires a Kaggle account and access token. If you don’t have a Kaggle account or don’t want to make one, you can download the dataset directly from the website and upload it to S3 using the AWS console. Just make sure that if you’re doing it this way, you store it with the correct prefix or things will break later.
 </Callout>
 
-![diagram of how the search works](/images/posts/create-a-wine-recommender-using-nlp-on-aws-image-4.png)
+![diagram of how the search works](../../assets/images/posts/create-a-wine-recommender-using-nlp-on-aws-image-4.png)
 
 To verify that everything is set up for the next steps, you can read in the dataset using `df=pd.read_csv(raw_data_location)` and then run things like `df.describe()` or `df.head(5)`. This’ll also give you a good look at how the data is structured and what fields it contains.
 
@@ -254,7 +254,7 @@ test_response = pipeline_predictor.predict(data=test_payload)
 print(test_response)
 ```
 
-![diagram of how the search works](/images/posts/create-a-wine-recommender-using-nlp-on-aws-image-5.png)
+![diagram of how the search works](../../assets/images/posts/create-a-wine-recommender-using-nlp-on-aws-image-5.png)
 
 # Clean Up
 Finally, we should delete the model and endpoint before we close the notebook (unless you really wanted the wine recommender to be always available).

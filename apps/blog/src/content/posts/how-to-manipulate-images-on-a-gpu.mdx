@@ -3,7 +3,7 @@ title: "How to Manipulate Images on a GPU"
 date: "2021-08-01"
 excerpt: "Using C++ and NVIDIA's CUDA"
 tags: ["images", "cpp", "c", "linux", "cuda", "gpu", "tutorial", "performance"]
-coverImage: "/images/covers/how-to-manipulate-images.png"
+coverImage: "../../assets/images/covers/how-to-manipulate-images.png"
 coverImageAlt: "How to Manipulate Images on a GPU cover image"
 ---
 
@@ -13,11 +13,11 @@ Manipulating and analyzing images is one of the most useful and interesting topi
 
 One particularly popular and widely used image filter is called the **median filter**. This filter's primary purpose is to denoise and soften images. Specifically, salt and pepper noise which looks like dark or corrupted pixels on the image. The way this filter operates on a pixel scale, is by looking at the surrounding neighboring pixels, specified by the size of the window desired, in an image, storing them in a list, and selecting the median value from that list. That selected median value is now the new pixel value for the pixel that was operated on. This is a fairly simple algorithm but there is an edge case. Border pixels that don't have enough neighboring pixels to satisfy the window size requirement are generally cropped out of the image, thus making the image smaller slightly in the process.
 
-![Median Filter Example](/images/posts/how-to-manipulate-images-1.png)
+![Median Filter Example](../../assets/images/posts/how-to-manipulate-images-1.png)
 
 *Median Filter Example*
 
-![Median Filter Effects](/images/posts/how-to-manipulate-images-2.jpeg)
+![Median Filter Effects](../../assets/images/posts/how-to-manipulate-images-2.jpeg)
 
 *Median Filter Effects*
 
@@ -286,7 +286,7 @@ __global__ void medianFilterGPU(
 
 From there, the next step is to get the adjacent pixel values since they will be used to determine the new, filtered pixel value.
 
-![Median Filter Graphic](/images/posts/how-to-manipulate-images-3.png)
+![Median Filter Graphic](../../assets/images/posts/how-to-manipulate-images-3.png)
 
 *Median Filter Graphic*
 

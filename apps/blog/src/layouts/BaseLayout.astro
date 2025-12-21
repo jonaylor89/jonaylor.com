@@ -4,7 +4,7 @@ import '../styles/global.css';
 interface Props {
   title: string;
   description?: string;
-  image?: string;
+  image?: string | ImageMetadata;
   type?: 'website' | 'article';
   publishedTime?: Date;
   modifiedTime?: Date;
@@ -25,7 +25,18 @@ const {
 
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 const siteUrl = Astro.site?.toString() || 'https://blog.jonaylor.com';
-const imageUrl = image ? new URL(image, siteUrl).toString() : `${siteUrl}/og-image.png`;
+
+let imageUrl: string;
+if (image) {
+  if (typeof image === 'string') {
+    imageUrl = new URL(image, siteUrl).toString();
+  } else {
+    // It's an ImageMetadata object
+    imageUrl = new URL(image.src, siteUrl).toString();
+  }
+} else {
+  imageUrl = `${siteUrl}/og-image.png`;
+}
 const twitterHandle = '@jonaylor89';
 ---
 

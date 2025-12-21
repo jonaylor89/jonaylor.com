@@ -3,29 +3,29 @@ title: "Creating a Twitter Bot in Go"
 date: "2021-02-02"
 excerpt: ""
 tags: ["go", "twitter", "bot", "tutorial", "heroku", "api"]
-coverImage: "/images/covers/creating-a-twitter-bot-in-go-cover.jpg"
+coverImage: "../../assets/images/covers/creating-a-twitter-bot-in-go-cover.jpg"
 coverImageAlt: "Creating a Twitter Bot in Go cover image"
 ---
 
 ### Intro
 This is a short, step by step, tutorial for how to make a twitter bot. The bot I'll create in this tutorial is going to be called "Big Pineapple Guy" and it's purpose will be to comment on my friend's posts with facts about pineapples. I'm going to be making the bot in Go and I'm going to be deploying it onto Heroku so everything will be free. The end result of this will be a bot that comments stuff like this:
 
-![screenshot of a pineapple tweet](/images/posts/creating-a-twitter-bot-in-go-image-3.png)
+![screenshot of a pineapple tweet](../../assets/images/posts/creating-a-twitter-bot-in-go-image-3.png)
 
 All the code for this can be found [here](https://github.com/jonaylor89/BigPineappleGuy)
 
 ### Getting Twitter Credentials
 I want my bot to have its own Twitter account so step one for all of this is to go to Twitter create a new account for the bot.
 
-![screenshot of a bot page](/images/posts/creating-a-twitter-bot-in-go-image-4.png)
+![screenshot of a bot page](../../assets/images/posts/creating-a-twitter-bot-in-go-image-4.png)
 
 Next I need api access to this account. To do that, I need to register as a developer at [https://developer.twitter.com](https://developer.twitter.com/). From there, I create a new app and fill it in with basic info about what the bot will be doing.
 
-![screenshot of a twitter developer page](/images/posts/creating-a-twitter-bot-in-go-image-5.png)
+![screenshot of a twitter developer page](../../assets/images/posts/creating-a-twitter-bot-in-go-image-5.png)
 
 Once the app is created, I can go in an get the keys and tokens I need.
 
-![screenshot of the twitter developer page](/images/posts/creating-a-twitter-bot-in-go-image-6.png)
+![screenshot of the twitter developer page](../../assets/images/posts/creating-a-twitter-bot-in-go-image-6.png)
 
 ### Loading Credentials
 
@@ -374,7 +374,7 @@ func getCreds() *creds {
 
 After this modification I can log into my Heroku account and make a new project. In this new project, I'm going to input all of my keys and tokens as environment variables through the web console.
 
-![screenshot of the configs](/images/posts/creating-a-twitter-bot-in-go-image-7.png)
+![screenshot of the configs](../../assets/images/posts/creating-a-twitter-bot-in-go-image-7.png)
 
 Before actually deploying though, I'm going to add a `Procfile` to my project folder. This will tell Heroku that my project isn't actually a website and is just a bot.
 
@@ -397,6 +397,6 @@ At this point, my project folder looks like this:
 
 Now I'm ready to push all of my stuff to Github and point Heroku at my Github repo for deployment.
 
-![screenshot of heroku page](/images/posts/creating-a-twitter-bot-in-go-image-8.png)
+![screenshot of heroku page](../../assets/images/posts/creating-a-twitter-bot-in-go-image-8.png)
 
 And with that I'm done! I have a Twitter bot written in go running on Heroku. This was a really fun project to make and it was really nice seeing my friends post pictures in our groupchat of a mysterious pineapple account commenting on their posts

@@ -14,8 +14,8 @@ const siteConfig = {
     "blog",
     "technology",
     "software development",
-    "programming",
     "web development",
+    "langauges",
   ],
 };
 

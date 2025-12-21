@@ -3,7 +3,7 @@ title: "Building a Simple AI DAW, Part 2: MCP and Agents"
 date: "2025-08-12"
 excerpt: "A semi-technical deep-dive into building a robust AI audio agent. Learn how a rust-based streaming engine and the Model Context Protocol (MCP) agent"
 tags: ["music", "ai", "ai-agents", "audio", "rust", "langchain", "claude", "ffmpeg", "mcp", "tutorial"]
-coverImage: "/images/covers/building-a-simple-ai-daw-part-2-mcp-and-agents-cover.jpg"
+coverImage: "../../assets/images/covers/building-a-simple-ai-daw-part-2-mcp-and-agents-cover.jpg"
 coverImageAlt: "Building a Simple AI DAW, Part 2: MCP and Agents cover image"
 ---
 
@@ -16,7 +16,7 @@ Since that post’s publication, there have been a number of Ai DAWs or DAW-like
 
 *“We’ve built Sessions to seamlessly integrate into those workflows, making it easier to visualize, edit, and experiment with tracks in one unified place.”* - Udio CEO, Andrew Sanchez
 
-![Udio Sessions UI](/images/posts/building-a-simple-ai-daw-part-2-mcp-and-agents-image-3.jpg)
+![Udio Sessions UI](../../assets/images/posts/building-a-simple-ai-daw-part-2-mcp-and-agents-image-3.jpg)
 
 This post will be a bit different than Part 1 and than my normal technical blog posts in general. I’ll call this a semi-technical blog post. This is intended for people interested in the music/tech space and perhaps with varying levels of technical skills rather than just a simple tutorial like normal. If you’re someone who likes music and has a curiosity for who to make it then this is for you. If you’re an engineer who wants to know the nitty gritty, I’ve included a Technical Appendix that goes into the details of how I built this (beware, it’s all in Rust 🦀).
 
@@ -32,7 +32,7 @@ Instead of relying solely on timeline-based editing or rigid software UIs, we ca
 
 AI-driven workflows are shifting that. Instead of engineering every move, artists can express intent in natural language or quick sketches, and let the system interpret. It feels less like operating a machine and more like collaborating with an assistant producer who understands what you mean. The biggest impact is psychological: creators stay in creative mode, not technical mode.The biggest productivity killer for me, for example, is when I get back in a DAW or in Blender or whatever and I can’t remember any of the keyboard shortcuts. That’s much less of an issues and the amount of activation energy to get into the flow is almost zero now.
 
-![Mozart Chat View](/images/posts/building-a-simple-ai-daw-part-2-mcp-and-agents-image-4.jpg)
+![Mozart Chat View](../../assets/images/posts/building-a-simple-ai-daw-part-2-mcp-and-agents-image-4.jpg)
 
 
 ## **3. A New Architecture: Artists Working with AI Conductors**
@@ -43,13 +43,13 @@ And with MCP, there is a shared language between these components. It defines th
 
 In practice, this architecture bridges the gap between creative direction and technical execution. As an artist, I don’t need to translate every idea into a manual sequence of edits; they can express intent, and the AI orchestrates the technical steps. Engineers, meanwhile, can design and improve tools independently, confident they will integrate smoothly into the broader system. The result is a collaborative production environment where human creativity and machine precision reinforce each other, rather than competing for control.
 
-![A picture of a robot in the studio](/images/posts/building-a-simple-ai-daw-part-2-mcp-and-agents-image-5.jpg)
+![A picture of a robot in the studio](../../assets/images/posts/building-a-simple-ai-daw-part-2-mcp-and-agents-image-5.jpg)
 
 ## **4. Improvements from Part 1**
 
 💡 *For the engineers and tech savvy people, there’s a more detailed Technical Appendix at the end of this post, complete with code walkthroughs and architectural insights. You can jump straight there, or continue reading for the high-level overview.*  One of the main issues with the previous blog post’s toy agent was that it was extremely unreliable. Sometimes it would hallucinate FFmpeg parameters that didn’t exist, get confused where to save temporary files, or accidentally get itself in infinite loops. The root cause of this is that the agent has too much it needs to do that isn't involved in the actual music editing process: file management, remembering documentation, error correcting, etc.. The solution I created to this is a separate server/tool that automates all this for the agent which I called **Streaming Engine**. The Streaming Engine is a server that wraps FFmpeg and exposes its functions via an HTTP API. That lets the AI call tools over the network with no local setup.
 
-![freqmoda architecture diagram](/images/posts/building-a-simple-ai-daw-part-2-mcp-and-agents-image-6.jpg)
+![freqmoda architecture diagram](../../assets/images/posts/building-a-simple-ai-daw-part-2-mcp-and-agents-image-6.jpg)
 
 The next major improvement was switching from the legacy LangChain prompting / parsing to run tools and use the new, fancy Model Context Protocol (MCP). The previous agent was originally built pre-MCP becoming the standard so it relied on just a custom [ReAct](https://arxiv.org/abs/2210.03629) prompting. There’s a [lot](https://www.anthropic.com/news/model-context-protocol) [of](https://modelcontextprotocol.io/overview) [articles](https://www.forbes.com/sites/davidbirch/2025/04/26/why-you-need-to-know-about-the-model-context-protocol/) explaining how MCP works so I won’t go into any detail here other than to say that the Streaming Engine could be easily connected to Claude, giving it access to a tool definition that looks like:
 
@@ -65,7 +65,7 @@ The next major improvement was switching from the legacy LangChain prompting / p
 
 The end result meaning **I could edit audio files directly in** **Claude Desktop**
 
-![Claude Desktop with custom MCP](/images/posts/building-a-simple-ai-daw-part-2-mcp-and-agents-image-7.jpg)
+![Claude Desktop with custom MCP](../../assets/images/posts/building-a-simple-ai-daw-part-2-mcp-and-agents-image-7.jpg)
 
 ## **5. Demo**
  <YouTube url="https://youtu.be/BGSBQDlbwb8" />

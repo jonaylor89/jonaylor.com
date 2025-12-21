@@ -1,12 +1,13 @@
 {
-  "name": "blog-astro",
+  "name": "blog",
   "type": "module",
   "version": "0.0.1",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "images:optimize": "deno run -A scripts/optimize-images.ts"
   },
   "dependencies": {
     "@astrojs/mdx": "^4.3.13",
@@ -19,5 +20,11 @@
     "remark-gfm": "^4.0.1",
     "rss": "^1.2.2",
     "tailwindcss": "^4.1.18"
+  },
+  "devDependencies": {
+    "@imagemagick/magick-wasm": "^0.0.31",
+    "node-addon-api": "^8.5.0",
+    "node-gyp": "^12.1.0",
+    "sharp": "^0.34.5"
   }
 }

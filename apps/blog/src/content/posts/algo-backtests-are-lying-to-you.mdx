@@ -3,14 +3,14 @@ title: "Trading Bot Backtests are Lying to You"
 date: "2025-11-17"
 excerpt: "Why most algorithmic trading backtests are theater / not all crashes are the same / how to do better"
 tags: [trading, ai, risk, monte-carlo, mandelbrot, jupyter, manim, fat-tails]
-coverImage: "/images/covers/algo-backtests-are-lying-to-you.jpg"
+coverImage: "../../assets/images/covers/algo-backtests-are-lying-to-you.jpg"
 coverImageAlt: "Algo Backtest are Lying to Your cover"
 ---
 
 
 Like a lot of programmers who I know, at some point I've tried to build a stock/crypto trading bot. It's common enough that it's on the popular [Build Your Own X](https://github.com/codecrafters-io/build-your-own-x?tab=readme-ov-file#build-your-own-bot) page and I see trading bots always trending on github. When I built mine the best way to test it, I figured, was to download some historical data on yahoo or something and see how well my strategy performed. Even now if you ask ChatGPT how to validate a trading strategy, the first thing it'll tell you is to backtest it.
 
-![ChatGPT conversation](/images/posts/algo-backtests-are-lying-to-you-image-2.png)
+![ChatGPT conversation](../../assets/images/posts/algo-backtests-are-lying-to-you-image-2.png)
 
 On the surface this seems reasonably sound. How often are there major crashes anyways and just to be safe you can add crashes into the backtest like 2008, 2020, dotcom bubble, etc. etc. EASY. Now when I made my bot, I think I made a few dollars (or lost a few dollars, who knows) but nothing substantial came from it. I've been revisiting the topic recently as I've slowly become more [uncertain](https://www.amazon.com/Incerto-Deluxe-Randomness-Procrustes-Antifragile/dp/198481981X) about markets which as ultimately led me to the conclusion that backtesting is **so** poor and misleading to the point that one could argue that the confidence I've seen some feel about their backtesting results is almost **dangerous**. Let's explore why and to help, I'll include [a colab notebook](https://colab.research.google.com/github/jonaylor89/fat-tail-backtesting/blob/main/convex.ipynb) that I'll be referencing in this post to add transparency.
 
@@ -39,7 +39,7 @@ Alright so Easy Mode is...easy: double your money, Sharpe around 1, and drawdown
 
 ## Hic Sunt Dracones
 
-![It only works for thin tails](/images/posts/algo-backtests-are-lying-to-you-image-3.png)
+![It only works for thin tails](../../assets/images/posts/algo-backtests-are-lying-to-you-image-3.png)
 
 Next let's try the same setup but draw returns from a [Student-t distribution](https://en.wikipedia.org/wiki/Student's_t-distribution) (`df=3`) and inject shocks i.e. rare selloffs into the series. Nothing in the SMA logic changes, yet now when I simulate the strategy in the notebook it looks real sad. The metrics copied from the notebook are:
 
@@ -59,15 +59,15 @@ That's not going to put food on the table. So that's _not_ a good strategy for t
 The mean is a pretty poor metric for understanding a distribution so let's take a look at quantiles. A quantile is just "what do I get if I sort all returns and grab the X% worst one?" i.e. the 90th percentile is the point 90% of outcomes beat, the 99.9th is where bad things happen. We sweep those percentiles from the median (50%) all the way into the far tail and plot what the Gaussian and Student-t distributions look like. 
 
 
-![Quantile-payoff chart highlighting unseen tail mass](/images/posts/algo-backtests-are-lying-to-you-image-4.png)
+![Quantile-payoff chart highlighting unseen tail mass](../../assets/images/posts/algo-backtests-are-lying-to-you-image-4.png)
 
 On the chart, the blue Gaussian curve is a bit less aggressive with how it climbs near the end. Inversely, the red Student-t curve goes up and to the right pretty aggressively. 
 
 To make the picture concrete, we can take two new toy strategies and see how they would react. A [convex](https://en.wikipedia.org/wiki/Convex_curve) payoff that behaves like being long optionality: small moves barely matter, but a huge jump pays off in chunks. And a [concave](https://en.wikipedia.org/wiki/Concave_function) payoff that acts like selling that optionality: you collect pennies until a tail event wipes you out. If we were to input percentiles through those shapes, the convex line shoots upward 🚀 (tail spikes feed it), while the concave one goes _real_ below zero right where our data stopped.
 
-![boxplot of payoff](/images/posts/algo-backtests-are-lying-to-you-image-6.png)
+![boxplot of payoff](../../assets/images/posts/algo-backtests-are-lying-to-you-image-6.png)
 
-![Quantile-payoff chart highlighting unseen tail mass](/images/posts/algo-backtests-are-lying-to-you-image-5.png)
+![Quantile-payoff chart highlighting unseen tail mass](../../assets/images/posts/algo-backtests-are-lying-to-you-image-5.png)
 
 ## Regime-Shifts Stress Kit
 
@@ -75,7 +75,7 @@ Good backtests will drop in the usual volatile windows (GFC, 2020) or include on
 
 A oversimple way to simulate this make a basic regime-shift function that changes the volatility of the fake market and when using the same SMA crossover strategy from before the graph that's produced looks super bad. 
 
-![Regime stress equity curve](/images/posts/algo-backtests-are-lying-to-you-image-7.png)
+![Regime stress equity curve](../../assets/images/posts/algo-backtests-are-lying-to-you-image-7.png)
 
 
 The metrics produced aren't even worth showing because they just suck. The periods of steadiness cause the strategy queue the strategy to do even worse than than all the other market simulation beforehand.  
@@ -113,7 +113,7 @@ history_start = {
 
 So there's way more data in the notebook but it's pretty predictable how this performed. Great for calm periods, bad during crashes like GFC and crypto winter. Someone trading on the assumptions of before the GFC, even if they factored in older crashes like Black Monday in 1987 wouldn't have been able to predict the GFC because there was enough crash data in existence to model it. You could read this and say: "congrats, Johannes. you're just explaining that Black Swans exist. Big deal?" but then perhaps still not understand why backtesting shouldn't give you a lot of confidence. Not all Black Swan event are the same: there's no evidence of blue swans or green swans or anything in between. Likewise "crashes" aren't the same and the takeaway is even with SotA machine learning or the fanciest models out there, there's no way to predict the next crash or what it'll look like.
 
-![Consequences of Fat Tails](/images/posts/algo-backtests-are-lying-to-you-image-1.png)
+![Consequences of Fat Tails](../../assets/images/posts/algo-backtests-are-lying-to-you-image-1.png)
 
 ## Better Backtesting & Closing Comments
 

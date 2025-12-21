@@ -13,7 +13,7 @@ export async function GET(context: APIContext) {
 
   const feed = new RSS({
     title: 'Buried Treasure - Johannes Naylor\'s Blog',
-    description: 'Technical blog by Johannes Naylor covering software engineering, algorithms, and more',
+    description: 'Blog by Johannes Naylor covering software engineering, laguage, and more',
     site_url: siteUrl,
     feed_url: `${siteUrl}/rss.xml`,
     language: 'en-us',
