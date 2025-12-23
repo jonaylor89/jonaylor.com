@@ -30,9 +30,11 @@ body {
 .prose h1 {
     @apply text-4xl;
 }
+
 .prose h2 {
     @apply text-3xl;
 }
+
 .prose h3 {
     @apply text-2xl;
 }
@@ -169,4 +171,18 @@ body {
 
 .nav-link:hover {
     @apply opacity-70;
+}
+
+/* Fix table overflow on mobile */
+.prose table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+}
+
+/* Force white text in code blocks in dark mode to fix specificty issues */
+.dark .prose pre,
+.dark .prose pre code,
+.dark .prose pre span {
+    color: #e1e4e8 !important;
 }
