@@ -7,7 +7,8 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "images:optimize": "deno run -A scripts/optimize-images.ts"
+    "images:optimize": "deno run -A scripts/optimize-images.ts",
+    "test": "playwright test"
   },
   "dependencies": {
     "@astrojs/mdx": "^4.3.13",
@@ -23,6 +24,7 @@
   },
   "devDependencies": {
     "@imagemagick/magick-wasm": "^0.0.31",
+    "@playwright/test": "^1.57.0",
     "node-addon-api": "^8.5.0",
     "node-gyp": "^12.1.0",
     "sharp": "^0.34.5"
