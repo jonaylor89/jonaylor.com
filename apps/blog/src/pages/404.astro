@@ -1,0 +1,307 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="404 - Empty signal | Buried Treasure"
+  description="Empty signal. The frequency you're looking for isn't broadcasting."
+>
+  <main class="page min-h-screen flex items-center justify-center px-6 py-16">
+    <div class="stack space-y-10">
+      <div class="space-y-3 text-center">
+        <p class="text-5xl uppercase text-secondary">404</p>
+      </div>
+      <div class="flex items-center justify-center gap-4 text-sm text-center">
+        <a href="/" class="nav-link inline-block·text-black·dark:text-white·underline·transition-opacity·duration-200">
+          ← Browse all posts
+        </a>
+      </div>
+      <section class="wave-area" aria-label="Static waveform representing a missing signal">
+        <canvas id="wave-field" class="wave" aria-hidden="true"></canvas>
+      </section>
+  </main>
+</BaseLayout>
+
+<script is:inline>
+  (() => {
+    const canvas = document.getElementById('wave-field');
+    if (!(canvas instanceof HTMLCanvasElement)) return;
+
+    const isDarkMode = () => {
+      const root = document.documentElement;
+      const body = document.body;
+      const classDark = root.classList.contains('dark') || body.classList.contains('dark');
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      return classDark || prefersDark;
+    };
+
+    const fallback2D = () => {
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      const rect = canvas.getBoundingClientRect();
+      const ratio = devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.round(rect.width * ratio));
+      canvas.height = Math.max(1, Math.round(rect.height * ratio));
+      ctx.save();
+      ctx.scale(ratio, ratio);
+      ctx.clearRect(0, 0, rect.width, rect.height);
+      const ink = isDarkMode() ? '#f5f6f8' : '#11141a';
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = 2;
+
+      const midY = rect.height / 2;
+      const baseFreq = 0.24;
+      const t = performance.now() * 0.0032;
+      ctx.beginPath();
+      for (let x = 0; x <= rect.width; x++) {
+        const jitter = Math.sin((x * 0.12) + t * 1.6) * 0.5;
+        const fund = 18 * Math.sin(x * baseFreq * (1.4 + jitter * 0.35) + t * 5.2);
+        const second = 10 * Math.sin(x * baseFreq * 3.8 + t * 6.0 + jitter);
+        const third = 6 * Math.sin(x * baseFreq * 6.6 + t * 6.9 - jitter * 0.5);
+        const shimmer = 4.5 * Math.sin(x * baseFreq * 26 + t * 12.6 + jitter * 2.6);
+        const y = midY + fund + second + third + shimmer;
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      ctx.restore();
+    };
+
+    const gl = canvas.getContext('webgl', {
+      antialias: true,
+      depth: false,
+      stencil: false,
+      alpha: true,
+      premultipliedAlpha: false,
+    });
+    if (!gl) {
+      fallback2D();
+      return;
+    }
+
+    const vertexSrc = `
+      attribute vec2 a_position;
+      uniform float u_time;
+      varying float v_amp;
+
+      float wave(float x, float t) {
+        float w1 = sin(x * 26.0 + t * 4.2) * 0.18;
+        float w2 = sin(x * 58.0 - t * 6.0) * 0.11;
+        float w3 = sin(x * 110.0 + t * 8.6) * 0.07;
+        float w4 = sin(x * 180.0 - t * 11.0) * 0.05;
+        float slow = sin(x * 12.0 + t * 2.4) * 0.06;
+        return w1 + w2 + w3 + w4 + slow;
+      }
+
+      void main() {
+        float y = wave(a_position.x, u_time);
+        v_amp = abs(y);
+        gl_Position = vec4(a_position.x, y, 0.0, 1.0);
+      }
+    `;
+
+    const fragmentSrc = `
+      precision mediump float;
+      varying float v_amp;
+      uniform vec3 u_ink;
+
+      void main() {
+        float alpha = clamp(0.5 + v_amp * 2.4, 0.0, 1.0);
+        gl_FragColor = vec4(u_ink, alpha);
+      }
+    `;
+
+    const compile = (type, source) => {
+      const shader = gl.createShader(type);
+      if (!shader) return null;
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.warn(gl.getShaderInfoLog(shader) || 'Shader compile error');
+        return null;
+      }
+      return shader;
+    };
+
+    const vs = compile(gl.VERTEX_SHADER, vertexSrc);
+    const fs = compile(gl.FRAGMENT_SHADER, fragmentSrc);
+    if (!vs || !fs) {
+      fallback2D();
+      return;
+    }
+
+    const program = gl.createProgram();
+    if (!program) {
+      fallback2D();
+      return;
+    }
+    gl.attachShader(program, vs);
+    gl.attachShader(program, fs);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      console.warn(gl.getProgramInfoLog(program) || 'Program link error');
+      fallback2D();
+      return;
+    }
+    gl.useProgram(program);
+
+    const numPoints = 360;
+    const verts = [];
+    for (let i = 0; i < numPoints; i++) {
+      const x = (i / (numPoints - 1)) * 2 - 1;
+      verts.push(x, 0);
+    }
+
+    const positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.STATIC_DRAW);
+
+    const aPosition = gl.getAttribLocation(program, 'a_position');
+    gl.enableVertexAttribArray(aPosition);
+    gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0);
+
+    const uTime = gl.getUniformLocation(program, 'u_time');
+    const uInk = gl.getUniformLocation(program, 'u_ink');
+    if (uTime === null || uInk === null) {
+      fallback2D();
+      return;
+    }
+
+    let lastWidth = 0;
+    let lastHeight = 0;
+
+    const resize = () => {
+      const rect = canvas.getBoundingClientRect();
+      const width = Math.max(1, Math.round(rect.width * devicePixelRatio));
+      const height = Math.max(1, Math.round(rect.height * devicePixelRatio));
+      if (width !== lastWidth || height !== lastHeight) {
+        lastWidth = width;
+        lastHeight = height;
+        canvas.width = width;
+        canvas.height = height;
+        gl.viewport(0, 0, width, height);
+      }
+    };
+
+    const start = performance.now();
+    let rafId = 0;
+
+    const getInk = () => {
+      const dark = isDarkMode();
+      return dark ? [0.98, 0.985, 0.99] : [0.03, 0.05, 0.07];
+    };
+
+    const render = () => {
+      resize();
+      const t = (performance.now() - start) / 1000;
+      gl.uniform1f(uTime, t);
+      const [r, g, b] = getInk();
+      gl.uniform3f(uInk, r, g, b);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.drawArrays(gl.LINE_STRIP, 0, numPoints);
+      rafId = requestAnimationFrame(render);
+    };
+
+    render();
+
+    window.addEventListener('resize', resize);
+    window.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        cancelAnimationFrame(rafId);
+      } else {
+        rafId = requestAnimationFrame(render);
+      }
+    });
+  })();
+</script>
+
+<style>
+  .page {
+    color: inherit;
+  }
+
+  .text-primary {
+    color: var(--wave-text-primary, #0b1220);
+  }
+
+  .text-secondary {
+    color: var(--wave-text-secondary, #4b5563);
+  }
+
+  .text-muted {
+    color: var(--wave-text-muted, #6b7280);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .text-primary {
+      color: #f8fafc;
+    }
+
+    .text-secondary {
+      color: #cbd5e1;
+    }
+
+    .text-muted {
+      color: #9ca3af;
+    }
+  }
+
+  :global(.dark) .text-primary {
+    color: #f8fafc;
+  }
+
+  :global(.dark) .text-secondary {
+    color: #cbd5e1;
+  }
+
+  :global(.dark) .text-muted {
+    color: #9ca3af;
+  }
+
+  .nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: inherit;
+    text-decoration: none;
+    padding-bottom: 2px;
+    border-bottom: 1px dashed rgba(15, 23, 42, 0.4);
+    transition: opacity 150ms ease, border-color 150ms ease;
+  }
+
+  .nav-link:hover {
+    opacity: 0.75;
+    border-color: rgba(15, 23, 42, 0.8);
+  }
+
+  :global(.dark) .nav-link {
+    border-color: rgba(226, 232, 240, 0.35);
+  }
+
+  :global(.dark) .nav-link:hover {
+    border-color: rgba(226, 232, 240, 0.8);
+  }
+
+  .stack {
+    width: 100%;
+    max-width: 1200px;
+    margin-inline: auto;
+  }
+
+  .wave-area {
+    width: 100vw;
+    margin-left: 50%;
+    transform: translateX(-50%);
+    background: transparent;
+  }
+
+  .wave {
+    width: 100%;
+    height: clamp(200px, 32vw, 320px);
+    display: block;
+    background: transparent;
+    isolation: isolate;
+  }
+</style>
