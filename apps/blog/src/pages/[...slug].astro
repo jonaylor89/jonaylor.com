@@ -1,41 +1,41 @@
 ---
 import { Image } from "astro:assets";
-import { getCollection } from "astro:content";
 import type { CollectionEntry } from "astro:content";
-import BaseLayout from "../layouts/BaseLayout.astro";
+import { getCollection } from "astro:content";
 import { format } from "date-fns";
-import ShareButtons from "../components/ShareButtons.astro";
-import Footer from "../components/Footer.astro";
 import Breadcrumb from "../components/Breadcrumb.astro";
+import Footer from "../components/Footer.astro";
 import { mdxComponents } from "../components/mdx";
+import ShareButtons from "../components/ShareButtons.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
 
 export async function getStaticPaths() {
-    const posts = await getCollection("posts", ({ data }) => {
-        const includeDrafts = import.meta.env.PUBLIC_INCLUDE_DRAFTS === "true";
-        return includeDrafts || !data.draft;
-    });
+	const posts = await getCollection("posts", ({ data }) => {
+		const includeDrafts = import.meta.env.PUBLIC_INCLUDE_DRAFTS === "true";
+		return includeDrafts || !data.draft;
+	});
 
-    return posts.map((post) => ({
-        params: { slug: post.slug },
-        props: { post },
-    }));
+	return posts.map((post) => ({
+		params: { slug: post.slug },
+		props: { post },
+	}));
 }
 
 interface Props {
-    post: CollectionEntry<"posts">;
+	post: CollectionEntry<"posts">;
 }
 
 const { post } = Astro.props;
 const { Content } = await post.render();
 
 function calculateReadTime(content: string): number {
-    const wordsPerMinute = 200;
-    const wordCount = content.trim().split(/\s+/).length;
-    return Math.ceil(wordCount / wordsPerMinute);
+	const wordsPerMinute = 200;
+	const wordCount = content.trim().split(/\s+/).length;
+	return Math.ceil(wordCount / wordsPerMinute);
 }
 
 function formatReadTime(minutes: number): string {
-    return `${minutes} min read`;
+	return `${minutes} min read`;
 }
 
 const readTime = calculateReadTime(post.body);

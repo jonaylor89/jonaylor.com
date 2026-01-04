@@ -1,26 +1,22 @@
 ---
 interface GalleryImage {
-  src: string;
-  alt: string;
-  caption?: string;
+	src: string;
+	alt: string;
+	caption?: string;
 }
 
 interface Props {
-  images: GalleryImage[];
-  columns?: 2 | 3 | 4;
-  class?: string;
+	images: GalleryImage[];
+	columns?: 2 | 3 | 4;
+	class?: string;
 }
 
-const {
-  images,
-  columns = 2,
-  class: className = ''
-} = Astro.props;
+const { images, columns = 2, class: className = "" } = Astro.props;
 
 const gridClassMap = {
-  2: 'grid-cols-1 md:grid-cols-2',
-  3: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3',
-  4: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4'
+	2: "grid-cols-1 md:grid-cols-2",
+	3: "grid-cols-1 md:grid-cols-2 lg:grid-cols-3",
+	4: "grid-cols-1 md:grid-cols-2 lg:grid-cols-4",
 };
 
 const gridClass = gridClassMap[columns];

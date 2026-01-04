@@ -1,25 +1,25 @@
 ---
 interface Props {
-  url: string;
-  title?: string;
-  class?: string;
+	url: string;
+	title?: string;
+	class?: string;
 }
 
-const { url, title = "YouTube video", class: className = '' } = Astro.props;
+const { url, title = "YouTube video", class: className = "" } = Astro.props;
 
 // Extract video ID from various YouTube URL formats
 function getYouTubeId(url: string): string | null {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/,
-    /youtube\.com\/embed\/([^?&\s]+)/,
-  ];
+	const patterns = [
+		/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/,
+		/youtube\.com\/embed\/([^?&\s]+)/,
+	];
 
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match) return match[1];
-  }
+	for (const pattern of patterns) {
+		const match = url.match(pattern);
+		if (match) return match[1];
+	}
 
-  return null;
+	return null;
 }
 
 const videoId = getYouTubeId(url);

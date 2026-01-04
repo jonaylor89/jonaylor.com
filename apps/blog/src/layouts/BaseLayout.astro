@@ -1,43 +1,43 @@
 ---
-import '../styles/global.css';
+import "../styles/global.css";
 
 interface Props {
-  title: string;
-  description?: string;
-  image?: string | ImageMetadata;
-  type?: 'website' | 'article';
-  publishedTime?: Date;
-  modifiedTime?: Date;
-  author?: string;
-  tags?: string[];
+	title: string;
+	description?: string;
+	image?: string | ImageMetadata;
+	type?: "website" | "article";
+	publishedTime?: Date;
+	modifiedTime?: Date;
+	author?: string;
+	tags?: string[];
 }
 
 const {
-  title,
-  description,
-  image,
-  type = 'website',
-  publishedTime,
-  modifiedTime,
-  author = 'Johannes Naylor',
-  tags = [],
+	title,
+	description,
+	image,
+	type = "website",
+	publishedTime,
+	modifiedTime,
+	author = "Johannes Naylor",
+	tags = [],
 } = Astro.props;
 
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
-const siteUrl = Astro.site?.toString() || 'https://blog.jonaylor.com';
+const siteUrl = Astro.site?.toString() || "https://blog.jonaylor.com";
 
 let imageUrl: string;
 if (image) {
-  if (typeof image === 'string') {
-    imageUrl = new URL(image, siteUrl).toString();
-  } else {
-    // It's an ImageMetadata object
-    imageUrl = new URL(image.src, siteUrl).toString();
-  }
+	if (typeof image === "string") {
+		imageUrl = new URL(image, siteUrl).toString();
+	} else {
+		// It's an ImageMetadata object
+		imageUrl = new URL(image.src, siteUrl).toString();
+	}
 } else {
-  imageUrl = `${siteUrl}/og-image.png`;
+	imageUrl = `${siteUrl}/og-image.png`;
 }
-const twitterHandle = '@jonaylor89';
+const twitterHandle = "@jonaylor89";
 ---
 
 <!doctype html>

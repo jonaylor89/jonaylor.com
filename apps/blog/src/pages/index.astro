@@ -1,25 +1,25 @@
 ---
-import { getCollection } from 'astro:content';
-import { Image } from 'astro:assets';
-import BaseLayout from '../layouts/BaseLayout.astro';
-import { format } from 'date-fns';
-import Footer from '../components/Footer.astro';
+import { Image } from "astro:assets";
+import { getCollection } from "astro:content";
+import { format } from "date-fns";
+import Footer from "../components/Footer.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
 
-const allPosts = await getCollection('posts', ({ data }) => {
-  const includeDrafts = import.meta.env.PUBLIC_INCLUDE_DRAFTS === 'true';
-  return includeDrafts || !data.draft;
+const allPosts = await getCollection("posts", ({ data }) => {
+	const includeDrafts = import.meta.env.PUBLIC_INCLUDE_DRAFTS === "true";
+	return includeDrafts || !data.draft;
 });
 
 const sortedPosts = allPosts.sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
 
 function calculateReadTime(content: string): number {
-  const wordsPerMinute = 200;
-  const wordCount = content.trim().split(/\s+/).length;
-  return Math.ceil(wordCount / wordsPerMinute);
+	const wordsPerMinute = 200;
+	const wordCount = content.trim().split(/\s+/).length;
+	return Math.ceil(wordCount / wordsPerMinute);
 }
 
 function formatReadTime(minutes: number): string {
-  return `${minutes} min read`;
+	return `${minutes} min read`;
 }
 ---
 

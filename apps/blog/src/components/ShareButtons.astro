@@ -1,15 +1,15 @@
 ---
 interface Props {
-  url: string;
-  title: string;
-  description?: string;
+	url: string;
+	title: string;
+	description?: string;
 }
 
 const { url, title, description } = Astro.props;
 
 const shareUrls = {
-  twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(title)}&url=${encodeURIComponent(url)}`,
-  linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
+	twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(title)}&url=${encodeURIComponent(url)}`,
+	linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
 };
 ---
 

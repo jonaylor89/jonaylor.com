@@ -1,21 +1,14 @@
 ---
 interface Props {
-  src: string;
-  alt: string;
-  width?: number;
-  height?: number;
-  caption?: string;
-  class?: string;
+	src: string;
+	alt: string;
+	width?: number;
+	height?: number;
+	caption?: string;
+	class?: string;
 }
 
-const {
-  src,
-  alt,
-  width = 800,
-  height = 600,
-  caption,
-  class: className = ''
-} = Astro.props;
+const { src, alt, width = 800, height = 600, caption, class: className = "" } = Astro.props;
 ---
 
 <figure class:list={['my-8', className]}>

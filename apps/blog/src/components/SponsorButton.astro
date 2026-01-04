@@ -1,10 +1,10 @@
 ---
 interface Props {
-  username: string;
-  class?: string;
+	username: string;
+	class?: string;
 }
 
-const { username, class: className = '' } = Astro.props;
+const { username, class: className = "" } = Astro.props;
 const sponsorUrl = `https://github.com/sponsors/${username}`;
 ---
 

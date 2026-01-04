@@ -1,7 +1,7 @@
 {
-  "title": "Apps",
-  "subtitle": "Hub of my awesome 🔥 Apps",
-  "image": "../../assets/images/playstore.png",
-  "link": "https://play.google.com/store/apps/developer?id=John+Naylor",
-  "order": 10
+	"title": "Apps",
+	"subtitle": "Hub of my awesome 🔥 Apps",
+	"image": "../../assets/images/playstore.png",
+	"link": "https://play.google.com/store/apps/developer?id=John+Naylor",
+	"order": 10
 }

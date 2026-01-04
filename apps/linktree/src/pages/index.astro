@@ -1,15 +1,15 @@
 ---
 import { getCollection } from "astro:content";
-import BaseLayout from "../layouts/BaseLayout.astro";
-import Header from "../components/Header.astro";
-import Footer from "../components/Footer.astro";
 import Card from "../components/Card.astro";
+import Footer from "../components/Footer.astro";
+import Header from "../components/Header.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
 
 // Get all links and sort by order
 const allLinks = await getCollection("links");
 const links = allLinks
-  .filter((link) => !link.data.hidden)
-  .sort((a, b) => a.data.order - b.data.order);
+	.filter((link) => !link.data.hidden)
+	.sort((a, b) => a.data.order - b.data.order);
 ---
 
 <BaseLayout>

@@ -1,6 +1,6 @@
 ---
 interface Props {
-  type?: "info" | "warning" | "success" | "error";
+	type?: "info" | "warning" | "success" | "error";
 }
 
 const { type = "info" } = Astro.props;
@@ -8,10 +8,10 @@ const { type = "info" } = Astro.props;
 const backgroundClass = "bg-gray-100 dark:bg-gray-800 bg-opacity-80 dark:bg-opacity-60";
 
 const borderClassMap = {
-  info: "border-l-4 border-blue-400 dark:border-blue-500",
-  warning: "border-l-4 border-amber-400 dark:border-amber-500",
-  success: "border-l-4 border-emerald-400 dark:border-emerald-500",
-  error: "border-l-4 border-red-400 dark:border-red-500",
+	info: "border-l-4 border-blue-400 dark:border-blue-500",
+	warning: "border-l-4 border-amber-400 dark:border-amber-500",
+	success: "border-l-4 border-emerald-400 dark:border-emerald-500",
+	error: "border-l-4 border-red-400 dark:border-red-500",
 };
 
 const borderClass = borderClassMap[type];

@@ -1,7 +1,7 @@
 {
-  "title": "Housefly",
-  "subtitle": "An interactive project designed to teach web scraping",
-  "image": "../../assets/images/housefly.png",
-  "link": "https://housefly.cc",
-  "order": 6
+	"title": "Housefly",
+	"subtitle": "An interactive project designed to teach web scraping",
+	"image": "../../assets/images/housefly.png",
+	"link": "https://housefly.cc",
+	"order": 6
 }

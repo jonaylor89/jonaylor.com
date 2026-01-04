@@ -2,13 +2,13 @@
 import "../styles/global.css";
 
 interface Props {
-  title?: string;
-  description?: string;
+	title?: string;
+	description?: string;
 }
 
 const {
-  title = "Johannes Naylor - Links",
-  description = "All of my important links in one place. Connect with me on social media, check out my projects, and explore my work.",
+	title = "Johannes Naylor - Links",
+	description = "All of my important links in one place. Connect with me on social media, check out my projects, and explore my work.",
 } = Astro.props;
 
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);

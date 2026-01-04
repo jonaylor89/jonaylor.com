@@ -1,32 +1,35 @@
 {
-  "name": "blog",
-  "type": "module",
-  "version": "0.0.1",
-  "scripts": {
-    "dev": "astro dev",
-    "build": "astro build",
-    "preview": "astro preview",
-    "astro": "astro",
-    "images:optimize": "deno run -A scripts/optimize-images.ts",
-    "test": "playwright test"
-  },
-  "dependencies": {
-    "@astrojs/mdx": "^4.3.13",
-    "@tailwindcss/typography": "^0.5.19",
-    "@tailwindcss/vite": "^4.1.18",
-    "astro": "^5.16.6",
-    "date-fns": "^4.1.0",
-    "highlight.js": "^11.11.1",
-    "rehype-highlight": "^7.0.2",
-    "remark-gfm": "^4.0.1",
-    "rss": "^1.2.2",
-    "tailwindcss": "^4.1.18"
-  },
-  "devDependencies": {
-    "@imagemagick/magick-wasm": "^0.0.31",
-    "@playwright/test": "^1.57.0",
-    "node-addon-api": "^8.5.0",
-    "node-gyp": "^12.1.0",
-    "sharp": "^0.34.5"
-  }
+	"name": "blog",
+	"type": "module",
+	"version": "0.0.1",
+	"scripts": {
+		"dev": "astro dev",
+		"build": "astro build",
+		"preview": "astro preview",
+		"astro": "astro",
+		"images:optimize": "deno run -A scripts/optimize-images.ts",
+		"test": "playwright test",
+		"lint": "biome check .",
+		"lint:fix": "biome check --write .",
+		"format": "biome format --write ."
+	},
+	"dependencies": {
+		"@astrojs/mdx": "^4.3.13",
+		"@tailwindcss/typography": "^0.5.19",
+		"@tailwindcss/vite": "^4.1.18",
+		"astro": "^5.16.6",
+		"date-fns": "^4.1.0",
+		"highlight.js": "^11.11.1",
+		"rehype-highlight": "^7.0.2",
+		"remark-gfm": "^4.0.1",
+		"rss": "^1.2.2",
+		"tailwindcss": "^4.1.18"
+	},
+	"devDependencies": {
+		"@imagemagick/magick-wasm": "^0.0.31",
+		"@playwright/test": "^1.57.0",
+		"node-addon-api": "^8.5.0",
+		"node-gyp": "^12.1.0",
+		"sharp": "^0.34.5"
+	}
 }
