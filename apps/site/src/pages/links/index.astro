@@ -1,0 +1,116 @@
+---
+import Footer from "../../components/Footer.astro";
+import Navigation from "../../components/Navigation.astro";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+const links = [
+	{
+		title: "Tapped Ai",
+		subtitle: "The leading live music database",
+		url: "https://tapped.ai",
+		icon: "rocket",
+	},
+	{
+		title: "GitHub",
+		subtitle: "@jonaylor89",
+		url: "https://github.com/jonaylor89",
+		icon: "github",
+	},
+	{
+		title: "Twitter / X",
+		subtitle: "@jonaylor89",
+		url: "https://twitter.com/jonaylor89",
+		icon: "twitter",
+	},
+	{
+		title: "LinkedIn",
+		subtitle: "Connect with me",
+		url: "https://www.linkedin.com/in/john-naylor",
+		icon: "linkedin",
+	},
+	{
+		title: "Play Store",
+		subtitle: "My Android apps",
+		url: "https://play.google.com/store/apps/developer?id=John+Naylor",
+		icon: "phone",
+	},
+	{
+		title: "Telegram",
+		subtitle: "@jonaylor89",
+		url: "https://telegram.me/jonaylor89",
+		icon: "message",
+	},
+	{
+		title: "Calendar",
+		subtitle: "Book a 30 min chat",
+		url: "https://cal.com/jonaylor89/30min",
+		icon: "calendar",
+	},
+];
+---
+
+<BaseLayout
+  title="Links - Johannes Naylor"
+  description="All my important links in one place"
+>
+  <Navigation />
+
+  <main class="max-w-md mx-auto px-5 py-10 min-h-screen">
+    <header class="text-center mb-10">
+      <div class="mx-auto mb-4">
+        <img src="/logo-dark-256.png" alt="Johannes Naylor" class="w-20 h-20 rounded-full mx-auto dark:hidden" />
+        <img src="/logo-light-256.png" alt="Johannes Naylor" class="w-20 h-20 rounded-full mx-auto hidden dark:block" />
+      </div>
+      <h1 class="text-2xl font-bold">Johannes Naylor</h1>
+      <p class="text-gray-600 dark:text-gray-400 text-sm mt-1">
+        Engineer & Entrepreneur
+      </p>
+    </header>
+
+    <div class="space-y-3">
+      {links.map((link, i) => (
+        <a
+          href={link.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="link-card block p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-200 hover:scale-[1.02]"
+          style={`animation-delay: ${i * 0.05}s`}
+        >
+          <div class="flex items-center gap-3">
+            <div class="flex-1">
+              <div class="font-medium">{link.title}</div>
+              <div class="text-sm text-gray-500 dark:text-gray-400">{link.subtitle}</div>
+            </div>
+            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+        </a>
+      ))}
+    </div>
+  </main>
+
+  <div class="text-center pb-8">
+    <p class="text-xs text-gray-400">
+      Made with ❤️ by Johannes
+    </p>
+  </div>
+</BaseLayout>
+
+<style>
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .link-card {
+    animation: fadeIn 0.3s ease-out forwards;
+    opacity: 0;
+  }
+</style>

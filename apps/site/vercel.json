@@ -1,0 +1,32 @@
+{
+	"$schema": "https://openapi.vercel.sh/vercel.json",
+	"redirects": [
+		{
+			"source": "/:path*",
+			"has": [{ "type": "host", "value": "blog.jonaylor.com" }],
+			"destination": "https://jonaylor.com/blog/:path*",
+			"permanent": true
+		},
+		{
+			"source": "/:path*",
+			"has": [{ "type": "host", "value": "bio.jonaylor.com" }],
+			"destination": "https://jonaylor.com/links/:path*",
+			"permanent": true
+		},
+		{
+			"source": "/needle_movers.html",
+			"destination": "/needle-movers",
+			"permanent": true
+		},
+		{
+			"source": "/user_manual.html",
+			"destination": "/user-manual",
+			"permanent": true
+		},
+		{
+			"source": "/index.html",
+			"destination": "/",
+			"permanent": true
+		}
+	]
+}

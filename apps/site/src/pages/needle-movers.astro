@@ -1,0 +1,65 @@
+---
+import Footer from "../components/Footer.astro";
+import Navigation from "../components/Navigation.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout
+  title="Needle Mover Ideas - Johannes Naylor"
+  description="A directory of ambitious ideas that could meaningfully accelerate progress for civilization."
+>
+  <Navigation />
+
+  <main class="max-w-3xl mx-auto px-5 md:px-10 py-10">
+    <header class="mb-12">
+      <h1 class="text-4xl font-bold mb-4">Needle Mover Ideas</h1>
+      <p class="text-gray-600 dark:text-gray-400">
+        Ambitious ideas that could meaningfully accelerate progress for civilization.
+      </p>
+    </header>
+
+    <section class="mb-12">
+      <ul class="list-disc pl-5 space-y-3">
+        <li>Nuclear fusion that hits net-positive energy</li>
+        <li>3D printing fully functional human organs</li>
+        <li>Digital brain interfaces
+          <ul class="list-disc pl-5 mt-2 space-y-1">
+            <li>Externalize ideas directly from your mind</li>
+            <li>Upload knowledge streams back into your brain</li>
+          </ul>
+        </li>
+        <li>Eradication of major diseases
+          <ul class="list-disc pl-5 mt-2 space-y-1">
+            <li>Tuberculosis</li>
+            <li>Polio</li>
+            <li>And other entrenched global killers</li>
+          </ul>
+        </li>
+        <li>Faster-than-light travel</li>
+        <li>Dyson-sphere-scale solar collection in orbit</li>
+        <li>Super-sonic overland trains (Hyperloop-tier speed)</li>
+        <li>Thought-driven control for software and hardware</li>
+        <li>Inertial protection systems for humans
+          <ul class="list-disc pl-5 mt-2 space-y-1">
+            <li>Artificial skeletons or exosuits to absorb extreme G-forces</li>
+            <li>Opens new opportunities for motorsports and aerospace</li>
+          </ul>
+        </li>
+        <li>Underwater cities</li>
+        <li>Retinal lens for professional and recreational use</li>
+      </ul>
+    </section>
+
+    <section class="mb-12 border-t border-gray-200 dark:border-gray-700 pt-8">
+      <h2 class="text-2xl font-bold mb-6">Civilizational Leaps</h2>
+      <ul class="list-disc pl-5 space-y-3">
+        <li>Constructing Dyson spheres to capture entire stellar outputs</li>
+        <li>Molecular assemblers building anything atom by atom</li>
+        <li>Self-replicating robots seeding infrastructure across the galaxy</li>
+        <li>Permanent colonies in other dimensions or parallel universes</li>
+      </ul>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>

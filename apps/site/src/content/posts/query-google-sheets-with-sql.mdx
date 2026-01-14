@@ -1,0 +1,44 @@
+---
+title: "Query Google Sheets with SQL"
+date: "2025-07-07"
+excerpt: "Turn Google Sheets into a Database with Go"
+tags: ["go", "google-sheets", "orm", "sql", "databases", "tutorial"]
+coverImage: "../../assets/images/covers/query-google-sheets-with-sql-cover.jpg"
+coverImageAlt: "Query Google Sheets with SQL cover image"
+---
+
+## Turning Google Sheets into a Database with Go
+
+So when I worked at my university’s IT department during college, getting an actual database required a lot of red tape. Because of this, it was very common for us to build apps that used Google sheets as a database (which is really fkn cursed). I wish this were a joke but *everything* was backed by some random Google sheet with like 80k rows in it. For example, I built a little script for setting up new desktop computers in computer labs. We needed a single binary that would run on all the machines and that would use google sheets as a DB.
+As much as I hate this, I have a feeling it’s not uncommon so I vibe-coded a little Go lib for it called `sheetsql` ([https://github.com/jonaylor89/sheetsql](https://github.com/jonaylor89/sheetsql)).
+
+> Is this unique?
+
+probably not, I’m sure there’s a million of these
+
+> Can this be used in production?
+
+if you’re using google sheets in production then does it really matter?
+
+### Why Go?
+- **Single binary**: no runtime dependencies, ship it and forget it.
+- **Cross-compiling**: build for Linux, Windows, macOS with ease. ideal for mixed‑environment labs.
+
+### Setup: Google Sheets creds
+- Create a Google Cloud service account, download its JSON key.
+- Share your sheet with the service account email ([xxx@yyy.iam.gserviceaccount.com](mailto:xxx@yyy.iam.gserviceaccount.com)).
+- Configure the `Client` to point at the sheet ID and keyfile.
+
+### Try it out
+
+![a screenshot of a google sheet](../../assets/images/posts/query-google-sheets-with-sql-image-3.png)
+
+![a screenshot of the output of the script](../../assets/images/posts/query-google-sheets-with-sql-image-4.png)
+
+isn’t it beautiful
+
+**In short**: if you ever need a quick SQL‑like layer on top of Sheets, **sheetsql** is *a* solution. no red tape, no DB admin required
+
+some useful-ish references:
+- [https://github.com/joway/sheetsql](https://github.com/joway/sheetsql?utm_source=chatgpt.com)
+- [https://eli.thegreenplace.net/2024/reading-google-sheets-from-a-go-program/](https://eli.thegreenplace.net/2024/reading-google-sheets-from-a-go-program/)

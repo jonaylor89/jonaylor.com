@@ -1,0 +1,447 @@
+---
+title: "Build a Simple Ai DAW"
+date: "2025-01-23"
+excerpt: "Program an Ai Audio Manipulation Agent with Python & Langchain"
+tags: ["music", "ai", "ai-agents", "python", "audio", "langchain", "tutorial", "ffmpeg"]
+coverImage: "../../assets/images/covers/build-a-simple-ai-daw-cover.jpg"
+coverImageAlt: "Build a Simple Ai DAW cover image"
+---
+
+# wtf is an Ai DAW!?
+
+Well first, wtf is a DAW? For the non-musicians, a Digital Audio Workstation (DAW) is a program one uses to create music such as Logic Pro, Ableton, FL Studio, even Garage Band.
+
+![a screenshot of Logic Pro](../../assets/images/posts/build-a-simple-ai-daw-image-3.png)
+
+They can be a bit complicated but this is the modern studio and where many musicians spend a ton of time.
+So whats an *Ai DAW*? Somewhat of a general term because just about anything can be labels Ai or a DAW so the term itself isn’t very helpful but commonly accepted examples of Ai DAW or just DAWs with Ai enhancements are Bandlabs *song starter* that lets one start off with something for inspiration before building out the rest of a track. Another controversial example can be like Udio or Suno’s Ai song creations tools which let one generate entire songs, extend them, and remix or edit sections. Ai in music is still in its infancy and there’s plenty of room of improvement, specialization, and potential new players.
+
+![a screenshot of Udio](../../assets/images/posts/build-a-simple-ai-daw-image-4.png)
+
+
+![a screenshot of Bandlab](../../assets/images/posts/build-a-simple-ai-daw-image-5.jpg)
+
+Today though, we’ll focus on something simpler. An Ai Agent written with the help of Langchain that makes use of a custom FFmpeg tool to manipulate and edit your local music library.
+
+# let’s build an agent
+- make the base agent (just a langchain example)
+- add the boilerplate for the tool
+
+One of the best explanations of an agent is from the LangChain website itself
+
+[Agents](https://python.langchain.com/docs/concepts/agents/) are systems that use [LLMs](https://python.langchain.com/docs/concepts/chat_models/) as reasoning engines to determine which actions to take and the inputs necessary to perform the action. After executing actions, the results can be fed back into the LLM to determine whether more actions are needed, or whether it is okay to finish. This is often achieved via [tool-calling](https://python.langchain.com/docs/concepts/tool_calling/).
+
+Thus a simple example of a agent would be asking like asking ChatGPT “what’s the 500th number in the fibonacci sequence, think in terms of steps you’d take to solve this given you have access to a python interpreter” where it would reply something like the following
+
+
+![a screenshot of ChatGPT](../../assets/images/posts/build-a-simple-ai-daw-image-6.png)
+
+and if we were to run the codeblock is provided, then replied with the result, it would accurately know what the 500th number in the fibonacci sequence was (which btw it got **WRONG**, there’s a bug in the code so it actually returned the 501st fibonacci number). And while that’s a simple example, using various prompting strategies, these agents can accomplish really sophisticated reasoning.
+
+![a screenshot of ChatGPT](../../assets/images/posts/build-a-simple-ai-daw-image-7.png)
+
+One of the more famous examples if using *Reasoning and Acting* or [ReAct](https://arxiv.org/abs/2210.03629) prompting. This is the description from the ReAct paper on the strategy.
+While large language models (LLMs) have demonstrated impressive capabilities across tasks in language understanding and interactive decision making, their abilities for reasoning (e.g. chain-of-thought prompting) and acting (e.g. action plan generation) have primarily been studied as separate topics. In this paper, we explore the use of LLMs to generate both reasoning traces and task-specific actions in an interleaved manner, allowing for greater synergy between the two: reasoning traces help the model induce, track, and update action plans as well as handle exceptions, while actions allow it to interface with external sources, such as knowledge bases or environments, to gather additional information
+The paper is an extremely interesting read so I recommend reading the whole thing. For our use case, we can start off with the template code LangChain provides for building agents that makes use of ReAct agents.
+
+```python
+# Import relevant functionality
+from langchain_anthropic import ChatAnthropic
+from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_core.messages import HumanMessage
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.prebuilt import create_react_agent
+
+# Saves the history of the chat
+memory = MemorySaver()
+
+# REQUIRES A CLAUDE API KEY
+model = ChatAnthropic(
+    model_name="claude-3-sonnet-20240229",
+    timeout=60,  # Maximum time to wait for model response
+    stop=None    # No custom stop tokens
+)
+
+# USING TAVILY FOR SEARCH
+search = TavilySearchResults(max_results=2)
+tools = [search]
+
+# ReAct Executioner
+agent_executor = create_react_agent(model, tools, checkpointer=memory)
+
+# Use the agent
+config = {"configurable": {"thread_id": "abc123"}}
+
+for chunk in agent_executor.stream(
+    {"messages": [HumanMessage(content="hi im bob! and i live in sf")]},
+    config
+):
+    print(chunk)
+    print("----")
+
+for chunk in agent_executor.stream(
+    {"messages": [HumanMessage(content="whats the weather where I live?")]},
+    config
+):
+    print(chunk)
+    print("----")
+```
+Running this in a virtual environment with all the necessary packages installed as well as environment variables set, you find in the wall of messy json text, the text contents the model is spitting out
+
+![a screenshot of the agent](../../assets/images/posts/build-a-simple-ai-daw-image-8.png)
+
+and if you parse just the agent messages from the mess, this is the conversation
+
+```
+Hello Bob! Welcome to Anthropic's AI assistant. Since you did not ask a specific question, I don't need to perform a search or invoke any tools. I'm an AI trained to be helpful, honest, and harmless. Please let me know if you have any questions or if there is anything I can assist you with.
+
+----
+
+[{'text': 'Okay, to get the weather for your location in San Francisco, let me invoke the search tool:', 'type': 'text'}, {'id': 'toolu_01Pbx2tAdrKFZSvxna4v1uLS', 'input': {'query': 'san francisco weather'}, 'name': 'tavily_search_results_json', 'type': 'tool_use'}]
+
+----
+
+Based on the search results, the current weather in San Francisco is partly cloudy with a temperature around 54°F (12°C). The forecast shows light winds from the east-northeast around 5-7 mph. The humidity is relatively low at 41% and visibility is good at 9 miles.
+
+Overall, it looks like pleasant winter weather in San Francisco today, Bob. The partly cloudy skies and mild temperatures make for nice conditions. Let me know if you need any other details about the forecast!
+
+----
+```
+
+# FFmpeg runs the world
+
+With out agent, we now have to do two things before we can have it editing music
+- give it access to a audio manipulation tool e.g. `FFmpeg`
+- give it access to a repository of our audio files
+
+Looking at the tools in the previous example, you can see that the input to the tool is still natural language thus our `FFmpegTool` will need to take a natural language query, create the appropriate `FFmpeg` cli command, execute that command, and return in plain text if the output was successful or not and whether the outputted file is located.
+Langchain includes a `BaseTool` that we can subclass and start by giving it a `name` and `description`
+
+```python
+# Required imports for FFmpeg tool functionality
+import asyncio
+import subprocess
+from typing import Optional
+from langchain.callbacks.manager import (
+    CallbackManagerForToolRun,
+    AsyncCallbackManagerForToolRun,
+)
+from langchain.tools import BaseTool
+from langchain.chains import LLMChain
+from langchain.llms import OpenAI
+from langchain.prompts import PromptTemplate
+
+class FfmpegTool(BaseTool):
+    """
+    A LangChain tool that provides FFmpeg audio manipulation capabilities through natural language.
+    This tool uses OpenAI's LLM to convert natural language requests into valid FFmpeg commands.
+
+    Features:
+    - Audio file clipping
+    - Format conversion
+    - Quality/bitrate adjustment
+    - Audio extraction from video
+    """
+
+    name: str = "FfmpegTool"
+    description: str = """Tool for audio file manipulation using FFmpeg. Can perform operations like:
+    - Clipping audio files to specific durations
+    - Converting between audio formats
+    - Adjusting audio quality and bitrate
+    - Extracting audio from video
+
+    Input should be a clear description of the desired audio operation."""
+```
+
+Next the `class` needs to implement `_run()` and the `async` `_arun()` . The general psuedocode for this run function is
+
+```
+1. ask Claude to create an FFmpeg command from the input request
+2. validate that isn't a FFmpeg command and there isn't anything extra
+3. run that FFmpeg command
+4. check for errors
+```
+
+So for the prompt to Claude, I didn’t get very fancy with the prompt engineering but I settled on this:
+
+Question or Query: `{query}`
+
+Generate a valid ffmpeg command to accomplish this task. Only return the command itself, no explanations or additional text. Use relative paths starting with ./samples/ for input and output files.
+
+```python
+def _run(
+    self,
+    query: str,
+    run_manager: Optional[CallbackManagerForToolRun] = None
+) -> str:
+    """
+    Synchronous execution of FFmpeg commands.
+
+    Flow:
+    1. Takes natural language query
+    2. Converts to FFmpeg command via LLM
+    3. Executes command and returns output
+
+    Args:
+        query: Natural language description of desired audio operation
+        run_manager: Optional callback manager for monitoring execution
+
+    Returns:
+        Command output or error message as string
+    """
+    # Template for LLM to convert natural language to FFmpeg command
+    prompt = f"""Question or Query: {query}
+
+Generate a valid ffmpeg command to accomplish this task. Only return the command itself, no explanations or additional text. Use relative paths starting with ./samples/ for input and output files."""
+
+    # Set up LLM chain to generate FFmpeg command
+    llm = ChatAnthropic(
+        model_name="claude-3-sonnet-20240229",
+        timeout=60,
+        stop=None,
+    )
+
+    messages = [
+        (
+            "system",
+            "You're an expert audio engineer specializing in FFmpeg operations.",
+        ),
+        ("human", prompt),
+    ]
+
+    content = llm.invoke(messages).content
+    command: str = str(content)
+
+    # Parse and validate the generated command
+    cmd_parts = [part.strip() for part in command.split() if part.strip()]
+
+    if not cmd_parts or cmd_parts[0] != "ffmpeg":
+        return "Invalid command generated"
+
+    # Prepare command with standard flags for consistent execution
+    if cmd_parts[0] == "ffmpeg":
+        cmd_parts = cmd_parts[1:]
+
+    # Add standard flags:
+    # -loglevel error: Only show errors
+    # -y: Overwrite output files without asking
+    full_cmd = ["ffmpeg", "-loglevel", "error", "-y"] + cmd_parts
+
+    print(f'\n\nrunning command: {" ".join(full_cmd)}')
+
+    output = subprocess.run(full_cmd, capture_output=True),
+
+    # Handle tuple output from subprocess.run()
+    if type(output) == tuple:
+        output = output[0]
+
+    # Process command output
+    stdout = output.stdout
+    stderr = output.stderr
+    returncode = output.returncode
+
+    print(f'[ffmpeg exited with {returncode}]')
+
+    if stdout:
+        print(f'\n{stdout.decode()}')
+
+    if stderr:
+        return f'[there was an error]\n{stderr.decode()}'
+
+    return stdout.decode()
+```
+
+And the `async` version
+
+```python
+async def _arun(
+    self,
+    query: str,
+    run_manager: Optional[AsyncCallbackManagerForToolRun] = None
+) -> str:
+    """
+    Asynchronous execution of FFmpeg commands.
+    Provides non-blocking execution for long-running FFmpeg operations.
+
+    Args:
+        query: Natural language description of desired audio operation
+        run_manager: Optional async callback manager for monitoring execution
+
+    Returns:
+        Status message indicating operation completion
+    """
+    async def async_run(cmd):
+        """
+        Inner async function to handle subprocess execution
+        Captures both stdout and stderr for proper error handling
+        """
+        proc = await asyncio.create_subprocess_shell(
+            cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        stdout, stderr = await proc.communicate()
+
+        print(f'[{cmd!r} exited with {proc.returncode}]')
+
+        if stdout:
+            print(f'[stdout]\n{stdout.decode()}')
+
+        if stderr:
+            print(f'[stderr]\n{stderr.decode()}')
+            raise Exception(f'[stderr]\n{stderr.decode()}')
+
+        return stdout.decode()
+
+    # Template for LLM to convert natural language to FFmpeg command
+    prompt = f"""Question or Query: {query}
+
+Generate a valid ffmpeg command to accomplish this task. Only return the command itself, no explanations or additional text. Use relative paths starting with ./samples/ for input and output files."""
+
+    # Set up LLM chain to generate FFmpeg command
+    llm = ChatAnthropic(
+        model_name="claude-3-sonnet-20240229",
+        timeout=60,
+        stop=None,
+    )
+
+    messages = [
+        (
+            "system",
+            "You're an expert audio engineer specializing in FFmpeg operations.",
+        ),
+        ("human", prompt),
+    ]
+
+    content = llm.invoke(messages).content
+    command: str = str(content)
+
+    # Parse and validate the generated command
+    cmd_parts = [part.strip() for part in command.split() if part.strip()]
+
+    if not cmd_parts or cmd_parts[0] != "ffmpeg":
+        return "Invalid command generated"
+
+    # Prepare command with standard flags for consistent execution
+    if cmd_parts[0] == "ffmpeg":
+        cmd_parts = cmd_parts[1:]
+
+    # Add standard flags:
+    # -loglevel error: Only show errors
+    # -y: Overwrite output files without asking
+    full_cmd = ["ffmpeg", "-loglevel", "error", "-y"] + cmd_parts
+
+    return await async_run(full_cmd)
+```
+# so does it work?
+
+Let’s figure out what this thing can and can’t do! If you’re following along, you can use your own music or I’ll put the samples I’m using in a Google Drive folder [here](https://drive.google.com/drive/folders/1ad3oQtZ_xYMefNQfnJzaiD8rlsl4nRnW?usp=sharing) that you’re welcome to use. We never built our a prompt audio CRUD system so we’re just going to put the files in a folder in the project so we can reference it with relative paths e.g. `./path/to/samples/file.mp3` .
+
+<Callout type="info">
+💡 Note: a better way to do this would to have all the files in a proper filestore with nice helpers for searching, getting, creating, and deleting files.  First, we’ll change the `main()` function to use the new tool we made.
+</Callout>
+
+```python
+def main():
+    ###########################################################################
+    # Agent Setup
+    ###########################################################################
+
+    # Initialize memory to maintain conversation state
+    memory = MemorySaver()
+
+    # Configure the Claude 3 Sonnet model as our main LLM
+    model = ChatAnthropic(
+        model_name="claude-3-sonnet-20240229",
+        timeout=60,  # Maximum time to wait for model response
+        stop=None    # No custom stop tokens
+    )
+
+    # Initialize tools that the agent can use:
+    # - TavilySearchResults: For web searches (limited to 2 results for conciseness)
+    # - FfmpegTool: Custom tool for audio manipulation
+    search = TavilySearchResults(max_results=2)
+    tools = [search, FfmpegTool()]
+
+    # Define the agent's core behavior and expertise through a prompt
+    prompt = """You are an expert audio engineer specializing in FFmpeg operations.
+When asked to perform audio operations:
+1. Use the FfmpegTool for any audio file manipulations
+2. Be precise with file paths, always using ./samples/ directory
+3. Verify the command's success and report any errors
+4. Only use valid FFmpeg parameters and syntax
+
+Remember to check the output of commands and handle any errors appropriately."""
+
+    # Create the reactive agent with our model, tools, and configuration
+    agent_executor = create_react_agent(model, tools, checkpointer=memory, state_modifier=prompt)
+
+    ###########################################################################
+    # Agent Interaction Examples
+    ###########################################################################
+
+    # Configuration for maintaining conversation thread
+    config = {"configurable": {"thread_id": "abc123"}}
+
+    # the commands we want the agent to do
+    usr_cmd = "<OUR COMMAND FOR THE AGENT>"
+
+    for chunk in agent_executor.stream(
+        {"messages": [HumanMessage(content=usr_cmd)]},
+        config,
+    ):
+        print(chunk)
+        print("----")
+```
+
+### trimming
+
+clip the audio file located at `./samples/helicopter.wav` to be 5 seconds, save it as an mp3 file
+
+### speed up
+
+speed up the audio file located at `./samples/ratatat.mp3` by 50% and save it as a wav file
+
+### filters
+
+add some echo the audio file located at `./samples/ratatat.mp3` and save it as an mp3 file
+
+trying all of these examples it and playing them with `ffplay`…kinda works? At least for me, it definitely isn’t perfect nor does it get it right the first time but I got some kind of output that was kind of correct every time.
+
+![a screenshot of the file created](../../assets/images/posts/build-a-simple-ai-daw-image-9.png)
+
+
+<YouTube url="https://youtu.be/omvvklmtyt8" />
+
+# potential improvements
+
+There’s two classes of improvements that I think are worth exploring for a bit:
+- improvements in the actual quality of the agent.
+- improvements in interacting with the agent
+
+### quality
+Currently, the agent has access to all of `FFmpeg` in a fairly open fashion. The first potential improvement would be to include examples of popular filters and operations as a way to guide it to what we want. For example, we could *one-shot prompt* it with those simple examples or go as far as adding separate functions for things like trimming, filters, and transcoding. That way the underlying LLM could output `trim(src: str, dest: str, start: str, end: str)` or `reverb(src: str, dest: str)` for predefined function and the normal `ffmpeg ....` for a custom ffmpeg command. Another great idea would be to have the tool interact with some simpler external audio editing interface like my [Cyberpunk](https://github.com/jonaylor89/cyberpunk-rs) server which would handle all the file fetching/creation as well as limit the surface area that the LLM has to think about.
+Another quality improvement would be to use more advanced tools such as one that uses Spotify’s [petalboard](https://github.com/spotify/pedalboard) library. That would give the agent the ability to load VST plugins or run more complex audio processing pipelines like:
+
+```python
+# Make a pretty interesting sounding guitar pedalboard:
+board = Pedalboard([
+    Compressor(threshold_db=-50, ratio=25),
+    Gain(gain_db=30),
+    Chorus(),
+    LadderFilter(mode=LadderFilter.Mode.HPF12, cutoff_hz=900),
+    Phaser(),
+    Convolution("./guitar_amp.wav", 1.0),
+    Reverb(room_size=0.25),
+])
+```
+
+Taking this a bit higher level, it’d be great to be able to say things more abstract like “make this sound more jazz-y” or “extend this sound to have a better outro” in which case we could add a tool for interfacing with Facebook’s [MusicGen](https://musicgen.com/) or (if they had nice APIs) [Udio](https://www.udio.com).
+Lastly, I think we can simplify the models we use for example, using a bigger model for the agent driver while smaller, faster models for the tools because creating these `FFmpeg` commands doesn’t require a lot of mental horsepower. To help the smaller ones, we can use that one-shot prompting or add a vector store of examples that it can communicate with for inspiration.
+
+### user experiment
+
+The most obvious improvement for talking to our agent is clearly making it an interactive cli tool and not something where we have to edit the source code every time we want to use a new prompt. Beyond that obvious one, cleaning up the output, and perhaps allowing for the ability to prompt it directly from your music player or DAW as a VST would be fantastic.
+Lastly, as mentioned previously, having a better audio source+destination for the agent to pull for, while also probably improving agent quality, would also improvement the experiment of interacting with the agent.
+All the source code for this can be found at [https://github.com/jonaylor89/AudioAgent](https://github.com/jonaylor89/AudioAgent) and the music I used in this blog post are saved at [this google drive link](https://drive.google.com/drive/folders/1ad3oQtZ_xYMefNQfnJzaiD8rlsl4nRnW?usp=sharing).

@@ -1,0 +1,122 @@
+---
+import { Image } from "astro:assets";
+import type { CollectionEntry } from "astro:content";
+import { getCollection } from "astro:content";
+import { format } from "date-fns";
+import Breadcrumb from "../../components/Breadcrumb.astro";
+import Footer from "../../components/Footer.astro";
+import { mdxComponents } from "../../components/mdx";
+import Navigation from "../../components/Navigation.astro";
+import ShareButtons from "../../components/ShareButtons.astro";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+export async function getStaticPaths() {
+	const posts = await getCollection("posts", ({ data }) => {
+		const includeDrafts = import.meta.env.PUBLIC_INCLUDE_DRAFTS === "true";
+		return includeDrafts || !data.draft;
+	});
+
+	return posts.map((post) => ({
+		params: { slug: post.slug },
+		props: { post },
+	}));
+}
+
+interface Props {
+	post: CollectionEntry<"posts">;
+}
+
+const { post } = Astro.props;
+const { Content } = await post.render();
+
+function calculateReadTime(content: string): number {
+	const wordsPerMinute = 200;
+	const wordCount = content.trim().split(/\s+/).length;
+	return Math.ceil(wordCount / wordsPerMinute);
+}
+
+function formatReadTime(minutes: number): string {
+	return `${minutes} min read`;
+}
+
+const readTime = calculateReadTime(post.body || "");
+const siteUrl = Astro.site?.toString() || "https://jonaylor.com";
+const postUrl = `${siteUrl}blog/${post.slug}`;
+---
+
+<BaseLayout
+  title={post.data.title}
+  description={post.data.excerpt}
+  image={post.data.coverImage}
+  type="article"
+  publishedTime={post.data.date}
+  tags={post.data.tags}
+>
+  <Navigation />
+
+  <main class="max-w-3xl mx-auto px-5 md:px-10 py-10 min-h-screen">
+    <Breadcrumb
+      items={[
+        { label: "Home", href: "/" },
+        { label: "Blog", href: "/blog" },
+        { label: post.data.title },
+      ]}
+    />
+
+    <article>
+      <header class="mb-8">
+        <h1 class="text-3xl md:text-4xl font-bold mb-4 leading-tight">
+          {post.data.title}
+        </h1>
+        {post.data.coverImage && (
+          <div class="mb-6 overflow-hidden rounded-md">
+            <Image
+              src={post.data.coverImage}
+              alt={post.data.coverImageAlt || post.data.title}
+              class="w-full h-64 md:h-80 object-cover"
+              widths={[640, 768, 1024, 1920]}
+              sizes="(max-width: 768px) 100vw, 1920px"
+            />
+          </div>
+        )}
+        <div class="flex items-center gap-4 text-gray-600 dark:text-gray-400 mb-6">
+          <time class="text-base" datetime={post.data.date.toISOString()}>
+            {format(post.data.date, "MMMM d, yyyy")}
+          </time>
+          <span>{formatReadTime(readTime)}</span>
+        </div>
+        {post.data.excerpt && (
+          <p class="text-xl text-gray-700 dark:text-gray-300 italic mb-8">
+            {post.data.excerpt}
+          </p>
+        )}
+      </header>
+
+      <div class="prose prose-lg max-w-none dark:prose-invert">
+        <Content components={mdxComponents} />
+      </div>
+
+      <ShareButtons url={postUrl} title={post.data.title} description={post.data.excerpt} />
+
+      {post.data.tags && post.data.tags.length > 0 && (
+        <div class="mt-6 pt-6">
+          <div class="flex flex-wrap gap-2">
+            {post.data.tags.map((tag) => (
+              <span class="bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full text-sm">
+                {tag}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </article>
+
+    <div class="mt-8 mb-4">
+      <a href="/blog" class="underline hover:opacity-70 transition-opacity">
+        ← Back to all posts
+      </a>
+    </div>
+  </main>
+
+  <Footer />
+</BaseLayout>

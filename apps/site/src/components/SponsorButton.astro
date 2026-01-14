@@ -1,0 +1,25 @@
+---
+interface Props {
+	username: string;
+	class?: string;
+}
+
+const { username, class: className = "" } = Astro.props;
+const sponsorUrl = `https://github.com/sponsors/${username}`;
+---
+
+<a
+  href={sponsorUrl}
+  target="_blank"
+  rel="noopener noreferrer"
+  class:list={[
+    'inline-flex items-center gap-2 px-4 py-2 bg-pink-50 dark:bg-pink-900/20 hover:bg-pink-100 dark:hover:bg-pink-900/40 text-pink-600 dark:text-pink-400 border border-pink-200 dark:border-pink-800 rounded-md transition-colors duration-200 text-sm font-medium',
+    className
+  ]}
+  title={`Sponsor ${username} on GitHub`}
+>
+  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+  </svg>
+  <span>Buy me some shawarma</span>
+</a>

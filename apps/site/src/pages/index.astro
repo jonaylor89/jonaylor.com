@@ -1,0 +1,66 @@
+---
+import Footer from "../components/Footer.astro";
+import Navigation from "../components/Navigation.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout
+  title="Johannes Naylor"
+  description="I'm Johannes Naylor, an engineer and entrepreneur who likes to build cool things."
+>
+  <Navigation />
+  
+  <main class="max-w-3xl mx-auto px-5 md:px-10 py-10">
+    <section class="mb-12">
+      <h1 class="text-4xl font-bold mb-4">Johannes Naylor</h1>
+      <p class="text-xl mb-4">Grüß Gott 👋</p>
+      <p class="text-lg leading-relaxed mb-4">
+        I'm Johannes Naylor, an engineer and entrepreneur from Virginia who likes to build cool things.
+      </p>
+    </section>
+
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold mb-4">Talks & Workshops</h2>
+      <ul class="space-y-3">
+        <li>
+          <a href="https://www.linkedin.com/posts/johannesnaylor_ai-and-music-panel-discussion-activity-1234567890" class="underline hover:opacity-70 transition-opacity" target="_blank" rel="noopener noreferrer">
+            AI and Music Panel Discussion with Suno
+          </a>
+          <span class="text-gray-600 dark:text-gray-400 ml-2">May 15, 2024</span>
+        </li>
+        <li>
+          <a href="https://www.youtube.com/watch?v=0yx1Lg0dlAE" class="underline hover:opacity-70 transition-opacity" target="_blank" rel="noopener noreferrer">
+            Speaking at UVA's Darden School of Business
+          </a>
+          <span class="text-gray-600 dark:text-gray-400 ml-2">April 28, 2024</span>
+        </li>
+        <li>
+          <a href="https://www.youtube.com/watch?v=iWDIax023zQ" class="underline hover:opacity-70 transition-opacity" target="_blank" rel="noopener noreferrer">
+            Future of AI, exploiting artists, and getting M's from investors
+          </a>
+          <span class="text-gray-600 dark:text-gray-400 ml-2">April 16, 2024</span>
+        </li>
+        <li>
+          <a href="https://www.youtube.com/watch?v=FmOVz0HuUyA" class="underline hover:opacity-70 transition-opacity" target="_blank" rel="noopener noreferrer">
+            Deploy a website in 60 seconds!
+          </a>
+          <span class="text-gray-600 dark:text-gray-400 ml-2">April 1, 2020</span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold mb-4">Contact Me</h2>
+      <p class="mb-4">
+        Let's grab coffee ☕ - find some time on my
+        <a href="https://cal.com/jonaylor89/30min" class="underline hover:opacity-70 transition-opacity" target="_blank" rel="noopener noreferrer">calendar</a>
+      </p>
+      <p>
+        Curious how I like to collaborate? Read my
+        <a href="/user-manual" class="underline hover:opacity-70 transition-opacity">user manual</a>.
+      </p>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>

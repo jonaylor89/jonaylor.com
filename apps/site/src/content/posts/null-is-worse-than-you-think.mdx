@@ -1,0 +1,200 @@
+---
+title: "null is worse than you think"
+date: "2023-04-27"
+excerpt: "why javascript has null and undefined"
+tags: ["javascript", "flutter", "dart", "programming-languages", "null-safety", "type-systems"]
+coverImage: "../../assets/images/covers/null-is-worse-than-you-think-cover.jpg"
+coverImageAlt: "null is worse than you think cover image"
+---
+
+# introduction
+Null is bad. Most people wouldn't argue with this unless they haven’t programmed on anything other than mainframes. But most programming languages have some kind of null and don’t have a great way of getting rid of it so we make due. Take dart, google’s wannabe javascript replacement, dart’s been around for a minute at this point and has a null. Luckily, dart has made leaps and bounds ahead of what it used to be to make null less ass to work with. For example, dart has syntax like this for nullable types
+
+```dart
+int myInt = 42;
+int? nullableInt = null;
+MyObject myObject = MyObject();
+Object? nullableObject = null;
+```
+
+And that’s definitely clean so cool. They also have ways to make function signatures a bit clearer with nullable types.
+
+```dart
+void myFunc({ int? myInt, }) {}
+
+myFunc(); // myInt would be `null`
+
+void myRequiredFunc({ required int? myInt, }) {}
+
+myRequiredFunc(myInt: null); // have to explicitly pass in `null`
+```
+
+Amazing, this is nicer than some other languages and makes code reasonably clean and more usable. Unfortunately it’s not enough.
+
+# problem
+
+First, some background. I’ve been programming an app called [Tapped](https://tapped.ai), a LinkedIn for the entertainment industry, for the past year and it’s written using Flutter and therefore dart. In the app, there are tons of models used to represent different pieces of data (e.g. a post model, user models, etc.) and they generally look like this.
+
+```dart
+class Post {
+  const Post({
+    required this.id,
+    required this.name,
+  }); // this is a constructor in dart btw
+
+  final String id;
+  final String name;
+}
+```
+
+With those model classes, I generally prefer to make them immutable and add a `copyWith()` function on them like so:
+
+```dart
+Post copyWith({
+  String? id,
+  String? name,
+}) {
+  return Post(
+    // '??' is fancy dart syntactic sugar for
+    // `id != null ? id : this.id`
+    id: id ?? this.id,
+    name: name ?? this.name,
+  );
+}
+
+// which is called like this
+final newPost = originalPost.copyWith(name: 'new');
+```
+
+It’s a bit more verbose than a javascript with the spread operator but it works and Github Copilot generally writes the whole function for me.
+
+```js
+const newPost = { name: 'new', ...originalPost }
+```
+
+With that background out of the way, let’s get into the problem. While working on a new feature, I received this warning from my linter when using the `copyWith()` function on one of my models.
+
+![screenshot of code lint errors](../../assets/images/posts/null-is-worse-than-you-think-image-3.png)
+
+The whole error is `“The value of the argument is redundant because it matches the default value”`
+
+WTF? what does this even mean? For some people this might be obvious but it took me an embarrassing amount of time to figure out what was going on. Turns out though, the linter is right, this is in fact a bug. This actually won’t update the `place` and `placeId` fields on the new object. The bug comes down to the line in the `copyWith()` function looking like `place: place ??` [`this.place`](http://this.place). Because the `place` that’s passed in is `null` it defaults to the original `place` value (i.e. [`this.place`](http://this.place))
+
+# solution
+
+When it finally clicked for me of why this was a bug I was blown away. **This is exactly why javascript has** `null` **and** `undefined`. In javascript, if no `place` value was passed in, it’d be `undefined` but `null` if `null` was specifically passed in. So the real question is, what’s the best way to fix this?
+
+### the bad way
+
+As hinted, javascript “fixes” this by introducing another value that also means “nothing” but a different kind of “nothing” called `undefined`. You can’t add another keyword to dart but you can hack around to create basically the same thing.
+
+```dart
+class _Undefined {}
+
+class Post {
+  Post({
+    required this.id,
+    required this.name,
+  });
+
+  final String id;
+  final String? name;
+
+  // const constructor no longer available
+  late Post Function({
+    String? id,
+    String? name,
+  }) copyWith = _copyWith;
+
+  Post _copyWith({
+    String? id,
+    Object? name = _Undefined,
+  }) {
+    return Post(
+      id: id ?? this.id,
+      name: name == _Undefined ? this.name : name as String?,
+    );
+  }
+}
+
+Post().copyWith(name: null);
+Post().copyWith(name: '');
+```
+
+Please don’t do this. Please.
+
+Javascript does many things well but this is not one of those things. The extra complexity with the private+late public function isn’t worth it. It’s a little hard to follow unless you know exactly what this problem is solving.
+
+### the mid way
+
+Another way to solve it is with a function wrapper.
+
+```dart
+class Post {
+  Post({
+    this.id,
+    this.name,
+  });
+
+  final String id;
+  final String? name;
+
+  Post copyWith({
+    String? id,
+    String? Function()? name,
+  }) => Post(
+    id: id ?? this.id,
+    name != null ? name() : this.name,
+  );
+}
+
+// this would be called like
+Post().copyWith(name: () => 'bob')
+Post().copyWith(name: () => null)
+```
+
+This isn’t the worst. It’s a cool wrapper and the syntax is a little concise but I don’t like it for a couple reasons:
+- the person calling the function might be confused why this is a function and might overthink it and mess it up
+- in the `copyWith()` function, an outsider would be hella confused why it is the way it is
+
+The tl;dr of these gripes is that we’re using a function as a wrapper but that’s not really what functions are for. It works and is reasonably concise but it’s not clear at first glance why it is the way it is.
+
+### the chad way
+So how do you wrap the value with a type that has a clearer meaning? Why not make our own wrapper type??
+
+```dart
+class Option<T> {
+  const Option(this.value);
+  final T? value;
+}
+
+class Post {
+  Post({
+    this.id,
+    this.name,
+  });
+
+  final String id;
+  final String? name;
+
+  Post copyWith({
+    String? id,
+    Option<String>? name,
+  }) => Post(
+    id: id ?? this.id,
+    name: name != null ? name.value : this.name,
+  );
+}
+
+// this would be called like
+Post().copyWith(name: Option('bob'))
+Post().copyWith(name: Option(null))
+```
+
+It’s a bit more verbose than the function wrapper but it’s purpose is super clear. An outsider looking at this might be confused for a sec but it doesn’t take too much hand holding for them to get it. You can also add helper functions on that `Option<T>` class similar to what rust does with `None` and `Some` to shorten the amount of characters you need to type but that’s just being fancy.
+I ended up using this solution in Tapped and I’m super pleased with the results. It’ll never been *perfect* but this is by far my more preferred solution.
+
+# conclusion
+This article isn't any kind of smoking gun on `null` - it’s been unliked for a while now but this was a cool little edge case against `null` that I ran into in a language that actively tries to make `null` less bad. Adding `Option<T>` has been so helpful that it makes me consider using the type everywhere in the project and not just in the `copyWith()` function.
+
+Also I wrote this on my notes app on a plane so forgive any crazy spelling or grammar issues lol

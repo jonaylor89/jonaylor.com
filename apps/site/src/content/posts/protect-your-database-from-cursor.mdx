@@ -1,0 +1,34 @@
+---
+title: "Protect Your Database from Cursor"
+date: "2025-09-04"
+excerpt: "a database proxy to defend against AI"
+tags: ["databases", "postgres", "ai", "security", "proxy", "tutorial"]
+coverImage: "../../assets/images/covers/protect-your-database-from-cursor-cover.jpg"
+coverImageAlt: "Protect Your Database from Cursor cover image"
+---
+
+<YouTube url="https://www.youtube.com/watch?v=kKO8CHGAzJU"/>
+
+ I’ve been seeing a bunch of screenshots on twitter of horrified vibecoders realize Cursor did irreversible damage to their application e.g.
+
+![cursor deleting someone's database](../../assets/images/posts/protect-your-database-from-cursor-image-3.png)
+
+ Personally, I think it’s fucking wild to give any AI agent read/write permission on anything important and without version control but out of curiosity/boredom I build something to mitigate these errors.
+
+ ### have your database defend itself
+
+ I called it [pg_guard](https://github.com/jonaylor89/pg_guard) and it’s a Postgres proxy that sits between your app and your database and audits unusual or suspicious queries while rejecting potentially dangerous ones with a human readable error message designed for guiding whatever vibecoding tool you’re using.
+
+ Here's how it works:
+
+  - **Query Interception:** pg_guard analyzes every SQL query before it ever hits your database. It's like a bouncer for your data, checking every query to make sure it's not going to cause a problem.
+
+ - **Row-Level Damage Limiting:** Ever run a `DELETE` or `UPDATE` that affects way more rows than you intended? pg_guard will stop it in its tracks. You can configure a limit, and if a query would affect more rows than that, pg_guard will block it.
+
+ - **Dangerous Query Blocking:** pg_guard automatically blocks truly dangerous queries like `DROP TABLE` and `TRUNCATE`. It also prevents `DELETE` and `UPDATE` queries without a `WHERE` clause, which is a common source of disaster.
+
+ - **Human-Readable Errors:** One of my favorite features is that it provides helpful, human-readable error messages. If a query is blocked, pg_guard will tell you why, which is especially useful for tools like `claude/cursor` so they can correct their queries to be safe. I’ve been doing this with other tools as well based on a conversation I had with Armin, the creator of Flask, and it's something he wrote about in one of his blog posts: [https://lucumr.pocoo.org/2025/6/12/agentic-coding/](https://lucumr.pocoo.org/2025/6/12/agentic-coding/)
+
+ I'm a big believer in building tools that are simple, focused, and solve a real problem. pg_guard isn't a replacement for proper database management, but it is a small, easy-to-use safety net that can prevent a lot of headaches. It's a "curse-proof" layer that lets me use the tools I love without worrying about a catastrophic accident.
+
+ You can check out the source code [https://github.com/jonaylor89/pg_guard](https://github.com/jonaylor89/pg_guard)

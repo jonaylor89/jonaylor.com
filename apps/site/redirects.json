@@ -1,0 +1,47 @@
+{
+	"version": 1,
+	"description": "Redirect rules for jonaylor.com migration",
+	"domainRedirects": [
+		{
+			"from": "blog.jonaylor.com",
+			"toPrefix": "/blog",
+			"status": 301,
+			"description": "Old blog domain to /blog path"
+		},
+		{
+			"from": "bio.jonaylor.com",
+			"toPrefix": "/links",
+			"status": 301,
+			"description": "Old linktree domain to /links path"
+		},
+		{
+			"from": "gm.jonaylor.com",
+			"toPrefix": "/gm",
+			"status": 301,
+			"description": "Old gm domain to /gm path"
+		},
+		{
+			"from": "resume.jonaylor.com",
+			"toPrefix": "/resume",
+			"status": 301,
+			"description": "Old resume domain to /resume path"
+		}
+	],
+	"pathRedirects": [
+		{
+			"from": "/needle_movers.html",
+			"to": "/needle-movers",
+			"status": 301
+		},
+		{
+			"from": "/user_manual.html",
+			"to": "/user-manual",
+			"status": 301
+		},
+		{
+			"from": "/index.html",
+			"to": "/",
+			"status": 301
+		}
+	]
+}

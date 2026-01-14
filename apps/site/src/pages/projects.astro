@@ -1,0 +1,110 @@
+---
+import Footer from "../components/Footer.astro";
+import Navigation from "../components/Navigation.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+const projects = [
+	{
+		category: "Companies",
+		items: [
+			{
+				name: "Tapped Ai",
+				description: "The leading live music database",
+				url: "https://tapped.ai",
+				year: "2021",
+			},
+			{
+				name: "In The Loop",
+				description: "Platform for artists and producers to collaborate",
+				url: "https://intheloopstudio.com",
+				year: "2022",
+			},
+			{
+				name: "Moments.fm",
+				description: "Transform memories into personalized melodies",
+				url: "https://moments.fm",
+				year: "2024",
+			},
+		],
+	},
+	{
+		category: "Projects",
+		items: [
+			{
+				name: "Housefly",
+				description: "Interactive playground for learning web scraping",
+				url: "https://housefly.cc",
+				year: "2024",
+			},
+			{
+				name: "Saint John",
+				description: "Distraction-free Android home screen",
+				url: "https://saintjohn.jonaylor.com",
+				year: "2023",
+			},
+			{
+				name: "Language Hub",
+				description: "Turn Notion into a language learning center",
+				url: "https://language-hub.jonaylor.com",
+				year: "2022",
+			},
+		],
+	},
+];
+---
+
+<BaseLayout
+  title="Projects - Johannes Naylor"
+  description="Things I've built - companies, open source projects, and experiments."
+>
+  <Navigation />
+
+  <main class="max-w-2xl mx-auto px-5 md:px-10 py-10 min-h-screen">
+    <header class="mb-12">
+      <h1 class="text-3xl font-bold mb-2">Projects</h1>
+      <p class="text-gray-600 dark:text-gray-400">
+        Things I've built over the years. 
+
+      Let's work on <a href="/needle-movers" class="underline hover:opacity-70 transition-opacity">needle mover ideas</a>.
+      </p>
+    </header>
+
+    {projects.map((group) => (
+      <section class="mb-10">
+        <h2 class="text-sm uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-4 font-medium">
+          {group.category}
+        </h2>
+        <div class="space-y-4">
+          {group.items.map((project) => (
+            <a
+              href={project.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="block group"
+            >
+              <div class="flex items-baseline justify-between gap-4">
+                <div class="flex-1 min-w-0">
+                  <span class="font-medium group-hover:underline">{project.name}</span>
+                  <span class="text-gray-600 dark:text-gray-400 ml-2 text-sm">
+                    {project.description}
+                  </span>
+                </div>
+                <span class="text-sm text-gray-400 dark:text-gray-500 shrink-0">
+                  {project.year}
+                </span>
+              </div>
+            </a>
+          ))}
+        </div>
+      </section>
+    ))}
+
+    <section class="mt-12 pt-8 border-t border-gray-200 dark:border-gray-700">
+      <p class="text-sm text-gray-500 dark:text-gray-400">
+        More on <a href="https://github.com/jonaylor89" class="underline hover:opacity-70" target="_blank" rel="noopener noreferrer">GitHub</a> and the <a href="https://play.google.com/store/apps/developer?id=John+Naylor" class="underline hover:opacity-70" target="_blank" rel="noopener noreferrer">Play Store</a>.
+      </p>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>

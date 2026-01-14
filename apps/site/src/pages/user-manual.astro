@@ -1,0 +1,196 @@
+---
+import Footer from "../components/Footer.astro";
+import Navigation from "../components/Navigation.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout
+  title="Working with Johannes Naylor"
+  description="A practical guide for collaborating effectively with Johannes Naylor."
+>
+  <Navigation />
+
+  <main class="max-w-3xl mx-auto px-5 md:px-10 py-10">
+    <header class="mb-12">
+      <span class="text-xs uppercase tracking-widest text-gray-500">User Manual</span>
+      <h1 class="text-4xl font-bold mb-4 mt-2">Working with Johannes Naylor</h1>
+      <p class="text-gray-600 dark:text-gray-400">
+        Want to work together? Grab time on my
+        <a href="https://cal.com/jonaylor89/30min" class="underline hover:opacity-70 transition-opacity" target="_blank" rel="noopener noreferrer">calendar</a>
+        and let's get into it.
+      </p>
+    </header>
+
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold mb-6">Core Values</h2>
+
+      <div class="space-y-6 border-t border-gray-200 dark:border-gray-700 pt-6">
+        <div>
+          <h3 class="text-lg font-semibold mb-2">What are the values that drive you?</h3>
+          <ul class="list-disc pl-5 space-y-1">
+            <li>Constant learning and growth</li>
+            <li>Empathy and respect</li>
+            <li>Creativity</li>
+            <li>Joy with grit</li>
+            <li>Integrity and doing the right thing even when it's hard</li>
+          </ul>
+        </div>
+
+        <div class="border-t border-gray-100 dark:border-gray-800 pt-6">
+          <h3 class="text-lg font-semibold mb-2">What do you value in professional relationships?</h3>
+          <ul class="list-disc pl-5 space-y-1">
+            <li>Clear communication</li>
+            <li>Open to healthy conflict</li>
+            <li>Bias towards action</li>
+            <li>Aligned incentives</li>
+            <li>Genuine care for the other person</li>
+            <li>Pushing me to be better</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold mb-6">Work Style</h2>
+
+      <div class="space-y-6 border-t border-gray-200 dark:border-gray-700 pt-6">
+        <div>
+          <h3 class="text-lg font-semibold mb-2">How do you like to work?</h3>
+          <p>Before lunch and after dinner are my lock-in times. Midday is prime time for calls and collaboration.</p>
+        </div>
+
+        <div class="border-t border-gray-100 dark:border-gray-800 pt-6">
+          <h3 class="text-lg font-semibold mb-2">Are you a planner or do you prefer flexibility?</h3>
+          <p>Deadlines create focus. Without them, people get busy but not productive.</p>
+          <figure class="mt-4">
+            <img src="/images/nasa_sp287.png" alt="NASA SP287 planning chart emphasizing schedule discipline" class="rounded-lg shadow-md max-w-full" />
+            <figcaption class="text-sm text-gray-500 dark:text-gray-400 mt-2 text-center">NASA SP287</figcaption>
+          </figure>
+        </div>
+
+        <div class="border-t border-gray-100 dark:border-gray-800 pt-6">
+          <h3 class="text-lg font-semibold mb-2">How do you approach problem-solving?</h3>
+          <p>Chess wisdom: "When you see a good move, look for a better one." I iterate on solutions, scanning for creative angles until I'm satisfied or hit the timebox.</p>
+        </div>
+
+        <div class="border-t border-gray-100 dark:border-gray-800 pt-6">
+          <h3 class="text-lg font-semibold mb-2">What's your ideal work environment?</h3>
+          <p>Dynamic settings keep me engaged. I need variety to avoid getting bored and distracted.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold mb-6">Communication Preferences</h2>
+
+      <figure class="mb-6">
+        <img src="/images/nasa_meetings.png" alt="NASA SP287 communication diagram mapping feedback loops" class="rounded-lg shadow-md max-w-full" />
+        <figcaption class="text-sm text-gray-500 dark:text-gray-400 mt-2 text-center">NASA SP287</figcaption>
+      </figure>
+
+      <div class="space-y-6 border-t border-gray-200 dark:border-gray-700 pt-6">
+        <div>
+          <h3 class="text-lg font-semibold mb-2">How do you prefer to communicate?</h3>
+          <ul class="list-disc pl-5 space-y-1">
+            <li>Slack for most things
+              <ul class="list-disc pl-5 mt-1">
+                <li>Use public channels by default</li>
+                <li>DMs reserved for non-work notes</li>
+              </ul>
+            </li>
+            <li>Loom instead of meetings when it's a walkthrough</li>
+            <li>Call or text if something is urgent</li>
+            <li>In-person for 1:1s</li>
+          </ul>
+        </div>
+
+        <div class="border-t border-gray-100 dark:border-gray-800 pt-6">
+          <h3 class="text-lg font-semibold mb-2">What is your typical response time?</h3>
+          <p>Generally within an hour unless I'm heads-down or away from my phone.</p>
+        </div>
+
+        <div class="border-t border-gray-100 dark:border-gray-800 pt-6">
+          <h3 class="text-lg font-semibold mb-2">How often do you like to check in?</h3>
+          <p>Casual syncs every two weeks keep us aligned. When things are critical, let's increase the cadence even so far as doing daily checkins the last week or two between big releases. In general you can't communicate too much.</p>
+        </div>
+
+        <div class="border-t border-gray-100 dark:border-gray-800 pt-6">
+          <h3 class="text-lg font-semibold mb-2">Do you prefer written or verbal communication?</h3>
+          <p>Written is best for retention. Looms or meetings help for introductions and nuance you can't capture in docs.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold mb-6">Feedback</h2>
+
+      <div class="space-y-6 border-t border-gray-200 dark:border-gray-700 pt-6">
+        <div>
+          <h3 class="text-lg font-semibold mb-2">How do you prefer to receive feedback?</h3>
+          <p>Be blunt just don't be rude. I can be an idiot so blunt feedback is much appreciated but if feedback comes with disrespect, I'll default to spite and that helps no one.</p>
+        </div>
+
+        <figure class="my-6">
+          <img src="/images/rejection_message.jpg" alt="Text message screenshot of a VC rejection explaining a pass" class="rounded-lg shadow-md max-w-sm mx-auto" />
+          <figcaption class="text-sm text-gray-500 dark:text-gray-400 mt-2 text-center">Quick and easy feedback from a VC</figcaption>
+        </figure>
+
+        <div class="border-t border-gray-100 dark:border-gray-800 pt-6">
+          <h3 class="text-lg font-semibold mb-2">How often do you like feedback?</h3>
+          <p>As often as needed. After big deliverables, I like sitting with the team to talk through what worked and how we can smooth things out next time.</p>
+        </div>
+
+        <div class="border-t border-gray-100 dark:border-gray-800 pt-6">
+          <h3 class="text-lg font-semibold mb-2">What's your approach to giving feedback?</h3>
+          <ul class="list-disc pl-5 space-y-1">
+            <li>Direct 1:1 conversations</li>
+            <li>Blameless retro-style discussions</li>
+            <li>If someone is struggling, the whole team is accountable for supporting them. It's nobody's fault because it's everyone's responsibility</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold mb-6">Optimal Performance</h2>
+
+      <div class="space-y-6 border-t border-gray-200 dark:border-gray-700 pt-6">
+        <div>
+          <h3 class="text-lg font-semibold mb-2">What conditions help you perform your best?</h3>
+          <p>Being around friends is distracting, so I gravitate toward diverse environments and even working around strangers to stay focused. BUT if it's crunch time then I'd prefer the whole team together in one room hackathon-style.</p>
+          <figure class="mt-4">
+            <img src="/images/work_env.jpg" alt="Team deep in focus during a late-night hackathon work session" class="rounded-lg shadow-md max-w-full" />
+            <figcaption class="text-sm text-gray-500 dark:text-gray-400 mt-2 text-center">CPTC 2019</figcaption>
+          </figure>
+        </div>
+
+        <div class="border-t border-gray-100 dark:border-gray-800 pt-6">
+          <h3 class="text-lg font-semibold mb-2">Are you a morning person or night owl?</h3>
+          <p>Both? My most productive blocks are before lunch and after dinner, and I try to stay offline then to keep momentum.</p>
+        </div>
+
+        <div class="border-t border-gray-100 dark:border-gray-800 pt-6">
+          <h3 class="text-lg font-semibold mb-2">How do you recharge?</h3>
+          <p>Long walks reset my brain. An hour walk can save days of spinning, and short walks between tasks make context switching easier.</p>
+        </div>
+
+        <div class="border-t border-gray-100 dark:border-gray-800 pt-6">
+          <h3 class="text-lg font-semibold mb-2">What support do you need from colleagues?</h3>
+          <ul class="list-disc pl-5 space-y-1">
+            <li>Clear documentation</li>
+            <li>Directional clarity</li>
+            <li>A healthy, communicative team culture</li>
+          </ul>
+        </div>
+      </div>
+
+      <p class="mt-8">
+        Want to collaborate? Grab time on my
+        <a href="https://cal.com/jonaylor89/30min" class="underline hover:opacity-70 transition-opacity font-semibold" target="_blank" rel="noopener noreferrer">calendar</a>
+        and let's get into it.
+      </p>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>

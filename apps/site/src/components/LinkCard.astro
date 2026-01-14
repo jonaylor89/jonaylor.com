@@ -1,0 +1,53 @@
+---
+import type { ImageMetadata } from "astro";
+
+interface Props {
+	title: string;
+	subtitle: string;
+	image: ImageMetadata;
+	link: string;
+	index: number;
+}
+
+const { title, subtitle, image, link, index } = Astro.props;
+const animationDelay = `${index * 0.1}s`;
+---
+
+<a href={link} target="_blank" rel="noopener noreferrer" class="block">
+  <div
+    class="link-card p-2 rounded-lg cursor-pointer transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+    style={`animation-delay: ${animationDelay}`}
+  >
+    <img
+      src={image.src}
+      alt={`${title} cover`}
+      class="w-full h-24 object-cover rounded-lg"
+      loading={index < 3 ? "eager" : "lazy"}
+    />
+    <div class="mt-2">
+      <h3 class="text-lg font-medium tracking-wide">
+        {title}
+      </h3>
+      <p class="text-sm text-gray-600 dark:text-gray-400">{subtitle}</p>
+    </div>
+  </div>
+</a>
+
+<style>
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .link-card {
+    animation: slideUp 0.4s ease-out forwards;
+    animation-delay: var(--animation-delay, 0s);
+    opacity: 0;
+  }
+</style>

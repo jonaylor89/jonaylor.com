@@ -1,0 +1,127 @@
+---
+import "../styles/global.css";
+
+interface Props {
+	title: string;
+	description?: string;
+	image?: string | ImageMetadata;
+	type?: "website" | "article";
+	publishedTime?: Date;
+	modifiedTime?: Date;
+	author?: string;
+	tags?: string[];
+}
+
+const {
+	title,
+	description = "Johannes Naylor - Engineer and entrepreneur who likes to build cool things.",
+	image,
+	type = "website",
+	publishedTime,
+	modifiedTime,
+	author = "Johannes Naylor",
+	tags = [],
+} = Astro.props;
+
+const canonicalURL = new URL(Astro.url.pathname, Astro.site);
+const siteUrl = Astro.site?.toString() || "https://jonaylor.com";
+
+let imageUrl: string;
+if (image) {
+	if (typeof image === "string") {
+		imageUrl = new URL(image, siteUrl).toString();
+	} else {
+		imageUrl = new URL(image.src, siteUrl).toString();
+	}
+} else {
+	imageUrl = `${siteUrl}/og-image.png`;
+}
+const twitterHandle = "@jonaylor89";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="canonical" href={canonicalURL} />
+    <meta name="generator" content={Astro.generator} />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=PT+Serif:wght@400;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+    <!-- Primary Meta Tags -->
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="author" content={author} />
+    {tags.length > 0 && <meta name="keywords" content={tags.join(', ')} />}
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content={type} />
+    <meta property="og:url" content={canonicalURL} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={imageUrl} />
+    <meta property="og:site_name" content="Johannes Naylor" />
+    {type === 'article' && publishedTime && (
+      <meta property="article:published_time" content={publishedTime.toISOString()} />
+    )}
+    {type === 'article' && modifiedTime && (
+      <meta property="article:modified_time" content={modifiedTime.toISOString()} />
+    )}
+    {type === 'article' && author && (
+      <meta property="article:author" content={author} />
+    )}
+    {type === 'article' && tags.map((tag) => (
+      <meta property="article:tag" content={tag} />
+    ))}
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content={twitterHandle} />
+    <meta name="twitter:creator" content={twitterHandle} />
+    <meta name="twitter:url" content={canonicalURL} />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={imageUrl} />
+
+    <!-- Structured Data (JSON-LD) -->
+    {type === 'article' && (
+      <script type="application/ld+json" set:html={JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'BlogPosting',
+        headline: title,
+        description: description,
+        image: imageUrl,
+        datePublished: publishedTime?.toISOString(),
+        dateModified: modifiedTime?.toISOString() || publishedTime?.toISOString(),
+        author: {
+          '@type': 'Person',
+          name: author,
+          url: 'https://jonaylor.com',
+        },
+        publisher: {
+          '@type': 'Person',
+          name: author,
+        },
+        mainEntityOfPage: {
+          '@type': 'WebPage',
+          '@id': canonicalURL.toString(),
+        },
+        keywords: tags.join(', '),
+      })} />
+    )}
+
+    <!-- RSS Feed -->
+    <link rel="alternate" type="application/rss+xml" title="Johannes Naylor's Blog" href="/blog/rss.xml" />
+
+    <!-- Plausible Analytics -->
+    <script defer data-domain="jonaylor.com" src="https://plausible.io/js/script.js"></script>
+  </head>
+  <body class="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <slot />
+  </body>
+</html>
