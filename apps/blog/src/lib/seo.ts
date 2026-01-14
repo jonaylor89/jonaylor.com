@@ -7,7 +7,7 @@ const siteConfig = {
 	url: "https://blog.jonaylor.com",
 	author: {
 		name: "Johannes Naylor",
-		email: "jonaylor89@gmail.com",
+		email: "johannes@jonaylor.com",
 		twitter: "@jonaylor89",
 	},
 	keywords: ["blog", "technology", "software development", "web development", "langauges"],

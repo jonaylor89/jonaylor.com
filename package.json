@@ -12,7 +12,7 @@
 		"check": "biome check ."
 	},
 	"keywords": [],
-	"author": "Johannes Naylor <jonaylor89@gmail.com>",
+	"author": "Johannes Naylor <johannes@jonaylor.com>",
 	"license": "MIT",
 	"packageManager": "pnpm@10.27.0",
 	"devDependencies": {
