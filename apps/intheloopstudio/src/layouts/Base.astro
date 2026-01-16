@@ -8,10 +8,7 @@ const {
 	title,
 	description = "In The Loop - The online platform tailored for producers and creators to share their loops to the world, get feedback on their music, and join the world-wide community of artists to collaborate with",
 } = Astro.props;
-const canonicalURL = new URL(
-	Astro.url.pathname,
-	Astro.site ?? "https://intheloopstudio.com",
-);
+const canonicalURL = new URL(Astro.url.pathname, Astro.site ?? "https://intheloopstudio.com");
 ---
 
 <!doctype html>

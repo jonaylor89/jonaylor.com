@@ -1,13 +1,13 @@
 {
 	"$schema": "https://openapi.vercel.sh/vercel.json",
 	"redirects": [
-		{	
+		{
 			"source": "/",
 			"has": [{ "type": "host", "value": "blog.jonaylor.com" }],
 			"destination": "https://jonaylor.com/blog",
 			"permanent": true
-		}
-,		{
+		},
+		{
 			"source": "/:path*",
 			"has": [{ "type": "host", "value": "blog.jonaylor.com" }],
 			"destination": "https://jonaylor.com/blog/:path*",
