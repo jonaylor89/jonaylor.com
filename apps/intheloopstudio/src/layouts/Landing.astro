@@ -1,0 +1,50 @@
+---
+import Footer from "../components/Footer.astro";
+import Header from "../components/Header.astro";
+import Base from "./Base.astro";
+
+interface Props {
+	title: string;
+	description?: string;
+}
+
+const { title, description } = Astro.props;
+---
+
+<Base title={title} description={description}>
+	<Header />
+	<main>
+		<slot />
+	</main>
+	<Footer />
+	
+	<!-- Back to top button -->
+	<button
+		id="back-to-top"
+		class="fixed bottom-6 right-6 z-50 hidden h-12 w-12 items-center justify-center rounded-full bg-secondary text-white shadow-lg transition-all hover:scale-110 hover:bg-secondary/90"
+		aria-label="Back to top"
+	>
+		<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+		</svg>
+	</button>
+</Base>
+
+<script>
+	const btn = document.getElementById("back-to-top");
+	if (btn) {
+		window.addEventListener("scroll", () => {
+			if (window.scrollY > 300) {
+				btn.classList.remove("hidden");
+				btn.classList.add("flex");
+			} else {
+				btn.classList.add("hidden");
+				btn.classList.remove("flex");
+			}
+		}, { passive: true });
+		
+		btn.addEventListener("click", () => {
+			window.scrollTo({ top: 0, behavior: "smooth" });
+		});
+	}
+</script>

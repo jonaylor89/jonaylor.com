@@ -1,0 +1,20 @@
+{
+	"name": "in-the-loop",
+	"type": "module",
+	"version": "1.0.0",
+	"scripts": {
+		"dev": "astro dev",
+		"build": "astro build",
+		"preview": "astro preview",
+		"check": "astro check && biome check .",
+		"lint": "biome check .",
+		"lint:fix": "biome check --write ."
+	},
+	"dependencies": {
+		"astro": "^5.9.3"
+	},
+	"devDependencies": {
+		"@tailwindcss/vite": "^4.1.8",
+		"tailwindcss": "^4.1.8"
+	}
+}

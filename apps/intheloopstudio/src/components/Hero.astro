@@ -1,0 +1,159 @@
+---
+---
+
+<section id="hero" class="relative min-h-screen overflow-hidden bg-gradient-to-br from-black via-purple-950/30 to-black">
+	<!-- Animated gradient background -->
+	<div class="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-transparent to-secondary/10"></div>
+	<div class="absolute inset-0 opacity-30">
+		<div class="absolute top-1/4 left-1/4 h-96 w-96 rounded-full bg-purple-600/30 blur-3xl"></div>
+		<div class="absolute bottom-1/4 right-1/4 h-96 w-96 rounded-full bg-secondary/20 blur-3xl"></div>
+	</div>
+	
+	<div class="relative mx-auto grid min-h-screen max-w-7xl items-center gap-12 px-4 pt-20 sm:px-6 lg:grid-cols-2 lg:px-8">
+		<div class="max-w-xl">
+			<h1 class="font-display text-5xl font-bold leading-[0.97] tracking-tight text-white sm:text-6xl lg:text-7xl">
+				Collaboration<br />Made Easy
+			</h1>
+			<p class="mt-6 text-lg text-white/80 sm:text-xl lg:text-2xl font-light">
+				The platform tailored for artists and producers<br class="hidden sm:block" />
+				to collaborate and build great things
+			</p>
+			
+			<div class="mt-8 flex flex-wrap items-center gap-4">
+				<a
+					class="line-through inline-flex items-center rounded-full bg-secondary px-8 py-4 text-lg font-medium text-white transition-all hover:bg-secondary/90 hover:scale-105 hover:shadow-lg hover:shadow-secondary/25"
+				>
+					Join the Waitlist
+				</a>
+				
+				<button
+					id="play-demo-btn"
+					class="group flex items-center gap-3 text-white/80 transition-colors hover:text-white"
+				>
+					<span class="play-button relative flex h-14 w-14 items-center justify-center">
+						<svg
+							class="h-14 w-14"
+							viewBox="0 0 213.7 213.7"
+							xmlns="http://www.w3.org/2000/svg"
+						>
+							<circle
+								class="circle stroke-white/30 transition-all duration-500 group-hover:stroke-white group-hover:stroke-dashoffset-0"
+								cx="106.8"
+								cy="106.8"
+								r="103.3"
+								fill="none"
+								stroke-width="7"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-dasharray="650"
+								stroke-dashoffset="650"
+							/>
+							<polygon
+								class="triangle stroke-white transition-all duration-700 group-hover:stroke-dashoffset-0"
+								points="73.5,62.5 148.5,105.8 73.5,149.1"
+								fill="none"
+								stroke-width="7"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-dasharray="240"
+								stroke-dashoffset="480"
+							/>
+						</svg>
+					</span>
+					<span class="text-base">Demo Video</span>
+				</button>
+			</div>
+		</div>
+		
+		<!-- Hero illustration -->
+		<div class="hidden lg:flex lg:items-center lg:justify-center">
+			<img 
+				src="/img/hero-illustration.svg" 
+				alt="Artists collaborating at a desk" 
+				class="w-full max-w-lg drop-shadow-2xl"
+				width="500"
+				height="400"
+				loading="eager"
+				fetchpriority="high"
+			/>
+		</div>
+	</div>
+	
+	<!-- Wave divider -->
+	<div class="absolute bottom-0 left-0 right-0">
+		<svg viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-full">
+			<path d="M0 120L60 105C120 90 240 60 360 45C480 30 600 30 720 37.5C840 45 960 60 1080 67.5C1200 75 1320 75 1380 75L1440 75V120H1380C1320 120 1200 120 1080 120C960 120 840 120 720 120C600 120 480 120 360 120C240 120 120 120 60 120H0Z" fill="white"/>
+		</svg>
+	</div>
+</section>
+
+<!-- Video Modal -->
+<div id="video-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/90 backdrop-blur-sm">
+	<div class="relative w-full max-w-4xl px-4">
+		<button id="close-modal" class="absolute -top-12 right-4 text-white/80 hover:text-white">
+			<svg class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+			</svg>
+		</button>
+		<div class="aspect-video w-full overflow-hidden rounded-xl bg-black">
+			<iframe
+				id="youtube-iframe"
+				class="h-full w-full"
+				src=""
+				title="Demo Video"
+				frameborder="0"
+				allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+				allowfullscreen
+				loading="lazy"
+			></iframe>
+		</div>
+	</div>
+</div>
+
+<style>
+	.group:hover .circle {
+		stroke-dashoffset: 0;
+	}
+	
+	.group:hover .triangle {
+		stroke-dashoffset: 0;
+		animation: nudge 0.7s ease-in-out;
+	}
+	
+	@keyframes nudge {
+		0% { transform: translateX(0); }
+		30% { transform: translateX(-5px); }
+		50% { transform: translateX(5px); }
+		70% { transform: translateX(-2px); }
+		100% { transform: translateX(0); }
+	}
+</style>
+
+<script>
+	const playBtn = document.getElementById("play-demo-btn");
+	const modal = document.getElementById("video-modal");
+	const closeBtn = document.getElementById("close-modal");
+	const iframe = document.getElementById("youtube-iframe") as HTMLIFrameElement;
+	const videoId = "7MVQglfhw0c";
+	
+	playBtn?.addEventListener("click", () => {
+		if (iframe) iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+		modal?.classList.remove("hidden");
+		modal?.classList.add("flex");
+	});
+	
+	const closeModal = () => {
+		modal?.classList.add("hidden");
+		modal?.classList.remove("flex");
+		if (iframe) iframe.src = "";
+	};
+	
+	closeBtn?.addEventListener("click", closeModal);
+	modal?.addEventListener("click", (e) => {
+		if (e.target === modal) closeModal();
+	});
+	
+	document.addEventListener("keydown", (e) => {
+		if (e.key === "Escape") closeModal();
+	});
+</script>

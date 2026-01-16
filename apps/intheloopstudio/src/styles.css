@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+@theme {
+	--color-primary: #000;
+	--color-secondary: #6200ee;
+	--color-accent: #fff;
+	--font-sans: "Inter", system-ui, -apple-system, sans-serif;
+	--font-display: "Manrope", sans-serif;
+}
+
+html {
+	scroll-behavior: smooth;
+}
+
+body {
+	font-family: var(--font-sans);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}

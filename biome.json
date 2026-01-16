@@ -7,7 +7,15 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": ["apps/site/**", "apps/blog/**", "apps/linktree/**", "*.json", "*.ts", "*.js"]
+		"includes": [
+			"apps/InTheLoop/**",
+			"apps/site/**",
+			"apps/blog/**",
+			"apps/linktree/**",
+			"*.json",
+			"*.ts",
+			"*.js"
+		]
 	},
 	"formatter": {
 		"enabled": true,

@@ -1,0 +1,134 @@
+---
+import Footer from "../components/Footer.astro";
+import Header from "../components/Header.astro";
+import Base from "./Base.astro";
+
+interface Props {
+	title: string;
+	description?: string;
+	lastUpdated?: string;
+}
+
+const { title, description, lastUpdated } = Astro.props;
+---
+
+<Base title={title} description={description}>
+	<Header />
+	<main class="min-h-screen bg-gradient-to-b from-black via-gray-950 to-black pt-28 pb-20">
+		<article class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+			<!-- Page header -->
+			<header class="mb-12 border-b border-white/10 pb-8">
+				<slot name="header" />
+				{lastUpdated && (
+					<p class="mt-4 text-sm text-white/40">
+						Last updated: {lastUpdated}
+					</p>
+				)}
+			</header>
+			
+			<!-- Content -->
+			<div class="legal-content">
+				<slot />
+			</div>
+			
+			<!-- Back link -->
+			<div class="mt-16 border-t border-white/10 pt-8">
+				<a 
+					href="/" 
+					class="inline-flex items-center gap-2 text-secondary transition-colors hover:text-secondary/80"
+				>
+					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+					</svg>
+					Back to Home
+				</a>
+			</div>
+		</article>
+	</main>
+	<Footer />
+</Base>
+
+<style is:global>
+	.legal-content h2 {
+		font-size: 1.75rem;
+		font-weight: 600;
+		color: white;
+		margin-top: 3rem;
+		margin-bottom: 1rem;
+		padding-bottom: 0.5rem;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+	}
+	
+	.legal-content h3 {
+		font-size: 1.25rem;
+		font-weight: 600;
+		color: white;
+		margin-top: 2rem;
+		margin-bottom: 0.75rem;
+	}
+	
+	.legal-content p {
+		color: rgba(255, 255, 255, 0.7);
+		line-height: 1.8;
+		margin-bottom: 1rem;
+	}
+	
+	.legal-content ul {
+		margin: 1rem 0 1.5rem 0;
+		padding-left: 0;
+		list-style: none;
+	}
+	
+	.legal-content li {
+		color: rgba(255, 255, 255, 0.7);
+		line-height: 1.7;
+		margin-bottom: 0.75rem;
+		padding-left: 1.75rem;
+		position: relative;
+	}
+	
+	.legal-content li::before {
+		content: "";
+		position: absolute;
+		left: 0;
+		top: 0.6rem;
+		width: 6px;
+		height: 6px;
+		background: #6200EE;
+		border-radius: 50%;
+	}
+	
+	.legal-content a {
+		color: #a78bfa;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+		transition: color 0.2s;
+	}
+	
+	.legal-content a:hover {
+		color: #c4b5fd;
+	}
+	
+	.legal-content strong {
+		color: white;
+		font-weight: 600;
+	}
+	
+	.legal-content .highlight-box {
+		background: rgba(98, 0, 238, 0.1);
+		border: 1px solid rgba(98, 0, 238, 0.2);
+		border-radius: 0.75rem;
+		padding: 1.25rem 1.5rem;
+		margin: 1.5rem 0;
+	}
+	
+	.legal-content .highlight-box p {
+		margin-bottom: 0;
+	}
+	
+	.legal-content .section-intro {
+		font-size: 1.125rem;
+		color: rgba(255, 255, 255, 0.8);
+		margin-bottom: 2rem;
+	}
+</style>

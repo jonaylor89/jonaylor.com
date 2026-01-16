@@ -69,6 +69,19 @@ importers:
 
   apps/gm: {}
 
+  apps/intheloopstudio:
+    dependencies:
+      astro:
+        specifier: ^5.9.3
+        version: 5.16.6(@types/node@20.19.27)(jiti@2.6.1)(lightningcss@1.30.2)(rollup@4.54.0)(typescript@5.1.6)
+    devDependencies:
+      '@tailwindcss/vite':
+        specifier: ^4.1.8
+        version: 4.1.18(vite@6.4.1(@types/node@20.19.27)(jiti@2.6.1)(lightningcss@1.30.2))
+      tailwindcss:
+        specifier: ^4.1.8
+        version: 4.1.18
+
   apps/linktree:
     dependencies:
       '@tailwindcss/vite':

@@ -1,0 +1,100 @@
+---
+const plans = [
+	{
+		name: "Starter",
+		price: "0",
+		period: "",
+		features: [
+			"Unlimited audio loops",
+			"Customized feed of new artists",
+			"Follow your favorite artists",
+			"Share loops with friends",
+		],
+		cta: "Join the Waitlist",
+		href: "#",
+		featured: true,
+		disabled: true,
+	},
+	{
+		name: "Professional",
+		price: "5.99",
+		period: "/ month",
+		features: [
+			"Higher quality audio",
+			"No ads",
+			"Analytics for loops",
+			"Upload private loops",
+		],
+		cta: "Coming Soon",
+		href: "#",
+		featured: false,
+		disabled: true,
+	},
+];
+---
+
+<section id="pricing" class="relative bg-black py-24">
+	<div class="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+		<div class="rounded-3xl bg-gradient-to-br from-gray-900 to-black p-8 shadow-2xl ring-1 ring-white/10 sm:p-12">
+			<h2 class="text-center text-4xl font-light text-white sm:text-5xl">Pricing</h2>
+			
+			<div class="mt-12 grid gap-8 md:grid-cols-2">
+				{plans.map((plan) => (
+					<div class={`relative rounded-2xl p-8 ${plan.featured ? "bg-secondary/10 ring-2 ring-secondary" : "bg-white/5 ring-1 ring-white/10"}`}>
+						{plan.featured && (
+							<div class="absolute -top-4 left-1/2 -translate-x-1/2 rounded-full bg-secondary px-4 py-1 text-xs font-semibold text-white">
+								POPULAR
+							</div>
+						)}
+						
+						<div class="mb-8 flex h-24 w-24 mx-auto items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-blue-50">
+							<div class="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-50 to-white p-3">
+								<img 
+									src={plan.name === "Starter" ? "/img/paperplane.svg" : "/img/airplane.svg"}
+									alt={plan.name}
+									class="h-full w-full"
+									width="40"
+									height="40"
+								/>
+							</div>
+						</div>
+						
+						<h3 class="text-center text-xl font-semibold uppercase tracking-wide text-white">{plan.name}</h3>
+						
+						<div class="my-8 space-y-4">
+							{plan.features.map((feature) => (
+								<div class="border-t border-white/10 pt-4 text-center text-sm uppercase text-white/80">
+									{feature}
+								</div>
+							))}
+						</div>
+						
+						<div class="mb-6 text-center">
+							<span class="text-4xl font-bold text-white">$ {plan.price}</span>
+							{plan.period && <span class="text-white/60">{plan.period}</span>}
+						</div>
+						
+						<a
+							href={plan.href}
+							class={`block w-full rounded-full py-3 text-center font-medium transition-all ${
+								plan.disabled
+									? "cursor-not-allowed bg-white/10 text-white/50"
+									: "bg-secondary text-white hover:bg-secondary/90 hover:scale-[1.02]"
+							}`}
+							aria-disabled={plan.disabled}
+						>
+							{plan.cta}
+						</a>
+					</div>
+				))}
+			</div>
+		</div>
+	</div>
+	
+	<!-- Wave divider -->
+	<div class="absolute bottom-0 left-0 right-0">
+		<svg viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-full">
+			<path d="M0 120L60 110C120 100 240 80 360 70C480 60 600 60 720 65C840 70 960 80 1080 85C1200 90 1320 90 1380 90L1440 90V120H1380C1320 120 1200 120 1080 120C960 120 840 120 720 120C600 120 480 120 360 120C240 120 120 120 60 120H0Z" fill="#6200EE" fill-opacity="0.1"/>
+		</svg>
+	</div>
+</section>
