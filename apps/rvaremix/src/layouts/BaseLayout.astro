@@ -24,6 +24,9 @@ const socialImage = await getImage({ src: socialImageSrc, width: 1200, height: 6
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={socialImage.src} />
     <title>{title}</title>
+
+    <!-- Plausible Analytics -->
+    <script defer data-domain="rvaremix.org" src="https://plausible.io/js/script.js"></script>
   </head>
   <body style={`--page-bg-image: url(${pacmanBackground.src});`}>
     <slot />
