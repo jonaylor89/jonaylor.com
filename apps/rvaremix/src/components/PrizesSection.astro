@@ -1,0 +1,32 @@
+---
+import { Image } from 'astro:assets';
+import moneyImage from '../assets/money.png';
+---
+
+<section id="prizes">
+  <div class="bg-black flex flex-col items-center py-5 lg:mx-40">
+    <div class="font-bold text-4xl pb-5 lg:font-black lg:text-5xl">
+      PRIZES
+    </div>
+
+    <Image src={moneyImage} alt="money" width={200} height={200} loading="lazy" />
+
+    <div class="flex flex-col lg:flex-row lg:justify-around">
+      <div class="flex flex-col items-center py-6 lg:px-20">
+        <div class="font-bold text-5xl text-center">1ST PLACE</div>
+        <div class="text-3xl hover:scale-125 hover:text-green-500">$300</div>
+        <div class="text-center">Prime slot for the RVA Remix Concert</div>
+      </div>
+      <div class="flex flex-col items-center py-6 lg:px-20">
+        <div class="font-bold text-5xl text-center">2ND PLACE</div>
+        <div class="text-3xl hover:scale-125 hover:text-green-500">$200</div>
+        <div class="text-center">Second slot for the RVA Remix Concert</div>
+      </div>
+      <div class="flex flex-col items-center py-6 lg:px-20">
+        <div class="font-bold text-5xl text-center">3RD PLACE</div>
+        <div class="text-3xl hover:scale-125 hover:text-green-500">$100</div>
+        <div class="text-center">Opening slot for the RVA Remix Concert</div>
+      </div>
+    </div>
+  </div>
+</section>

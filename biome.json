@@ -7,7 +7,14 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": ["apps/intheloopstudio/**", "apps/site/**", "*.json", "*.ts", "*.js"]
+		"includes": [
+			"apps/rvaremix",
+			"apps/intheloopstudio/**",
+			"apps/site/**",
+			"*.json",
+			"*.ts",
+			"*.js"
+		]
 	},
 	"formatter": {
 		"enabled": true,

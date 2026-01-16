@@ -1,0 +1,44 @@
+---
+import { Image } from 'astro:assets';
+import chrisPhoto from '../assets/Chris.jpeg';
+import denisePhoto from '../assets/Denise.jpg';
+import johannesPhoto from '../assets/Johannes.jpg';
+import jonathanPhoto from '../assets/Jonathan.jpg';
+import shaddenPhoto from '../assets/Shadden.jpg';
+---
+
+<section class="bg-rva-remix-purple mx-3 my-4 lg:mx-40">
+  <div class="flex flex-col items-center py-5">
+    <div class="font-bold text-4xl pb-5 lg:font-black lg:text-5xl lg:pb-6">
+      MEET THE TEAM
+    </div>
+
+    <div class="flex flex-col lg:flex-row">
+      <div class="flex flex-col items-center pb-5 px-10">
+        <Image class="rounded-full object-cover w-[150px] h-[150px]" src={johannesPhoto} alt="Johannes" width={150} height={150} loading="lazy" fit="cover" />
+        <div class="font-bold text-lg">Johannes</div>
+        <div>Lead Organizer</div>
+      </div>
+      <div class="flex flex-col items-center pb-5 px-10">
+        <Image class="rounded-full object-cover w-[150px] h-[150px]" src={shaddenPhoto} alt="Shadden" width={150} height={150} loading="lazy" fit="cover" />
+        <div class="font-bold text-lg">Shadden</div>
+        <div>Operations</div>
+      </div>
+      <div class="flex flex-col items-center pb-5 px-10">
+        <Image class="rounded-full object-cover w-[150px] h-[150px]" src={denisePhoto} alt="Denise" width={150} height={150} loading="lazy" fit="cover" />
+        <div class="font-bold text-lg">Denise</div>
+        <div>Designer</div>
+      </div>
+      <div class="flex flex-col items-center pb-5 px-10">
+        <Image class="rounded-full object-cover w-[150px] h-[150px]" src={jonathanPhoto} alt="Jonathan" width={150} height={150} loading="lazy" fit="cover" />
+        <div class="font-bold text-lg">Jonathan</div>
+        <div>Artists Relations</div>
+      </div>
+      <div class="flex flex-col items-center pb-5 px-10">
+        <Image class="rounded-full object-cover w-[150px] h-[150px]" src={chrisPhoto} alt="Chris" width={150} height={150} loading="lazy" fit="cover" />
+        <div class="font-bold text-lg">Chris</div>
+        <div>Social Media</div>
+      </div>
+    </div>
+  </div>
+</section>

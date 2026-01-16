@@ -1,0 +1,31 @@
+---
+import '../styles/global.css';
+import { getImage } from 'astro:assets';
+import pacmanBackgroundSrc from '../assets/pacman-background.jpeg';
+import socialImageSrc from '../assets/rva_remix_header.png';
+
+const { title = 'RVA Remix Competition', description = 'RVA Remix Competition is an in-person remix competition for music creators in Richmond, Virginia.' } = Astro.props;
+const pacmanBackground = await getImage({ src: pacmanBackgroundSrc, format: 'webp' });
+const socialImage = await getImage({ src: socialImageSrc, width: 1200, height: 630, format: 'png' });
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="robots" content="index, follow" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content={socialImage.src} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={socialImage.src} />
+    <title>{title}</title>
+  </head>
+  <body style={`--page-bg-image: url(${pacmanBackground.src});`}>
+    <slot />
+  </body>
+</html>

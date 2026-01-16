@@ -1,0 +1,34 @@
+<nav class="lg:flex lg:justify-end lg:shadow-lg">
+  <div class="flex justify-end items-center px-4 py-4">
+    <button class="lg:hidden pt-2" type="button" aria-controls="primary-nav" aria-expanded="false" data-nav-toggle>
+      <svg data-icon="open" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false">
+        <path fill="currentColor" d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z" />
+      </svg>
+      <svg class="hidden" data-icon="close" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false">
+        <path fill="currentColor" d="M18.3 5.7 12 12l6.3 6.3-1.6 1.6L10.4 13.6 4.1 19.9 2.5 18.3 8.8 12 2.5 5.7 4.1 4.1l6.3 6.3 6.3-6.3 1.6 1.6z" />
+      </svg>
+    </button>
+  </div>
+  <div id="primary-nav" class="hidden px-4 lg:flex lg:flex-row lg:pt-5" data-nav-menu>
+    <a class="p-2 text-md font-bold lg:text-xl lg:px-5 hover:font-extrabold hover:scale-110" href="#home">HOME</a>
+    <a class="p-2 text-md font-bold lg:text-xl lg:px-5 hover:font-extrabold hover:scale-110" href="#prizes">PRIZES</a>
+    <a class="p-2 text-md font-bold lg:text-xl lg:px-5 hover:font-extrabold hover:scale-110" href="#schedule">SCHEDULE</a>
+    <a class="p-2 text-md font-bold lg:text-xl lg:px-5 hover:font-extrabold hover:scale-110" href="#hosts">MORE</a>
+  </div>
+</nav>
+
+<script>
+  const toggle = document.querySelector('[data-nav-toggle]');
+  const menu = document.querySelector('[data-nav-menu]');
+  const iconOpen = toggle?.querySelector('[data-icon="open"]');
+  const iconClose = toggle?.querySelector('[data-icon="close"]');
+
+  if (toggle && menu && iconOpen && iconClose) {
+    toggle.addEventListener('click', () => {
+      const isHidden = menu.classList.toggle('hidden');
+      toggle.setAttribute('aria-expanded', String(!isHidden));
+      iconOpen.classList.toggle('hidden', !isHidden);
+      iconClose.classList.toggle('hidden', isHidden);
+    });
+  }
+</script>

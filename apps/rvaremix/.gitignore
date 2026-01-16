@@ -1,0 +1,68 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# production
+/build
+
+# misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.vercel
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+.vercel
+
+# make it easy for people to add project-specific Astro settings that they don't
+# want to share with others (see
+# https://github.com/withastro/astro/pull/11759#discussion_r1721444711)
+*.code-workspace
+o# build output
+dist/
+
+# Local fonts
+fonts/
+
+# cache files
+.eslintcache
+
+# generated types
+.astro/
+
+# dependencies
+node_modules/
+package-lock.json
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# environment variables
+.env
+.env.production
+
+# macOS-specific files
+.DS_Store
+
+# Local Netlify folder
+.netlify
+
+# Local Vercel folder
+.vercel
