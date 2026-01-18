@@ -1,0 +1,28 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import WinnersSection from '../components/WinnersSection.astro';
+import Footer from '../components/Footer.astro';
+---
+
+<BaseLayout title="RVA Remix 2022 Winners" description="The 2022 RVA Remix Competition winners and top tracks.">
+  <div class="App">
+    <section id="home">
+      <div class="bg-rva-remix-purple mx-3 my-4 lg:mx-40 flex flex-col items-center py-6">
+        <div class="font-bold text-4xl text-center lg:font-black lg:text-5xl px-6">
+          RVA Remix 2022 Winners
+        </div>
+        <div class="text-center pt-3 pb-5 max-w-2xl px-6">
+          Congrats to the top 3 teams from the 2022 remix challenge.
+        </div>
+        <a
+          class="font-bold px-3 text-blue-500 hover:scale-110 ease-in"
+          href="/"
+        >
+          Back to the homepage
+        </a>
+      </div>
+    </section>
+    <WinnersSection />
+    <Footer />
+  </div>
+</BaseLayout>
