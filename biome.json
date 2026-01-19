@@ -8,6 +8,7 @@
 	"files": {
 		"ignoreUnknown": false,
 		"includes": [
+			"apps/rvamusiccalendar",
 			"apps/rvaremix",
 			"apps/intheloopstudio/**",
 			"apps/site/**",

@@ -1,0 +1,80 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const calUrl = "https://calendar.google.com/calendar/ical/810rm4o2829cdhurresns7a4cc%40group.calendar.google.com/public/basic.ics";
+---
+
+<Layout
+  title="RVA Music Calendar"
+  description="A calendar of live music events in Richmond, VA"
+>
+  <div class="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
+    <div id="toast" class="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg opacity-0 transition-opacity duration-300 pointer-events-none z-50">
+      Copied to clipboard!
+    </div>
+
+    <main class="flex h-[60vh] flex-col items-center justify-center px-2">
+      <h1 class="text-4xl md:text-6xl font-extrabold text-center font-rubik">
+        RVA Music Calendar
+      </h1>
+      <div class="h-4"></div>
+      <h3 class="text-2xl text-center font-rubik">
+        the source of truth for music events going on in Richmond, Virginia
+      </h3>
+      <div class="h-4"></div>
+      <div class="w-11/12 md:w-auto shadow-xl shadow-inner px-4 py-3 bg-white text-gray-500 rounded-xl">
+        <p
+          id="cal-url"
+          class="text-center text-sm text-ellipsis overflow-hidden cursor-pointer hover:bg-gray-50 transition-colors rounded px-2 py-1"
+        >
+          {calUrl}
+        </p>
+      </div>
+      <p class="text-gray-200">(click to copy)</p>
+    </main>
+
+    <div class="flex justify-center items-center">
+      <iframe
+        src="https://calendar.google.com/calendar/embed?height=600&wkst=1&bgcolor=%23ffffff&ctz=America%2FNew_York&mode=WEEK&showTitle=0&showNav=0&showDate=0&showPrint=0&showTabs=0&showTz=0&showCalendars=0&src=ODEwcm00bzI4MjljZGh1cnJlc25zN2E0Y2NAZ3JvdXAuY2FsZW5kYXIuZ29vZ2xlLmNvbQ&color=%237CB342"
+        style="border: solid 1px #777"
+        width="800"
+        height="600"
+        title="RVA Music Calendar"
+        loading="lazy"
+      ></iframe>
+    </div>
+    <div class="h-24"></div>
+  </div>
+</Layout>
+
+<script>
+  const calUrl = "https://calendar.google.com/calendar/ical/810rm4o2829cdhurresns7a4cc%40group.calendar.google.com/public/basic.ics";
+
+  const calUrlElement = document.getElementById('cal-url');
+  const toast = document.getElementById('toast');
+
+  calUrlElement?.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(calUrl);
+
+      // Show toast
+      if (toast) {
+        toast.classList.remove('opacity-0');
+        toast.classList.add('opacity-100');
+
+        // Hide after 2 seconds
+        setTimeout(() => {
+          toast.classList.remove('opacity-100');
+          toast.classList.add('opacity-0');
+        }, 2000);
+      }
+
+      // Track analytics if available
+      if (window.va) {
+        window.va('copied-to-clipboard', { url: calUrl });
+      }
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  });
+</script>
