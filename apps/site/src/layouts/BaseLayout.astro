@@ -10,6 +10,7 @@ interface Props {
 	modifiedTime?: Date;
 	author?: string;
 	tags?: string[];
+	lang?: "en" | "de";
 }
 
 const {
@@ -21,6 +22,7 @@ const {
 	modifiedTime,
 	author = "Johannes Naylor",
 	tags = [],
+	lang = "en",
 } = Astro.props;
 
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
@@ -40,7 +42,7 @@ const twitterHandle = "@jonaylor89";
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang={lang}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />

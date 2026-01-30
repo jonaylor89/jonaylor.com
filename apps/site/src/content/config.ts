@@ -11,6 +11,7 @@ const posts = defineCollection({
 			coverImage: image().optional(),
 			coverImageAlt: z.string().optional(),
 			draft: z.boolean().default(false),
+			lang: z.enum(["en", "de"]).default("en"),
 		}),
 });
 
