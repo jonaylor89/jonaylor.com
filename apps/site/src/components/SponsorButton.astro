@@ -12,6 +12,7 @@ const sponsorUrl = `https://github.com/sponsors/${username}`;
   href={sponsorUrl}
   target="_blank"
   rel="noopener noreferrer"
+  data-sponsor-button
   class:list={[
     'inline-flex items-center gap-2 px-4 py-2 bg-pink-50 dark:bg-pink-900/20 hover:bg-pink-100 dark:hover:bg-pink-900/40 text-pink-600 dark:text-pink-400 border border-pink-200 dark:border-pink-800 rounded-md transition-colors duration-200 text-sm font-medium',
     className
@@ -23,3 +24,48 @@ const sponsorUrl = `https://github.com/sponsors/${username}`;
   </svg>
   <span>Buy me some shawarma</span>
 </a>
+
+<script>
+  import { successChimeSound } from "../sounds/success-chime";
+
+  let audioContext: AudioContext | null = null;
+  let bufferCache: AudioBuffer | null = null;
+
+  async function getBuffer(): Promise<AudioBuffer> {
+    if (!audioContext) audioContext = new AudioContext();
+    if (bufferCache) return bufferCache;
+
+    const base64 = successChimeSound.dataUri.split(",")[1];
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    bufferCache = await audioContext.decodeAudioData(bytes.buffer.slice(0));
+    return bufferCache;
+  }
+
+  function playChime() {
+    if (!audioContext) audioContext = new AudioContext();
+    if (audioContext.state === "suspended") audioContext.resume();
+
+    getBuffer().then((buffer) => {
+      const source = audioContext!.createBufferSource();
+      const gain = audioContext!.createGain();
+      source.buffer = buffer;
+      gain.gain.value = 0.3;
+      source.connect(gain);
+      gain.connect(audioContext!.destination);
+      source.start(0);
+    });
+  }
+
+  function init() {
+    document.querySelectorAll<HTMLAnchorElement>("[data-sponsor-button]").forEach((btn) => {
+      btn.addEventListener("click", playChime);
+    });
+  }
+
+  init();
+  document.addEventListener("astro:after-swap", init);
+</script>
