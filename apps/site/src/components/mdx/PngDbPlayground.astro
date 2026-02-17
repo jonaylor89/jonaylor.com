@@ -1,0 +1,345 @@
+---
+---
+
+<div id="pngdb-playground" class="not-prose my-10 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 overflow-hidden font-sans">
+  <!-- Header -->
+  <div class="flex items-center justify-between px-4 py-3 bg-neutral-100 dark:bg-neutral-800 border-b border-neutral-200 dark:border-neutral-700">
+    <div class="flex items-center gap-2">
+      <div class="flex gap-1.5">
+        <span class="w-3 h-3 rounded-full bg-red-400"></span>
+        <span class="w-3 h-3 rounded-full bg-yellow-400"></span>
+        <span class="w-3 h-3 rounded-full bg-green-400"></span>
+      </div>
+      <span class="ml-2 text-sm font-medium text-neutral-600 dark:text-neutral-300">png-db playground</span>
+    </div>
+    <span id="pngdb-status" class="text-xs text-neutral-400">loading wasm…</span>
+  </div>
+
+  <!-- Two-column layout: terminal + chunk visualizer -->
+  <div class="md:grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-neutral-200 dark:divide-neutral-700">
+    <!-- Left: Terminal -->
+    <div class="flex flex-col">
+      <!-- Output log -->
+      <div id="pngdb-output" class="p-4 h-72 overflow-y-auto text-sm font-mono leading-relaxed text-neutral-700 dark:text-neutral-300 space-y-1">
+        <div class="text-neutral-400">-- initializing png-db…</div>
+      </div>
+
+      <!-- Input -->
+      <div class="flex items-center border-t border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-950">
+        <span class="pl-4 text-green-500 font-mono text-sm font-bold select-none">❯</span>
+        <input
+          id="pngdb-input"
+          type="text"
+          placeholder="Try: SELECT * WHERE age > 28"
+          disabled
+          class="flex-1 px-2 py-3 bg-transparent text-sm font-mono text-neutral-800 dark:text-neutral-200 placeholder-neutral-400 outline-none border-none"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+
+      <!-- Quick action buttons -->
+      <div class="flex flex-wrap gap-2 p-3 border-t border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900">
+        <button data-cmd='SELECT * WHERE age > 28' class="pngdb-quickbtn">WHERE age &gt; 28</button>
+        <button data-cmd='SELECT * WHERE name = "Alice"' class="pngdb-quickbtn">WHERE name = "Alice"</button>
+        <button data-cmd='SELECT *' class="pngdb-quickbtn">SELECT *</button>
+        <button data-cmd='INSERT INTO (30, 40) {"name":"Charlie","age":35}' class="pngdb-quickbtn">INSERT Charlie</button>
+        <button data-cmd='DOWNLOAD' class="pngdb-quickbtn">📥 Download PNG</button>
+      </div>
+    </div>
+
+    <!-- Right: PNG Chunk Visualizer -->
+    <div class="flex flex-col">
+      <div class="px-4 py-2 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wide border-b border-neutral-200 dark:border-neutral-700">
+        PNG File Structure
+      </div>
+      <div id="pngdb-chunks" class="p-4 h-72 overflow-y-auto space-y-1.5 text-sm font-mono">
+        <!-- Populated by JS -->
+      </div>
+      <div class="px-4 py-2 border-t border-neutral-200 dark:border-neutral-700 text-xs text-neutral-400 flex justify-between">
+        <span id="pngdb-filesize">0 bytes</span>
+        <span id="pngdb-rowcount">0 rows</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .pngdb-quickbtn {
+    font-size: 0.75rem;
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+    padding: 0.25rem 0.625rem;
+    border-radius: 0.375rem;
+    border: 1px solid;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    border-color: #d4d4d4;
+    background: #fff;
+    color: #525252;
+  }
+  :global(.dark) .pngdb-quickbtn {
+    border-color: #525252;
+    background: #262626;
+    color: #a3a3a3;
+  }
+  .pngdb-quickbtn:hover {
+    border-color: #a3a3a3;
+    background: #f5f5f5;
+  }
+  :global(.dark) .pngdb-quickbtn:hover {
+    border-color: #737373;
+    background: #404040;
+  }
+
+  .chunk-block {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem 0.5rem;
+    border-radius: 0.25rem;
+    border: 1px solid;
+    animation: chunk-appear 0.3s ease-out;
+  }
+  @keyframes chunk-appear {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .chunk-critical {
+    background: #fef3c7;
+    border-color: #fbbf24;
+    color: #92400e;
+  }
+  :global(.dark) .chunk-critical {
+    background: #422006;
+    border-color: #b45309;
+    color: #fcd34d;
+  }
+  .chunk-schema {
+    background: #dbeafe;
+    border-color: #60a5fa;
+    color: #1e40af;
+  }
+  :global(.dark) .chunk-schema {
+    background: #172554;
+    border-color: #2563eb;
+    color: #93c5fd;
+  }
+  .chunk-data {
+    background: #d1fae5;
+    border-color: #34d399;
+    color: #065f46;
+  }
+  :global(.dark) .chunk-data {
+    background: #022c22;
+    border-color: #059669;
+    color: #6ee7b7;
+  }
+  .chunk-pixel {
+    background: #f3e8ff;
+    border-color: #a78bfa;
+    color: #5b21b6;
+  }
+  :global(.dark) .chunk-pixel {
+    background: #2e1065;
+    border-color: #7c3aed;
+    color: #c4b5fd;
+  }
+  .chunk-new {
+    animation: chunk-flash 0.6s ease-out;
+  }
+  @keyframes chunk-flash {
+    0% { opacity: 0; transform: translateY(-8px) scale(0.95); }
+    50% { box-shadow: 0 0 12px rgba(52, 211, 153, 0.5); }
+    100% { opacity: 1; transform: translateY(0) scale(1); box-shadow: none; }
+  }
+</style>
+
+<script>
+  async function initPlayground() {
+    const output = document.getElementById('pngdb-output');
+    const input = document.getElementById('pngdb-input') as HTMLInputElement | null;
+    const status = document.getElementById('pngdb-status');
+    const chunksEl = document.getElementById('pngdb-chunks');
+    const filesizeEl = document.getElementById('pngdb-filesize');
+    const rowcountEl = document.getElementById('pngdb-rowcount');
+
+    if (!output || !input || !status || !chunksEl || !filesizeEl || !rowcountEl) return;
+
+    type WebPngDatabaseType = import('@jonaylor89/png-db').WebPngDatabase;
+    let db: WebPngDatabaseType | null = null;
+
+    function log(text: string, cls = '') {
+      const line = document.createElement('div');
+      if (cls) line.className = cls;
+      line.textContent = text;
+      output.appendChild(line);
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function logHtml(html: string) {
+      const line = document.createElement('div');
+      line.innerHTML = html;
+      output.appendChild(line);
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function renderChunks(highlight?: string) {
+      if (!db || !chunksEl) return;
+
+      const rows = JSON.parse(db.list_all());
+      const schema = db.get_schema();
+      const dims = db.get_dimensions();
+      let chunks: { type: string; label: string; cls: string; detail: string }[] = [];
+
+      chunks.push({ type: 'IHDR', label: 'IHDR', cls: 'chunk-critical', detail: `${dims[0]}×${dims[1]}` });
+      chunks.push({ type: 'schema', label: 'zTXt', cls: 'chunk-schema', detail: `schema: ${schema}` });
+
+      for (const row of rows) {
+        const key = `row_${row.x}_${row.y}`;
+        chunks.push({
+          type: key,
+          label: 'zTXt',
+          cls: 'chunk-data' + (highlight === key ? ' chunk-new' : ''),
+          detail: `${key}: ${JSON.stringify(row.data)}`
+        });
+      }
+
+      chunks.push({ type: 'IDAT', label: 'IDAT', cls: 'chunk-pixel', detail: 'pixel data (black)' });
+      chunks.push({ type: 'IEND', label: 'IEND', cls: 'chunk-critical', detail: 'end' });
+
+      chunksEl.innerHTML = chunks.map(c =>
+        `<div class="chunk-block ${c.cls}">` +
+        `<span class="font-bold shrink-0">${c.label}</span>` +
+        `<span class="truncate text-xs opacity-75">${c.detail}</span>` +
+        `</div>`
+      ).join('');
+
+      const pngBytes = db.to_png_bytes();
+      filesizeEl.textContent = `${pngBytes.length.toLocaleString()} bytes`;
+      rowcountEl.textContent = `${rows.length} row${rows.length !== 1 ? 's' : ''}`;
+    }
+
+    function executeCommand(raw: string) {
+      if (!db) return;
+      const cmd = raw.trim();
+      if (!cmd) return;
+
+      log(`❯ ${cmd}`, 'text-green-500 dark:text-green-400');
+
+      try {
+        if (cmd === 'DOWNLOAD') {
+          const pngBytes = db.to_png_bytes();
+          const blob = new Blob([pngBytes], { type: 'image/png' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'database.png';
+          a.click();
+          URL.revokeObjectURL(url);
+          log('✅ Downloaded database.png');
+          return;
+        }
+
+        // INSERT INTO (x, y) {json}
+        const insertMatch = cmd.match(/^INSERT\s+INTO\s+\((\d+)\s*,\s*(\d+)\)\s+(.+)$/i);
+        if (insertMatch) {
+          const x = parseInt(insertMatch[1]);
+          const y = parseInt(insertMatch[2]);
+          const data = insertMatch[3];
+          JSON.parse(data); // validate
+          db.insert(x, y, data);
+          log(`✅ Inserted at (${x}, ${y})`);
+          renderChunks(`row_${x}_${y}`);
+          return;
+        }
+
+        // SELECT * or SELECT * WHERE ...
+        const selectMatch = cmd.match(/^SELECT\s+\*\s*(?:WHERE\s+(.+))?$/i);
+        if (selectMatch) {
+          let results: { x: number; y: number; data: Record<string, unknown> }[];
+          if (selectMatch[1]) {
+            results = JSON.parse(db.query(`WHERE ${selectMatch[1]}`));
+          } else {
+            results = JSON.parse(db.list_all());
+          }
+
+          if (results.length === 0) {
+            log('(no results)');
+          } else {
+            log(`-- ${results.length} row${results.length !== 1 ? 's' : ''} returned`);
+            for (const row of results) {
+              logHtml(
+                `<span class="text-neutral-400">(${row.x},${row.y})</span> ` +
+                `<span class="text-blue-500 dark:text-blue-400">${JSON.stringify(row.data)}</span>`
+              );
+            }
+          }
+          renderChunks();
+          return;
+        }
+
+        log(`⚠ Unknown command. Try: SELECT * WHERE ..., INSERT INTO (x,y) {...}, or DOWNLOAD`);
+      } catch (e) {
+        log(`❌ ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+
+    // --- Init WASM ---
+    try {
+      const pngdb = await import('@jonaylor89/png-db');
+      await pngdb.default();
+
+      const { WebPngDatabase } = pngdb;
+
+      db = new WebPngDatabase(256, 256, '{"name":"string","age":"number"}');
+      db.insert(10, 20, '{"name":"Alice","age":30}');
+      db.insert(50, 60, '{"name":"Bob","age":25}');
+      db.insert(80, 90, '{"name":"Carol","age":42}');
+
+      output.innerHTML = '';
+      log('-- png-db initialized (wasm)');
+      log('-- created 256×256 database with schema: {"name":"string","age":"number"}');
+      log('-- inserted 3 sample rows: Alice(30), Bob(25), Carol(42)');
+      log('');
+      log('Type a query below, or click a button to try it out.');
+      log('  SELECT * WHERE age > 28');
+      log('  INSERT INTO (x, y) {"name":"...","age":N}');
+      log('  DOWNLOAD');
+      log('');
+
+      status!.textContent = '✓ ready';
+      status!.classList.add('text-green-500');
+      input.disabled = false;
+      input.focus();
+
+      renderChunks();
+    } catch (e) {
+      log(`❌ Failed to initialize WASM: ${e instanceof Error ? e.message : String(e)}`);
+      status!.textContent = '✗ error';
+      return;
+    }
+
+    // --- Event listeners ---
+    input.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        executeCommand(input.value);
+        input.value = '';
+      }
+    });
+
+    for (const btn of document.querySelectorAll('.pngdb-quickbtn')) {
+      btn.addEventListener('click', () => {
+        const cmd = (btn as HTMLElement).dataset.cmd;
+        if (cmd) {
+          executeCommand(cmd);
+          input.focus();
+        }
+      });
+    }
+  }
+
+  // Support Astro view transitions
+  initPlayground();
+  document.addEventListener('astro:after-swap', initPlayground);
+</script>
