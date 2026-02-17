@@ -27,6 +27,9 @@ export default defineConfig({
 
 	vite: {
 		plugins: [tailwindcss()],
+		optimizeDeps: {
+			exclude: ["@jonaylor89/png-db"],
+		},
 	},
 
 	markdown: {

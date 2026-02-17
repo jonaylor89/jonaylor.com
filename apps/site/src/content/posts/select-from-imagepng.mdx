@@ -7,13 +7,7 @@ coverImage: "../../assets/images/covers/select-from-imagepng-cover.jpg"
 coverImageAlt: "SELECT * FROM image.png cover image"
 ---
 
-## PNG as a Database (PNGaaDB?)
-
-![screenshot of the demo website](../../assets/images/posts/select-from-imagepng-image-3.png)
-
-Try it at [https://pngdb.jonaylor.com](https://pngdb.jonaylor.com)
-
-### SELECT * FROM `image.png`
+### PNG as a Database (PNGaaDB?)
 
 A lot of people have heard of steganography before but idk how many people have actually tried uses it or building for it. At least that statement is true for myself as while I’ve done tons of CTFs in high school and college, I’d never *really* known how it all worked and thus `png-db` . This project hides JSON data in obscure corners of PNG files and exposes it via a sequel-esque script. It’s very fun.
 
@@ -88,8 +82,14 @@ The concept of embedding data in a PNG is an element of steganography, the pract
 
 The project organizes its data into a schema and individual data rows. When the database is saved to a PNG file, the schema is serialized into a JSON object and written to a single `zTXt` chunk with the keyword `"schema"`. Each data row is also serialized as a JSON object and is written to its own separate `zTXt` chunk. The keyword for each data row chunk is generated based on its coordinates, in the format `"row_x_y"`. This method allows the database to be reconstructed simply by reading and parsing these specific chunks from the PNG file. When a user queries the database, the project parses a simple `WHERE` clause and performs an in-memory linear scan of all the data rows. It then compares the values of the coordinates or the JSON fields within each row to the conditions specified in the query, returning only the rows that match.
 
+### Try It Yourself
+
+Try querying a PNG database right here. The playground below loads the actual `png-db` WebAssembly module in your browser, creates a sample database with a few rows, and lets you run queries. Watch the chunk visualizer on the right update in real time as you insert new data.
+
+<PngDbPlayground />
+
 ### Conclusion
 
 `png-db` is a simple, focused tool that demonstrates the potential of using the PNG file format as a data container. I suppose next I’ll build a meme page where all the memes have hidden datasets contained in the image metadata then pretend I’ve found a super secret CIA chat website.
 
-Try it at [https://pngdb.jonaylor.com](https://pngdb.jonaylor.com)
+Try the full demo website at [https://pngdb.jonaylor.com](https://pngdb.jonaylor.com)
