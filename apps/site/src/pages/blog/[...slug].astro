@@ -7,6 +7,8 @@ import Breadcrumb from "../../components/Breadcrumb.astro";
 import Footer from "../../components/Footer.astro";
 import { mdxComponents } from "../../components/mdx";
 import Navigation from "../../components/Navigation.astro";
+import ReadingProgress from "../../components/ReadingProgress.astro";
+import RelatedPosts from "../../components/RelatedPosts.astro";
 import ShareButtons from "../../components/ShareButtons.astro";
 import BaseLayout from "../../layouts/BaseLayout.astro";
 
@@ -54,6 +56,7 @@ const description = post.data.excerpt || post.data.subtitle || "";
   tags={post.data.tags}
   lang={post.data.lang}
 >
+  <ReadingProgress />
   <Navigation />
 
   <main class="max-w-3xl mx-auto px-5 md:px-10 py-10 min-h-screen">
@@ -112,6 +115,8 @@ const description = post.data.excerpt || post.data.subtitle || "";
         </div>
       )}
     </article>
+
+    <RelatedPosts currentSlug={post.slug} currentTags={post.data.tags || []} />
 
     <div class="mt-8 mb-4">
       <a href="/blog" class="underline hover:opacity-70 transition-opacity">

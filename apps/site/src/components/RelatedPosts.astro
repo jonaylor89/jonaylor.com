@@ -1,0 +1,73 @@
+---
+import { Image } from "astro:assets";
+import type { CollectionEntry } from "astro:content";
+import { getCollection } from "astro:content";
+import { format } from "date-fns";
+
+interface Props {
+	currentSlug: string;
+	currentTags: string[];
+	limit?: number;
+}
+
+const { currentSlug, currentTags, limit = 3 } = Astro.props;
+
+const allPosts = await getCollection("posts", ({ data }) => {
+	const includeDrafts = import.meta.env.PUBLIC_INCLUDE_DRAFTS === "true";
+	return includeDrafts || !data.draft;
+});
+
+// Score each post by number of shared tags, exclude current post
+const scored = allPosts
+	.filter((p) => p.slug !== currentSlug)
+	.map((post) => {
+		const shared = post.data.tags.filter((t) => currentTags.includes(t)).length;
+		return { post, shared };
+	})
+	.filter((s) => s.shared > 0)
+	.sort((a, b) => {
+		// Sort by shared tags desc, then by date desc
+		if (b.shared !== a.shared) return b.shared - a.shared;
+		return b.post.data.date.getTime() - a.post.data.date.getTime();
+	})
+	.slice(0, limit);
+---
+
+{scored.length > 0 && (
+	<aside class="mt-12 pt-8 border-t border-gray-200 dark:border-gray-700">
+		<h2 class="text-sm uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-6 font-medium">
+			Keep Reading
+		</h2>
+		<div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+			{scored.map(({ post }) => (
+				<a
+					href={`/blog/${post.slug}`}
+					class="group block rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden hover:border-gray-400 dark:hover:border-gray-500 transition-colors duration-200"
+				>
+					{post.data.coverImage && (
+						<div class="overflow-hidden h-32">
+							<Image
+								src={post.data.coverImage}
+								alt={post.data.coverImageAlt || post.data.title}
+								width={400}
+								height={200}
+								class="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+							/>
+						</div>
+					)}
+					<div class="p-4">
+						<h3 class="font-bold text-base leading-snug mb-1 group-hover:opacity-70 transition-opacity duration-200">
+							{post.data.title}
+						</h3>
+						<time
+							class="text-xs text-gray-500 dark:text-gray-400"
+							datetime={post.data.date.toISOString()}
+						>
+							{format(post.data.date, "MMM d, yyyy")}
+						</time>
+					</div>
+				</a>
+			))}
+		</div>
+	</aside>
+)}

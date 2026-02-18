@@ -11,6 +11,7 @@ const projects = [
 				name: "Udio",
 				description: "SOTA music diffusion model and music making tool",
 				url: "https://udio.com",
+				blogSlug: "i-quit-my-500k-software-job",
 			},
 			{
 				name: "Tapped Ai",
@@ -21,6 +22,7 @@ const projects = [
 				name: "Audius",
 				description: "Web3 soundcloud letting musicians own their catalogue",
 				url: "https://audius.co",
+				blogSlug: "observability-in-audiuss-decentralized-system",
 			},
 			{
 				name: "In The Loop",
@@ -36,6 +38,7 @@ const projects = [
 				name: "Pennysite",
 				description: "Ai Website Builder that costs pennies",
 				url: "https://pennysite.app",
+				blogSlug: "i-built-a-website-builder-that-costs-pennies",
 			},
 			{
 				name: "Moments.fm",
@@ -46,11 +49,13 @@ const projects = [
 				name: "Housefly",
 				description: "Interactive playground for learning web scraping",
 				url: "https://housefly.cc",
+				blogSlug: "introducing-housefly-a-playground-for-web-scraping",
 			},
 			{
 				name: "Saint John",
 				description: "Distraction-free Android home screen",
 				url: "https://saintjohn.jonaylor.com",
+				blogSlug: "introducing-saint-john",
 			},
 			{
 				name: "Language Hub",
@@ -62,6 +67,13 @@ const projects = [
 				description:
 					"Hunt down social media accounts by username across 400+ networks — a Rust CLI OSINT tool.",
 				url: "https://github.com/jonaylor89/sherlock-rs",
+				blogSlug: "make-an-exe-file",
+			},
+			{
+				name: "pngdb",
+				description: "",
+				url: "https://github.com/jonaylor89/png-db",
+				blogSlug: "select-from-imagepng",
 			},
 			{
 				name: "netbook",
@@ -74,23 +86,27 @@ const projects = [
 				description:
 					"High-performance CSV parser powered by Rust/N-API — blazing fast and drop-in compatible with csv-parser for big files.",
 				url: "https://github.com/jonaylor89/fast-csv-parser",
+				blogSlug: "i-made-csv-parser-13x-faster-sometimes",
 			},
 			{
 				name: "pg_guard",
 				description:
 					"A Postgres proxy that analyzes and blocks dangerous SQL operations to protect your database.",
 				url: "https://github.com/jonaylor89/pg_guard",
+				blogSlug: "protect-your-database-from-cursor",
 			},
 			{
 				name: "freqmoda",
 				description:
 					"AI-powered audio editing and processing server/playground — part of your AI DAW experiments.",
 				url: "https://github.com/jonaylor89/freqmoda",
+				blogSlug: "build-a-simple-ai-daw",
 			},
 			{
 				name: "WineInAMillion",
 				description: "Wine recommender built with ML models on AWS SageMaker and vector search.",
 				url: "https://github.com/jonaylor89/WineInAMillion",
+				blogSlug: "create-a-wine-recommender",
 			},
 			{
 				name: "carbon14",
@@ -137,24 +153,30 @@ const projects = [
         </h2>
         <div class="space-y-4">
           {group.items.map((project) => (
-            <a
-              href={project.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block group"
-            >
-              <div class="flex items-baseline justify-between gap-4">
-                <div class="flex-1 min-w-0">
-                  <span class="font-medium group-hover:underline">{project.name}</span>
-                  <span class="text-gray-600 dark:text-gray-400 ml-2 text-sm">
-                    {project.description}
-                  </span>
-                </div>
-                <span class="text-sm text-gray-400 dark:text-gray-500 shrink-0">
-                  {project.year}
+            <div class="flex items-baseline justify-between gap-4">
+              <div class="flex-1 min-w-0">
+                <a
+                  href={project.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="font-medium hover:underline"
+                >
+                  {project.name}
+                </a>
+                <span class="text-gray-600 dark:text-gray-400 ml-2 text-sm">
+                  {project.description}
                 </span>
               </div>
-            </a>
+              {project.blogSlug && (
+                <a
+                  href={`/blog/${project.blogSlug}`}
+                  class="shrink-0 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors duration-200"
+                  title={`Read the story behind ${project.name}`}
+                >
+                  read the story →
+                </a>
+              )}
+            </div>
           ))}
         </div>
       </section>
