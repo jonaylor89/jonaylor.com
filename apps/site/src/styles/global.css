@@ -182,6 +182,18 @@ body {
 	white-space: nowrap;
 }
 
+/* Poem styling — left-aligned lines, stanza spacing */
+.prose .poem p {
+	text-align: left;
+	white-space: pre-line;
+	margin-bottom: 0;
+	line-height: 1.8;
+}
+
+.prose .poem p + p {
+	margin-top: 2rem;
+}
+
 /* Force white text in code blocks in dark mode to fix specificty issues */
 .dark .prose pre,
 .dark .prose pre code,

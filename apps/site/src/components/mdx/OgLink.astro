@@ -1,0 +1,64 @@
+---
+interface Props {
+	url: string;
+}
+
+const { url } = Astro.props;
+
+let title = "";
+let description = "";
+let image = "";
+let hostname = "";
+
+try {
+	const res = await fetch(url, {
+		headers: { "User-Agent": "bot" },
+		redirect: "follow",
+	});
+	const html = await res.text();
+	const get = (property: string) =>
+		html.match(
+			new RegExp(`<meta[^>]+property=["']og:${property}["'][^>]+content=["']([^"']+)["']`, "i")
+		)?.[1] ??
+		html.match(
+			new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:${property}["']`, "i")
+		)?.[1] ??
+		"";
+	title = get("title") || new URL(url).pathname.split("/").filter(Boolean).pop() || url;
+	description = get("description");
+	image = get("image");
+	hostname = new URL(url).hostname;
+} catch {
+	title = url;
+	hostname = new URL(url).hostname;
+}
+---
+
+<a href={url} target="_blank" rel="noopener noreferrer" class="block my-8 no-underline not-prose group">
+  <div class="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden bg-white dark:bg-gray-800 shadow-sm transition-shadow duration-200 group-hover:shadow-md">
+    {image && (
+      <img
+        src={image}
+        alt={title}
+        class="w-full h-auto object-cover"
+        loading="lazy"
+      />
+    )}
+    <div class="px-4 py-3">
+      <p class="font-semibold text-base text-black dark:text-white truncate">{title}</p>
+      {description && (
+        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">{description}</p>
+      )}
+      <p class="text-xs text-gray-500 dark:text-gray-500 mt-2">{hostname}</p>
+    </div>
+  </div>
+</a>
+
+<style>
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+</style>

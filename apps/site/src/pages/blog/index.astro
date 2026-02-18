@@ -101,7 +101,7 @@ function formatReadTime(minutes: number): string {
                       class="text-gray-700 dark:text-gray-300 mb-4 text-base leading-relaxed"
                       itemprop="description"
                     >
-                      {post.data.excerpt}
+                      {post.data.excerpt || post.data.subtitle}
                     </p>
                   </div>
 

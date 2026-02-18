@@ -26,7 +26,7 @@ export async function GET(context: APIContext) {
 	sortedPosts.forEach((post) => {
 		feed.item({
 			title: post.data.title,
-			description: post.data.excerpt,
+			description: post.data.excerpt || post.data.subtitle || "",
 			url: `${siteUrl}/blog/${post.slug}/`,
 			date: post.data.date,
 			categories: post.data.tags || [],

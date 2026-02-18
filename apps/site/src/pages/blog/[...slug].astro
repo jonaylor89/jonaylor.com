@@ -42,11 +42,12 @@ function formatReadTime(minutes: number): string {
 const readTime = calculateReadTime(post.body || "");
 const siteUrl = Astro.site?.toString() || "https://jonaylor.com";
 const postUrl = `${siteUrl}blog/${post.slug}`;
+const description = post.data.excerpt || post.data.subtitle || "";
 ---
 
 <BaseLayout
   title={post.data.title}
-  description={post.data.excerpt}
+  description={description}
   image={post.data.coverImage}
   type="article"
   publishedTime={post.data.date}
@@ -86,9 +87,9 @@ const postUrl = `${siteUrl}blog/${post.slug}`;
           </time>
           <span>{formatReadTime(readTime)}</span>
         </div>
-        {post.data.excerpt && (
+        {post.data.subtitle && (
           <p class="text-xl text-gray-700 dark:text-gray-300 italic mb-8">
-            {post.data.excerpt}
+            {post.data.subtitle}
           </p>
         )}
       </header>
@@ -97,7 +98,7 @@ const postUrl = `${siteUrl}blog/${post.slug}`;
         <Content components={mdxComponents} />
       </div>
 
-      <ShareButtons url={postUrl} title={post.data.title} description={post.data.excerpt} />
+      <ShareButtons url={postUrl} title={post.data.title} description={description} />
 
       {post.data.tags && post.data.tags.length > 0 && (
         <div class="mt-6 pt-6">

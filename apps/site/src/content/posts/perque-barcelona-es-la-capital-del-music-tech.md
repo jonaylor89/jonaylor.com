@@ -1,7 +1,7 @@
 ---
 title: Per què Barcelona és la capital del Music Tech a Europe?
 date: "2026-02-06"
-excerpt: On la recerca d’avantguarda troba la festa - el futur híbrid de la Music Tech.
+subtitle: On la recerca d’avantguarda troba la festa - el futur híbrid de la Music Tech.
 tags: ["music", "europe", "tech", "barcelona", "catalunya", "catalan"]
 coverImage: "../../assets/images/covers/perque-barcelona-es-la-capital-del-music-tech-cover.jpg"
 coverImageAlt: Per què Barcelona és la capital del Music Tech a Europe?
