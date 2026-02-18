@@ -1,0 +1,82 @@
+---
+interface Props {
+	src: string;
+	title?: string;
+	artist?: string;
+	cover?: string;
+	layout?: "square" | "wide";
+}
+
+const { src, title, artist, cover, layout = "square" } = Astro.props;
+const isWide = layout === "wide";
+---
+
+<div class="my-8 not-prose">
+  {cover ? (
+    isWide ? (
+      <div class="audio-player rounded-xl overflow-hidden bg-gradient-to-r from-gray-900 to-black shadow-lg flex">
+        <img
+          src={cover}
+          alt={title ? `Cover art for ${title}` : "Cover art"}
+          class="w-20 h-20 sm:w-24 sm:h-24 object-cover flex-shrink-0"
+          loading="lazy"
+          width="96"
+          height="96"
+        />
+        <div class="flex flex-col justify-center flex-1 min-w-0 px-4 py-2">
+          {title && <p class="text-white font-semibold text-sm truncate">{title}</p>}
+          {artist && <p class="text-gray-400 text-xs truncate mb-1">{artist}</p>}
+          <audio controls preload="none" class="w-full audio-styled" aria-label={title ? `Play: ${title}` : "Audio player"}>
+            <source src={src} type="audio/mpeg" />
+          </audio>
+        </div>
+      </div>
+    ) : (
+      <div class="audio-player rounded-xl overflow-hidden bg-gradient-to-b from-gray-900 to-black shadow-lg max-w-md">
+        <div class="relative">
+          <img
+            src={cover}
+            alt={title ? `Cover art for ${title}` : "Cover art"}
+            class="w-full aspect-square object-cover"
+            loading="lazy"
+            width="400"
+            height="400"
+          />
+          <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+          <div class="absolute bottom-0 left-0 right-0 p-4">
+            {title && <p class="text-white font-semibold text-base truncate">{title}</p>}
+            {artist && <p class="text-gray-300 text-sm truncate">{artist}</p>}
+          </div>
+        </div>
+        <div class="px-4 py-3">
+          <audio controls preload="none" class="w-full audio-styled" aria-label={title ? `Play: ${title}` : "Audio player"}>
+            <source src={src} type="audio/mpeg" />
+          </audio>
+        </div>
+      </div>
+    )
+  ) : (
+    <div class="audio-player rounded-xl overflow-hidden bg-gradient-to-r from-gray-900 to-gray-800 shadow-lg max-w-md px-4 py-3">
+      {title && <p class="text-white font-semibold text-sm mb-2 truncate">{title}</p>}
+      {artist && <p class="text-gray-400 text-xs mb-2 truncate">{artist}</p>}
+      <audio controls preload="none" class="w-full audio-styled" aria-label={title ? `Play: ${title}` : "Audio player"}>
+        <source src={src} type="audio/mpeg" />
+      </audio>
+    </div>
+  )}
+</div>
+
+<style>
+  .audio-player {
+    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  }
+
+  .audio-styled {
+    height: 32px;
+    filter: invert(1) hue-rotate(180deg) brightness(0.8) contrast(1.2);
+  }
+
+  .audio-styled::-webkit-media-controls-panel {
+    background: transparent;
+  }
+</style>
