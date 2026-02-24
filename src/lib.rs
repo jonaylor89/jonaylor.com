@@ -7,6 +7,7 @@ pub mod idempotency;
 pub mod idempotency_cleanup;
 pub mod issue_delivery_queue;
 pub mod routes;
+pub mod rss_worker;
 pub mod session_state;
 pub mod startup;
 pub mod telemetry;

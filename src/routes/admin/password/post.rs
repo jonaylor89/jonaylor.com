@@ -4,7 +4,7 @@ use secrecy::{ExposeSecret, Secret};
 use sqlx::PgPool;
 
 use crate::{
-    authentication::{validate_credentials, AuthError, AuthenticatedUser, Credentials},
+    authentication::{AuthError, AuthenticatedUser, Credentials, validate_credentials},
     domain::Password,
     routes::get_username,
     session_state::TypedSession,

@@ -5,10 +5,11 @@ use once_cell::sync::Lazy;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 
-use email_newsletter::configuration::{get_configuration, DatabaseSettings};
-use email_newsletter::issue_delivery_queue::{try_execute_tasks, ExecutionOutcome};
-use email_newsletter::startup::{get_connection_pool, Application};
+use email_newsletter::configuration::{DatabaseSettings, get_configuration};
+use email_newsletter::issue_delivery_queue::{ExecutionOutcome, try_execute_tasks};
+use email_newsletter::startup::{Application, get_connection_pool};
 use email_newsletter::telemetry::{get_subscriber, init_subscriber};
+use secrecy::ExposeSecret;
 use wiremock::MockServer;
 
 static TRACING: Lazy<()> = Lazy::new(|| {
@@ -37,6 +38,8 @@ pub struct TestApp {
     pub test_user: TestUser,
     pub api_client: reqwest::Client,
     pub email_client: EmailClient,
+    pub hmac_secret: String,
+    pub base_url: String,
     shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
     server_task: tokio::task::JoinHandle<Result<(), std::io::Error>>,
 }
@@ -181,10 +184,14 @@ impl TestApp {
     }
     pub async fn dispatch_all_pending_emails(&self) {
         loop {
-            if let ExecutionOutcome::EmptyQueue =
-                try_execute_tasks(&self.db_pool, &self.email_client)
-                    .await
-                    .unwrap()
+            if let ExecutionOutcome::EmptyQueue = try_execute_tasks(
+                &self.db_pool,
+                &self.email_client,
+                &self.hmac_secret,
+                &self.base_url,
+            )
+            .await
+            .unwrap()
             {
                 break;
             }
@@ -288,6 +295,12 @@ pub async fn spawn_app() -> TestApp {
         test_user: TestUser::generate(),
         api_client: client,
         email_client: configuration.email_client.client(),
+        hmac_secret: configuration
+            .application
+            .hmac_secret
+            .expose_secret()
+            .clone(),
+        base_url: configuration.application.base_url.clone(),
         shutdown_tx: Some(shutdown_tx),
         server_task,
     };

@@ -52,7 +52,7 @@ pub async fn get_saved_response(
         let response = builder
             .body(Body::from(r.response_body))
             .map_err(|e| anyhow::anyhow!(e.to_string()))?;
-        Ok(Some(response.into()))
+        Ok(Some(response))
     } else {
         Ok(None)
     }

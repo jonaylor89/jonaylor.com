@@ -1,28 +1,29 @@
 use axum::routing::{get, post};
-use axum::{middleware, serve::Serve, Router};
+use axum::{Router, middleware, serve::Serve};
 use secrecy::ExposeSecret;
-use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 use time::Duration;
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 use tower_sessions::cookie::Key;
-use tower_sessions::{Expiry, SessionManagerLayer};
 use tower_sessions::service::PrivateCookie;
+use tower_sessions::{Expiry, SessionManagerLayer};
 use tower_sessions_redis_store::{
+    RedisStore,
     fred::{
         interfaces::ClientLike,
         prelude::{Config, Pool},
     },
-    RedisStore,
 };
 
 use crate::authentication::AuthenticatedUser;
 use crate::configuration::{DatabaseSettings, Settings};
 use crate::email_client::EmailClient;
 use crate::routes::{
-    admin_dashboard, change_password, change_password_form, confirm, health_check, home, log_out,
-    login, login_form, newsletters_form, publish_newsletter, subscribe,
+    admin_dashboard, api_publish_newsletter, change_password, change_password_form, confirm,
+    health_check, home, log_out, login, login_form, newsletters_form, publish_newsletter,
+    subscribe, unsubscribe_get, unsubscribe_post,
 };
 
 pub struct Application {
@@ -74,6 +75,16 @@ impl Application {
             db_pool: connection_pool.clone(),
             email_client: email_client.clone(),
             base_url: ApplicationBaseUrl(configuration.application.base_url.clone()),
+            hmac_secret: configuration
+                .application
+                .hmac_secret
+                .expose_secret()
+                .clone(),
+            api_bearer_token: configuration
+                .application
+                .api_bearer_token
+                .expose_secret()
+                .clone(),
         };
 
         let server = run(listener, state, session_layer)?;
@@ -86,9 +97,7 @@ impl Application {
     }
 
     pub async fn run_until_stopped(self) -> Result<(), std::io::Error> {
-        self.server
-            .await
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+        self.server.await.map_err(std::io::Error::other)
     }
 
     pub async fn run_with_graceful_shutdown(
@@ -98,7 +107,7 @@ impl Application {
         self.server
             .with_graceful_shutdown(shutdown_signal)
             .await
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+            .map_err(std::io::Error::other)
     }
 }
 
@@ -110,6 +119,8 @@ pub struct AppState {
     pub db_pool: PgPool,
     pub email_client: EmailClient,
     pub base_url: ApplicationBaseUrl,
+    pub hmac_secret: String,
+    pub api_bearer_token: String,
 }
 
 impl axum::extract::FromRef<AppState> for PgPool {
@@ -148,7 +159,12 @@ fn build_router(
         .route("/health_check", get(health_check))
         .route("/subscriptions", post(subscribe))
         .route("/subscriptions/confirm", get(confirm))
+        .route(
+            "/subscriptions/unsubscribe",
+            get(unsubscribe_get).post(unsubscribe_post),
+        )
         .route("/login", get(login_form).post(login))
+        .route("/api/newsletters", post(api_publish_newsletter))
         .nest("/admin", admin_routes)
         .layer(session_layer)
         .layer(TraceLayer::new_for_http())

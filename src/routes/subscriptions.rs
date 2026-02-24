@@ -4,7 +4,7 @@ use axum::extract::{Form, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use chrono::Utc;
-use rand::{distributions::Alphanumeric, thread_rng, Rng};
+use rand::{Rng, distributions::Alphanumeric, thread_rng};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
@@ -289,6 +289,7 @@ pub async fn send_confirmation_email(
             "Confirm Your Subscription",
             &html_body,
             &plain_body,
+            None,
         )
         .await
 }
@@ -319,6 +320,7 @@ pub async fn send_already_subscribed_email(
             "Already Subscribed",
             &html_body,
             &plain_body,
+            None,
         )
         .await
 }

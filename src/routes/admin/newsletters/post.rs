@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     authentication::AuthenticatedUser,
-    idempotency::{save_response, try_processing, IdempotencyKey, NextAction},
+    idempotency::{IdempotencyKey, NextAction, save_response, try_processing},
     session_state::TypedSession,
     utils::{e400, e500, see_other},
 };

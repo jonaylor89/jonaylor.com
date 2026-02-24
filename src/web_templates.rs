@@ -1,5 +1,5 @@
-use askama::Template;
 use crate::session_state::FlashMessage;
+use askama::Template;
 
 #[derive(Template)]
 #[template(path = "web/login.html")]
@@ -24,4 +24,11 @@ pub struct NewslettersFormTemplate {
 #[template(path = "web/change_password.html")]
 pub struct ChangePasswordTemplate {
     pub flash_messages: Vec<FlashMessage>,
+}
+
+#[derive(Template)]
+#[template(path = "web/unsubscribe.html")]
+pub struct UnsubscribeTemplate {
+    pub heading: String,
+    pub message: String,
 }

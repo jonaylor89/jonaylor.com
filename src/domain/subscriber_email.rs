@@ -30,8 +30,8 @@ mod tests {
     use super::SubscriberEmail;
     use claim::assert_err;
 
-    use fake::faker::internet::en::SafeEmail;
     use fake::Fake;
+    use fake::faker::internet::en::SafeEmail;
 
     #[test]
     fn empty_string_is_rejected() {

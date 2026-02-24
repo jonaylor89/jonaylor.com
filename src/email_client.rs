@@ -34,14 +34,30 @@ impl EmailClient {
         subject: &str,
         html_content: &str,
         text_content: &str,
+        unsubscribe_url: Option<&str>,
     ) -> Result<(), reqwest::Error> {
         let url = format!("{}/email", self.base_url);
+
+        let headers = unsubscribe_url.map(|unsub_url| {
+            vec![
+                PostmarkHeader {
+                    name: "List-Unsubscribe",
+                    value: unsub_url,
+                },
+                PostmarkHeader {
+                    name: "List-Unsubscribe-Post",
+                    value: "List-Unsubscribe=One-Click",
+                },
+            ]
+        });
+
         let request_body = SendEmailRequest {
             from: self.sender.as_ref(),
             to: recipient.as_ref(),
             subject,
             html_body: html_content,
             text_body: text_content,
+            headers,
         };
         self.http_client
             .post(&url)
@@ -66,6 +82,15 @@ struct SendEmailRequest<'a> {
     subject: &'a str,
     html_body: &'a str,
     text_body: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    headers: Option<Vec<PostmarkHeader<'a>>>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "PascalCase")]
+struct PostmarkHeader<'a> {
+    name: &'a str,
+    value: &'a str,
 }
 
 #[cfg(test)]
@@ -139,7 +164,7 @@ mod tests {
             .await;
 
         let _ = email_client
-            .send_email(&email(), &subject(), &content(), &content())
+            .send_email(&email(), &subject(), &content(), &content(), None)
             .await;
     }
 
@@ -155,7 +180,7 @@ mod tests {
             .await;
 
         let outcome = email_client
-            .send_email(&email(), &subject(), &content(), &content())
+            .send_email(&email(), &subject(), &content(), &content(), None)
             .await;
 
         assert_ok!(outcome);
@@ -173,7 +198,7 @@ mod tests {
             .await;
 
         let outcome = email_client
-            .send_email(&email(), &subject(), &content(), &content())
+            .send_email(&email(), &subject(), &content(), &content(), None)
             .await;
 
         assert_err!(outcome);
@@ -192,7 +217,7 @@ mod tests {
             .await;
 
         let outcome = email_client
-            .send_email(&email(), &subject(), &content(), &content())
+            .send_email(&email(), &subject(), &content(), &content(), None)
             .await;
 
         assert_err!(outcome);

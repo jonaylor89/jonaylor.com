@@ -25,3 +25,19 @@ pub struct AlreadySubscribedEmailHtml {
 pub struct AlreadySubscribedEmailText {
     pub subscriber_name: String,
 }
+
+#[derive(Template)]
+#[template(path = "emails/blog_post.html")]
+pub struct BlogPostEmailHtml {
+    pub title: String,
+    pub description: String,
+    pub post_url: String,
+}
+
+#[derive(Template)]
+#[template(path = "emails/blog_post.txt")]
+pub struct BlogPostEmailText {
+    pub title: String,
+    pub description: String,
+    pub post_url: String,
+}

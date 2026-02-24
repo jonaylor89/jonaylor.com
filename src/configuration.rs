@@ -1,9 +1,9 @@
 use secrecy::ExposeSecret;
 use secrecy::Secret;
 use serde_aux::prelude::deserialize_number_from_string;
+use sqlx::ConnectOptions;
 use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgSslMode;
-use sqlx::ConnectOptions;
 
 use crate::domain::SubscriberEmail;
 use crate::email_client::EmailClient;
@@ -14,6 +14,40 @@ pub struct Settings {
     pub application: ApplicationSettings,
     pub email_client: EmailClientSettings,
     pub redis_uri: Secret<String>,
+    #[serde(default)]
+    pub rss_feed: RssFeedSettings,
+}
+
+#[derive(serde::Deserialize, Clone)]
+pub struct RssFeedSettings {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_feed_url")]
+    pub feed_url: String,
+    #[serde(default = "default_poll_interval")]
+    pub poll_interval_secs: u64,
+}
+
+fn default_feed_url() -> String {
+    String::new()
+}
+
+fn default_poll_interval() -> u64 {
+    900 // 15 minutes
+}
+
+fn default_api_bearer_token() -> Secret<String> {
+    Secret::new(String::new())
+}
+
+impl Default for RssFeedSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            feed_url: default_feed_url(),
+            poll_interval_secs: default_poll_interval(),
+        }
+    }
 }
 
 #[derive(serde::Deserialize, Clone)]
@@ -23,6 +57,8 @@ pub struct ApplicationSettings {
     pub host: String,
     pub base_url: String,
     pub hmac_secret: Secret<String>,
+    #[serde(default = "default_api_bearer_token")]
+    pub api_bearer_token: Secret<String>,
 }
 
 #[derive(serde::Deserialize, Clone)]
@@ -55,7 +91,7 @@ impl DatabaseSettings {
         PgConnectOptions::new()
             .host(&self.host)
             .username(&self.username)
-            .password(&self.password.expose_secret())
+            .password(self.password.expose_secret())
             .port(self.port)
             .ssl_mode(ssl_mode)
     }

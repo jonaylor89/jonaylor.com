@@ -1,5 +1,5 @@
 [package]
-edition = "2021"
+edition = "2024"
 name = "email_newsletter"
 version = "0.1.0"
 
@@ -61,6 +61,7 @@ unicode-segmentation = "1.12.0"
 urlencoding = "2.1.3"
 uuid = {version = "1.19.0", features = ["v4", "serde"]}
 validator = "0.15.0"
+rss = "2"
 
 [dependencies.sqlx]
 default-features = false
