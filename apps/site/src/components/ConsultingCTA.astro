@@ -1,0 +1,77 @@
+---
+interface Props {
+	tags?: string[];
+	variant: "break" | "slidein";
+}
+
+const { tags = [], variant } = Astro.props;
+
+const musicAiTags = ["music", "ai", "audio", "ai-agents", "mcp", "ffmpeg", "machine-learning"];
+const isRelevant = tags.some((tag) => musicAiTags.includes(tag.toLowerCase()));
+---
+
+{isRelevant && variant === "break" && (
+  <aside class="-mx-5 md:-mx-10 my-12 px-5 md:px-10 py-10 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-center">
+    <p class="text-2xl font-bold mb-2">Building in music-AI? Let's talk.</p>
+    <p class="text-gray-300 dark:text-gray-600 mb-6 max-w-lg mx-auto">
+      I consult with startups and investors navigating the music-AI space.
+      If you're building, evaluating, or exploring — I can help.
+    </p>
+    <a
+      href="/work-with-me"
+      class="inline-block font-semibold bg-white dark:bg-gray-900 text-gray-900 dark:text-white px-6 py-3 rounded-md hover:opacity-80 transition-opacity"
+    >
+      Work with me →
+    </a>
+  </aside>
+)}
+
+{isRelevant && variant === "slidein" && (
+  <div
+    id="consulting-slidein"
+    class="fixed bottom-6 right-6 z-50 max-w-xs w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-5 translate-x-[calc(100%+2rem)] transition-transform duration-500 ease-out"
+  >
+    <button
+      id="consulting-slidein-dismiss"
+      class="absolute top-3 right-3 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+      aria-label="Dismiss"
+    >
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+    <p class="font-semibold mb-1">Building in music-AI?</p>
+    <p class="text-gray-600 dark:text-gray-400 text-sm mb-3">
+      I help startups and investors navigate this space. Let's talk.
+    </p>
+    <a
+      href="/work-with-me"
+      class="inline-block text-sm font-semibold bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-4 py-2 rounded hover:opacity-80 transition-opacity"
+    >
+      Work with me →
+    </a>
+  </div>
+  <script>
+    const slidein = document.getElementById('consulting-slidein');
+    const slideinDismiss = document.getElementById('consulting-slidein-dismiss');
+    let slideinShown = false;
+
+    function onScrollSlidein() {
+      const scrollPercent = window.scrollY / (document.documentElement.scrollHeight - window.innerHeight);
+      if (!slideinShown && scrollPercent > 0.6) {
+        slideinShown = true;
+        slidein?.classList.remove('translate-x-[calc(100%+2rem)]');
+        slidein?.classList.add('translate-x-0');
+      }
+    }
+
+    slideinDismiss?.addEventListener('click', () => {
+      slidein?.classList.remove('translate-x-0');
+      slidein?.classList.add('translate-x-[calc(100%+2rem)]');
+      window.removeEventListener('scroll', onScrollSlidein);
+    });
+
+    window.addEventListener('scroll', onScrollSlidein, { passive: true });
+  </script>
+)}

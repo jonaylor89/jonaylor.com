@@ -4,6 +4,7 @@ import type { CollectionEntry } from "astro:content";
 import { getCollection } from "astro:content";
 import { format } from "date-fns";
 import Breadcrumb from "../../components/Breadcrumb.astro";
+import ConsultingCTA from "../../components/ConsultingCTA.astro";
 import Footer from "../../components/Footer.astro";
 import { mdxComponents } from "../../components/mdx";
 import Navigation from "../../components/Navigation.astro";
@@ -100,6 +101,9 @@ const description = post.data.excerpt || post.data.subtitle || "";
       <div class="prose prose-lg max-w-none dark:prose-invert">
         <Content components={mdxComponents} />
       </div>
+
+      <ConsultingCTA tags={post.data.tags} variant="break" />
+      <ConsultingCTA tags={post.data.tags} variant="slidein" />
 
       <ShareButtons url={postUrl} title={post.data.title} description={description} />
 
