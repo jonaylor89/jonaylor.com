@@ -1,0 +1,102 @@
+---
+import Footer from "../components/Footer.astro";
+import Navigation from "../components/Navigation.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout
+  title="Work With Me - Johannes Naylor"
+  description="Music-AI consulting, technical advisory, and fractional CTO services from a former Udio, Audius, and Tapped engineer."
+>
+  <Navigation />
+
+  <main class="max-w-3xl mx-auto px-5 md:px-10 py-10 min-h-screen">
+    <header class="mb-12">
+      <h1 class="text-3xl font-bold mb-4">Work With Me</h1>
+      <p class="text-lg text-gray-700 dark:text-gray-300 leading-relaxed">
+        I've spent the last several years building at the intersection of music, AI, and infrastructure
+        — at <a href="https://udio.com" class="underline hover:opacity-70" target="_blank" rel="noopener noreferrer">Udio</a>,
+        <a href="https://audius.co" class="underline hover:opacity-70" target="_blank" rel="noopener noreferrer">Audius</a>,
+        and <a href="https://tapped.ai" class="underline hover:opacity-70" target="_blank" rel="noopener noreferrer">Tapped</a>.
+        I help founders, teams, and investors navigate the music-AI landscape.
+      </p>
+    </header>
+
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold mb-6">How I Can Help</h2>
+      <div class="space-y-8">
+        <div>
+          <h3 class="text-xl font-semibold mb-2">Technical Advisory</h3>
+          <p class="text-gray-700 dark:text-gray-300 leading-relaxed">
+            For music-AI startups that need senior technical guidance without a full-time hire.
+            Architecture reviews, infrastructure strategy, ML pipeline design, and hands-on problem solving.
+          </p>
+        </div>
+
+        <div>
+          <h3 class="text-xl font-semibold mb-2">Due Diligence for Investors</h3>
+          <p class="text-gray-700 dark:text-gray-300 leading-relaxed">
+            For VCs and angels evaluating music-AI deals. I've worked inside the leading companies in this space
+            and can assess technical feasibility, team strength, and competitive positioning.
+          </p>
+        </div>
+
+        <div>
+          <h3 class="text-xl font-semibold mb-2">Audio/AI Infrastructure Consulting</h3>
+          <p class="text-gray-700 dark:text-gray-300 leading-relaxed">
+            ML preprocessing pipelines, audio transcoding at scale, streaming infrastructure,
+            and bridging the gap between research and production. I've built these systems
+            at companies processing millions of audio files.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold mb-4">Background</h2>
+      <ul class="space-y-3 text-gray-700 dark:text-gray-300">
+        <li>
+          <strong>Udio</strong> — Product/Growth Engineer. Built the mobile app, shipped ML pipelines, and led experimental products like <a href="https://moments.fm" class="underline hover:opacity-70" target="_blank" rel="noopener noreferrer">Moments.fm</a>.
+        </li>
+        <li>
+          <strong>Audius</strong> — Software Engineer. Worked on decentralized content storage, observability, and infrastructure across GCP + AWS.
+        </li>
+        <li>
+          <strong>Tapped Ai</strong> — CEO / Technical Founder. Built the leading live music database from scratch.
+        </li>
+        <li>
+          MS in Computer Science (ML/Data Science) from Virginia Commonwealth University.
+        </li>
+      </ul>
+    </section>
+
+    <section class="mb-12 p-6 border border-gray-200 dark:border-gray-700 rounded-lg">
+      <h2 class="text-2xl font-bold mb-4">Book a Paid Consultation</h2>
+      <p class="text-gray-700 dark:text-gray-300 mb-6 leading-relaxed">
+        If you're building in music-AI, exploring the space, or evaluating a deal — let's talk.
+        Book a paid session below, or reach out at
+        <a href="mailto:me@jonaylor.com" class="underline hover:opacity-70">me@jonaylor.com</a>
+        for ongoing advisory engagements.
+      </p>
+      <a
+        href="https://cal.com/jonaylor89/consultation"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-block bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-6 py-3 rounded-md font-medium hover:opacity-80 transition-opacity"
+      >
+        Book a consultation →
+      </a>
+    </section>
+
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold mb-4">Need a Website?</h2>
+      <p class="text-gray-700 dark:text-gray-300 leading-relaxed">
+        I also built <a href="https://pennysite.app" class="underline hover:opacity-70" target="_blank" rel="noopener noreferrer">Pennysite</a>,
+        an AI website builder that costs pennies instead of $25/mo.
+        If you need a site spun up fast without the SaaS tax, check it out.
+      </p>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>
