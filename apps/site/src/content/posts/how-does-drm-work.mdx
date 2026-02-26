@@ -29,13 +29,13 @@ Depending on your hardware, you are assigned a "trust level." **L1** represents 
 
 ![DRM Diagram](../../assets/images/posts/how-does-drm-work-image-1.jpg)
 
-## Building `udio-dl`
+## Building `music-dl`
 
-To build a functional client, I need to replicate the browser's behavior with just enough precision to satisfy the license servers. Google's widevine client is in Python so I'll stick with that. I'll test with Udio since it's a new member to the DRM club.
+To build a functional client, I need to replicate the browser's behavior with just enough precision to satisfy the license servers. Google's widevine client is in Python so I'll stick with that. I'll test with a new member to the DRM club.
 
-### Extracting song metadata from Next.js hydration payloads
+### Extracting song metadata
 
-Udio is a Next.js application, which means the data Ineed (like the song_path and title) is often buried in the initial page load to help the React frontend "hydrate." We use regex to sift through the `__next_f.push()` calls, what the compiled js of the framwork looks like, to find our target.
+The website I'm testing on is a Next.js application, which means the data I need (like the song_path and title) is often buried in the initial page load to help the React frontend "hydrate." We use regex to sift through the `__next_f.push()` calls, what the compiled js of the framwork looks like, to find our target.
 
 ```py
 def extract_song_info(html: str) -> dict:
@@ -108,5 +108,5 @@ The industry accepts that **L3 CDMs** are inherently fragile because software-on
 
 Ultimately, DRM is an access-control protocol masquerading as security. It's pretty shitty that it exists but legacy Rights Holders like Record Labels have lobbied the government extremely well. It is a system designed to ensure that while the bits are on your drive and the waves are in your ears, the ownership remains firmly in the hands of the gatekeepers. This exercise is, of course, **for educational purposes only**. Understanding the locks on your own front door is the first step toward digital literacy, just remember to respect the creators whose work lives behind those locks.
 
-<OgLink url="https://codeberg.org/jonaylor89/udio-dl" />
+<OgLink url="https://codeberg.org/jonaylor89/music-dl" />
 
