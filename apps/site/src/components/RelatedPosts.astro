@@ -34,15 +34,15 @@ const scored = allPosts
 ---
 
 {scored.length > 0 && (
-	<aside class="mt-12 pt-8 border-t border-gray-200 dark:border-gray-700">
-		<h2 class="text-sm uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-6 font-medium">
+	<aside class="mt-12 pt-8 border-t border-default">
+		<h2 class="text-sm uppercase tracking-widest text-text-muted mb-6 font-medium">
 			Keep Reading
 		</h2>
 		<div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
 			{scored.map(({ post }) => (
 				<a
 					href={`/blog/${post.slug}`}
-					class="group block rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden hover:border-gray-400 dark:hover:border-gray-500 transition-colors duration-200"
+					class="group block rounded-lg border border-default overflow-hidden hover:border-border-strong transition-colors duration-200"
 				>
 					{post.data.coverImage && (
 						<div class="overflow-hidden h-32">
@@ -60,7 +60,7 @@ const scored = allPosts
 							{post.data.title}
 						</h3>
 						<time
-							class="text-xs text-gray-500 dark:text-gray-400"
+							class="text-xs text-text-muted"
 							datetime={post.data.date.toISOString()}
 						>
 							{format(post.data.date, "MMM d, yyyy")}

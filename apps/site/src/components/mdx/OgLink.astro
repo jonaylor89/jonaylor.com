@@ -35,7 +35,7 @@ try {
 ---
 
 <a href={url} target="_blank" rel="noopener noreferrer" class="block my-8 no-underline not-prose group">
-  <div class="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden bg-white dark:bg-gray-800 shadow-sm transition-shadow duration-200 group-hover:shadow-md">
+  <div class="rounded-xl border border-default overflow-hidden bg-white dark:bg-gray-800 shadow-sm transition-shadow duration-200 group-hover:shadow-md">
     {image && (
       <img
         src={image}
@@ -45,11 +45,11 @@ try {
       />
     )}
     <div class="px-4 py-3">
-      <p class="font-semibold text-base text-black dark:text-white truncate">{title}</p>
+      <p class="font-semibold text-base text-text truncate">{title}</p>
       {description && (
-        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">{description}</p>
+        <p class="text-sm text-text-secondary mt-1 line-clamp-2">{description}</p>
       )}
-      <p class="text-xs text-gray-500 dark:text-gray-500 mt-2">{hostname}</p>
+      <p class="text-xs text-text-muted mt-2">{hostname}</p>
     </div>
   </div>
 </a>

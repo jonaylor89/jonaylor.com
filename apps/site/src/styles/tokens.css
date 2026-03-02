@@ -1,0 +1,193 @@
+/*
+ * Design Tokens
+ *
+ * Single source of truth for the site's visual language.
+ * All shared UI should use the semantic `--color-*` utilities
+ * (e.g. `bg-surface`, `text-muted`, `border-default`) instead
+ * of raw palette classes like `bg-gray-100 dark:bg-gray-800`.
+ *
+ * Allowed scales (do not add one-off values):
+ *   Spacing steps : 0.5, 1, 1.5, 2, 3, 4, 5, 6, 8, 10, 12, 16
+ *   Type sizes    : xs sm base lg xl 2xl 3xl 4xl 5xl
+ *   Radii         : rounded rounded-md rounded-lg rounded-xl rounded-full
+ *   Shadows       : shadow-sm shadow-md shadow-lg
+ *   Duration      : 200ms (--motion-fast)
+ *   Z-index       : 50 (--z-overlay)
+ */
+
+/* ── Foundation: palette primitives ─────────────────────────── */
+@theme {
+	--font-body: "PT Serif", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+	--font-mono:
+		"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+		"Courier New", monospace;
+}
+
+/* ── Semantic roles ─────────────────────────────────────────── */
+:root {
+	--motion-fast: 200ms;
+	--z-overlay: 50;
+
+	/* Surface & text */
+	--site-bg: #ffffff;
+	--site-surface: #ffffff;
+	--site-surface-muted: #f3f4f6;
+	--site-text: #000000;
+	--site-text-secondary: #4b5563;
+	--site-text-muted: #6b7280;
+	--site-text-inverse: #ffffff;
+
+	/* Borders */
+	--site-border: #e5e7eb;
+	--site-border-subtle: #f3f4f6;
+	--site-border-strong: #9ca3af;
+
+	/* Links */
+	--site-link: #000000;
+
+	/* Code */
+	--site-code-bg: #f3f4f6;
+	--site-code-border: #e5e7eb;
+
+	/* Accent (CTA / sponsor) */
+	--site-accent-bg: #111827;
+	--site-accent-text: #ffffff;
+
+	/* Sponsor / pink */
+	--site-sponsor-bg: #fdf2f8;
+	--site-sponsor-bg-hover: #fce7f3;
+	--site-sponsor-text: #db2777;
+	--site-sponsor-border: #fbcfe8;
+
+	/* Share / social blue */
+	--site-social-bg: #eff6ff;
+	--site-social-bg-hover: #dbeafe;
+	--site-social-text: #2563eb;
+
+	/* Status: info */
+	--site-info-bg: #eff6ff;
+	--site-info-border: #dbeafe;
+	--site-info-text: #1e3a8a;
+
+	/* Status: success */
+	--site-success-bg: #f0fdf4;
+	--site-success-border: #bbf7d0;
+	--site-success-text: #166534;
+
+	/* Status: warning */
+	--site-warning-bg: #fefce8;
+	--site-warning-border: #fef08a;
+	--site-warning-text: #713f12;
+
+	/* Status: danger */
+	--site-danger-bg: #fef2f2;
+	--site-danger-border: #fecaca;
+	--site-danger-text: #991b1b;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--site-bg: #111827;
+		--site-surface: #111827;
+		--site-surface-muted: #1f2937;
+		--site-text: #ffffff;
+		--site-text-secondary: #d1d5db;
+		--site-text-muted: #9ca3af;
+		--site-text-inverse: #111827;
+
+		--site-border: #374151;
+		--site-border-subtle: #1f2937;
+		--site-border-strong: #4b5563;
+
+		--site-link: #ffffff;
+
+		--site-code-bg: #1f2937;
+		--site-code-border: #374151;
+
+		--site-accent-bg: #f3f4f6;
+		--site-accent-text: #111827;
+
+		--site-sponsor-bg: rgba(131, 24, 67, 0.2);
+		--site-sponsor-bg-hover: rgba(131, 24, 67, 0.4);
+		--site-sponsor-text: #f472b6;
+		--site-sponsor-border: #9d174d;
+
+		--site-social-bg: rgba(30, 58, 138, 0.2);
+		--site-social-bg-hover: rgba(30, 58, 138, 0.4);
+		--site-social-text: #60a5fa;
+
+		--site-info-bg: rgba(30, 58, 138, 0.2);
+		--site-info-border: #1e3a8a;
+		--site-info-text: #dbeafe;
+
+		--site-success-bg: rgba(22, 101, 52, 0.2);
+		--site-success-border: #166534;
+		--site-success-text: #bbf7d0;
+
+		--site-warning-bg: rgba(113, 63, 18, 0.2);
+		--site-warning-border: #854d0e;
+		--site-warning-text: #fef08a;
+
+		--site-danger-bg: rgba(153, 27, 27, 0.2);
+		--site-danger-border: #991b1b;
+		--site-danger-text: #fecaca;
+	}
+}
+
+/* ── Expose semantic roles as Tailwind utilities ────────────── */
+@theme inline {
+	/* Surfaces */
+	--color-bg: var(--site-bg);
+	--color-surface: var(--site-surface);
+	--color-surface-muted: var(--site-surface-muted);
+
+	/* Text */
+	--color-text: var(--site-text);
+	--color-text-secondary: var(--site-text-secondary);
+	--color-text-muted: var(--site-text-muted);
+	--color-text-inverse: var(--site-text-inverse);
+
+	/* Borders */
+	--color-default: var(--site-border);
+	--color-border-subtle: var(--site-border-subtle);
+	--color-border-strong: var(--site-border-strong);
+
+	/* Links */
+	--color-link: var(--site-link);
+
+	/* Code */
+	--color-code-bg: var(--site-code-bg);
+	--color-code-border: var(--site-code-border);
+
+	/* Accent */
+	--color-accent-bg: var(--site-accent-bg);
+	--color-accent-text: var(--site-accent-text);
+
+	/* Sponsor */
+	--color-sponsor-bg: var(--site-sponsor-bg);
+	--color-sponsor-bg-hover: var(--site-sponsor-bg-hover);
+	--color-sponsor-text: var(--site-sponsor-text);
+	--color-sponsor-border: var(--site-sponsor-border);
+
+	/* Social */
+	--color-social-bg: var(--site-social-bg);
+	--color-social-bg-hover: var(--site-social-bg-hover);
+	--color-social-text: var(--site-social-text);
+
+	/* Status */
+	--color-info-bg: var(--site-info-bg);
+	--color-info-border: var(--site-info-border);
+	--color-info-text: var(--site-info-text);
+
+	--color-success-bg: var(--site-success-bg);
+	--color-success-border: var(--site-success-border);
+	--color-success-text: var(--site-success-text);
+
+	--color-warning-bg: var(--site-warning-bg);
+	--color-warning-border: var(--site-warning-border);
+	--color-warning-text: var(--site-warning-text);
+
+	--color-danger-bg: var(--site-danger-bg);
+	--color-danger-border: var(--site-danger-border);
+	--color-danger-text: var(--site-danger-text);
+}

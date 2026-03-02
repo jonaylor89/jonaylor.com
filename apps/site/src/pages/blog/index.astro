@@ -33,7 +33,7 @@ function formatReadTime(minutes: number): string {
   <main class="max-w-3xl mx-auto px-5 md:px-10 py-10 min-h-screen">
     <header class="mb-12">
       <h1 class="text-3xl md:text-4xl font-bold mb-4">Buried Treasure</h1>
-      <p class="text-lg text-gray-600 dark:text-gray-400">
+      <p class="text-lg text-text-secondary">
         Technical writings and thoughts by Johannes Naylor
       </p>
     </header>
@@ -50,7 +50,7 @@ function formatReadTime(minutes: number): string {
         <div class="flex flex-col gap-8">
           {sortedPosts.map((post, index) => (
             <article
-              class={`${index !== sortedPosts.length - 1 ? 'border-b border-gray-200 dark:border-gray-700' : ''} pb-8`}
+              class={`${index !== sortedPosts.length - 1 ? 'border-b border-default' : ''} pb-8`}
               itemscope
               itemtype="https://schema.org/Article"
             >
@@ -85,7 +85,7 @@ function formatReadTime(minutes: number): string {
                       >
                         {post.data.title}
                       </h3>
-                      <div class="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+                      <div class="flex items-center gap-4 text-sm text-text-secondary">
                         <time
                           datetime={post.data.date.toISOString()}
                           itemprop="datePublished"
@@ -98,7 +98,7 @@ function formatReadTime(minutes: number): string {
                       </div>
                     </header>
                     <p
-                      class="text-gray-700 dark:text-gray-300 mb-4 text-base leading-relaxed"
+                      class="text-text-secondary mb-4 text-base leading-relaxed"
                       itemprop="description"
                     >
                       {post.data.excerpt || post.data.subtitle}

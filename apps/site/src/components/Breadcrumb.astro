@@ -12,12 +12,12 @@ const { items } = Astro.props;
 ---
 
 <nav aria-label="Breadcrumb" class="mb-6">
-  <ol class="flex items-center space-x-2 text-sm text-black dark:text-white">
+  <ol class="flex items-center space-x-2 text-sm text-text">
     {items.map((item, index) => (
       <li class="flex items-center">
         {index > 0 && (
           <svg
-            class="w-4 h-4 mx-2 text-gray-400 dark:text-gray-500"
+            class="w-4 h-4 mx-2 text-text-muted"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"

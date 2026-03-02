@@ -62,7 +62,7 @@ const links = [
         <img src="/logo-light-256.png" alt="Johannes Naylor" class="w-20 h-20 rounded-full mx-auto hidden dark:block" />
       </div>
       <h1 class="text-2xl font-bold">Johannes Naylor</h1>
-      <p class="text-gray-600 dark:text-gray-400 text-sm mt-1">
+      <p class="text-text-secondary text-sm mt-1">
         Engineer & Entrepreneur
       </p>
     </header>
@@ -73,15 +73,15 @@ const links = [
           href={link.url}
           target="_blank"
           rel="noopener noreferrer"
-          class="link-card block p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-200 hover:scale-[1.02]"
+          class="link-card block p-4 rounded-xl border border-default hover:bg-surface-muted transition-all duration-200 hover:scale-[1.02]"
           style={`animation-delay: ${i * 0.05}s`}
         >
           <div class="flex items-center gap-3">
             <div class="flex-1">
               <div class="font-medium">{link.title}</div>
-              <div class="text-sm text-gray-500 dark:text-gray-400">{link.subtitle}</div>
+              <div class="text-sm text-text-muted">{link.subtitle}</div>
             </div>
-            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
             </svg>
           </div>

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./tokens.css";
 @import "highlight.js/styles/github.css";
 @plugin "@tailwindcss/typography";
 
@@ -7,15 +8,17 @@
 }
 
 body {
-	font-family: "PT Serif", Georgia, "Times New Roman", serif;
-	@apply bg-white dark:bg-gray-900 text-black dark:text-white;
+	font-family: var(--font-body);
+	background: var(--site-bg);
+	color: var(--site-text);
 	transition:
-		background-color 0.3s ease,
-		color 0.3s ease;
+		background-color var(--motion-fast) ease,
+		color var(--motion-fast) ease;
 }
 
 .prose {
-	@apply text-black dark:text-white leading-relaxed;
+	color: var(--site-text);
+	@apply leading-relaxed;
 }
 
 .prose h1,
@@ -24,7 +27,8 @@ body {
 .prose h4,
 .prose h5,
 .prose h6 {
-	@apply text-black dark:text-white font-bold mt-8 mb-4;
+	color: var(--site-text);
+	@apply font-bold mt-8 mb-4;
 }
 
 .prose h1 {
@@ -40,25 +44,30 @@ body {
 }
 
 .prose p {
-	@apply mb-6 text-black dark:text-white;
+	color: var(--site-text);
+	@apply mb-6;
 }
 
 .prose a {
-	@apply text-black dark:text-white underline transition-opacity duration-200 hover:opacity-70;
+	color: var(--site-text);
+	@apply underline transition-opacity duration-200 hover:opacity-70;
 }
 
 .prose code {
-	@apply bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-sm text-black dark:text-white;
+	background: var(--site-code-bg);
+	color: var(--site-text);
+	@apply px-1 py-0.5 rounded text-sm;
 }
 
 .prose pre {
-	@apply bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md p-4 overflow-x-auto my-6;
+	background: var(--site-surface-muted);
+	border: 1px solid var(--site-border);
+	@apply rounded-md p-4 overflow-x-auto my-6;
 }
 
 .prose pre code {
+	font-family: var(--font-mono);
 	@apply bg-transparent p-0 text-sm;
-	font-family:
-		"JetBrains Mono", ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
 }
 
 .prose ul,
@@ -85,7 +94,8 @@ body {
 }
 
 .prose blockquote {
-	@apply border-l-4 border-gray-200 dark:border-gray-700 pl-4 my-6 italic;
+	border-left: 4px solid var(--site-border);
+	@apply pl-4 my-6 italic;
 }
 
 .prose table {
@@ -94,20 +104,25 @@ body {
 }
 
 .prose table th {
-	@apply bg-gray-50 dark:bg-gray-800 text-black dark:text-white font-semibold text-left px-4 py-3 border border-gray-200 dark:border-gray-700;
+	background: var(--site-surface-muted);
+	color: var(--site-text);
+	border: 1px solid var(--site-border);
+	@apply font-semibold text-left px-4 py-3;
 }
 
 .prose table td {
-	@apply text-black dark:text-white px-4 py-3 border border-gray-200 dark:border-gray-700;
+	color: var(--site-text);
+	border: 1px solid var(--site-border);
+	@apply px-4 py-3;
 }
 
 .prose table tbody tr:nth-child(even) {
-	@apply bg-gray-50/50 dark:bg-gray-800/30;
+	background: color-mix(in srgb, var(--site-surface-muted) 50%, transparent);
 }
 
 .prose table tbody tr:hover {
-	@apply bg-gray-100/70 dark:bg-gray-700/50;
-	transition: background-color 0.2s ease;
+	background: color-mix(in srgb, var(--site-surface-muted) 70%, transparent);
+	transition: background-color var(--motion-fast) ease;
 }
 
 /* Syntax highlighting adjustments */
@@ -133,8 +148,7 @@ body {
 [data-rehype-pretty-code-fragment] code {
 	background: none !important;
 	padding: 0 !important;
-	font-family:
-		"JetBrains Mono", ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+	font-family: var(--font-mono);
 }
 
 /* Language label */
@@ -194,7 +208,7 @@ body {
 	margin-top: 2rem;
 }
 
-/* Force white text in code blocks in dark mode to fix specificty issues */
+/* Force white text in code blocks in dark mode to fix specificity issues */
 .dark .prose pre,
 .dark .prose pre code,
 .dark .prose pre span {
