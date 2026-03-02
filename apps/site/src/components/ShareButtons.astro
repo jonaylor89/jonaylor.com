@@ -13,14 +13,14 @@ const shareUrls = {
 };
 ---
 
-<div class="flex items-center gap-3 py-4 border-t border-gray-200 dark:border-gray-700">
+<div class="flex items-center gap-3 py-4 border-t border-default">
   <div class="flex items-center gap-2">
     <button
       data-share-button
       data-url={url}
       data-title={title}
       data-description={description || title}
-      class="share-button flex items-center gap-1 px-3 py-2 text-sm bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition-colors duration-200"
+      class="share-button flex items-center gap-1 px-3 py-2 text-sm bg-surface-muted hover:opacity-90 rounded-md transition-colors duration-200"
     >
       <svg class="share-icon w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
@@ -38,7 +38,7 @@ const shareUrls = {
       href={shareUrls.twitter}
       target="_blank"
       rel="noopener noreferrer"
-      class="flex items-center gap-1 px-3 py-2 text-sm bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-md transition-colors duration-200"
+      class="flex items-center gap-1 px-3 py-2 text-sm bg-social-bg hover:bg-social-bg-hover text-social-text rounded-md transition-colors duration-200"
       title="Share on Twitter"
     >
       <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -51,7 +51,7 @@ const shareUrls = {
       href={shareUrls.linkedin}
       target="_blank"
       rel="noopener noreferrer"
-      class="flex items-center gap-1 px-3 py-2 text-sm bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-md transition-colors duration-200"
+      class="flex items-center gap-1 px-3 py-2 text-sm bg-social-bg hover:bg-social-bg-hover text-social-text rounded-md transition-colors duration-200"
       title="Share on LinkedIn"
     >
       <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">

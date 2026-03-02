@@ -85,14 +85,14 @@ const description = post.data.excerpt || post.data.subtitle || "";
             />
           </div>
         )}
-        <div class="flex items-center gap-4 text-gray-600 dark:text-gray-400 mb-6">
+        <div class="flex items-center gap-4 text-text-secondary mb-6">
           <time class="text-base" datetime={post.data.date.toISOString()}>
             {format(post.data.date, "MMMM d, yyyy")}
           </time>
           <span>{formatReadTime(readTime)}</span>
         </div>
         {post.data.subtitle && (
-          <p class="text-xl text-gray-700 dark:text-gray-300 italic mb-8">
+          <p class="text-xl text-text-secondary italic mb-8">
             {post.data.subtitle}
           </p>
         )}
@@ -111,7 +111,7 @@ const description = post.data.excerpt || post.data.subtitle || "";
         <div class="mt-6 pt-6">
           <div class="flex flex-wrap gap-2">
             {post.data.tags.map((tag) => (
-              <span class="bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full text-sm">
+              <span class="bg-surface-muted px-3 py-1 rounded-full text-sm">
                 {tag}
               </span>
             ))}

@@ -12,8 +12,8 @@ export default defineConfig({
 	site: "https://jonaylor.com",
 	output: "static",
 
-	// Path-based redirects for old URLs (provider-agnostic)
-	// Note: /index.html redirect handled by vercel.json to avoid build conflict
+	// Path-based redirects for old URLs
+	// Note: /index.html redirect handled by public/_redirects for Cloudflare Pages
 	redirects: {
 		"/needle_movers.html": "/needle-movers",
 		"/user_manual.html": "/user-manual",
