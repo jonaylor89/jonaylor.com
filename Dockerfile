@@ -1,5 +1,5 @@
 
-FROM lukemathwalker/cargo-chef:latest-rust-1 as chef
+FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
 
 WORKDIR /app
 
@@ -24,13 +24,13 @@ RUN cargo chef cook --release --recipe-path recipe.json
 COPY . . 
 
 
-ENV SQLX_OFFLINE true
+ENV SQLX_OFFLINE=true
 
 RUN cargo build --release --bin email_newsletter
 
 # ----------------------------
 
-FROM debian:bookworm-slim AS runtime
+FROM debian:trixie-slim AS runtime
 
 WORKDIR /app
 
@@ -42,8 +42,7 @@ RUN apt-get update -y \
 
 COPY --from=builder /app/target/release/email_newsletter email_newsletter
 
-COPY configuration configuration
 COPY templates templates
-ENV APP_ENVIRONMENT production
+ENV APP_ENVIRONMENT=production
 
 ENTRYPOINT ["./email_newsletter"]
