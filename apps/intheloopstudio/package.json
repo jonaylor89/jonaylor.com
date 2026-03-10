@@ -11,7 +11,7 @@
 		"lint:fix": "biome check --write ."
 	},
 	"dependencies": {
-		"astro": "^5.9.3"
+		"astro": "^6.0.1"
 	},
 	"devDependencies": {
 		"@tailwindcss/vite": "^4.1.8",

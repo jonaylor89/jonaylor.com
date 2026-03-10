@@ -13,12 +13,12 @@
 		"format": "biome format --write ."
 	},
 	"dependencies": {
-		"@astrojs/mdx": "^4.3.13",
-		"@astrojs/sitemap": "^3.7.0",
+		"@astrojs/mdx": "5.0.0",
+		"@astrojs/sitemap": "3.7.1",
 		"@jonaylor89/png-db": "^0.1.1",
 		"@tailwindcss/typography": "^0.5.19",
 		"@tailwindcss/vite": "^4.1.18",
-		"astro": "^5.17.3",
+		"astro": "^6.0.1",
 		"date-fns": "^4.1.0",
 		"highlight.js": "^11.11.1",
 		"rehype-highlight": "^7.0.2",

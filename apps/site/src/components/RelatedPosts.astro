@@ -19,7 +19,7 @@ const allPosts = await getCollection("posts", ({ data }) => {
 
 // Score each post by number of shared tags, exclude current post
 const scored = allPosts
-	.filter((p) => p.slug !== currentSlug)
+	.filter((p) => p.id !== currentSlug)
 	.map((post) => {
 		const shared = post.data.tags.filter((t) => currentTags.includes(t)).length;
 		return { post, shared };
@@ -41,7 +41,7 @@ const scored = allPosts
 		<div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
 			{scored.map(({ post }) => (
 				<a
-					href={`/blog/${post.slug}`}
+					href={`/blog/${post.id}`}
 					class="group block rounded-lg border border-default overflow-hidden hover:border-border-strong transition-colors duration-200"
 				>
 					{post.data.coverImage && (

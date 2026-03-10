@@ -27,7 +27,7 @@ export async function GET(context: APIContext) {
 		feed.item({
 			title: post.data.title,
 			description: post.data.excerpt || post.data.subtitle || "",
-			url: `${siteUrl}/blog/${post.slug}/`,
+			url: `${siteUrl}/blog/${post.id}/`,
 			date: post.data.date,
 			categories: post.data.tags || [],
 			author: "Johannes Naylor",
