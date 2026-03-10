@@ -14,7 +14,7 @@ use crate::{
 };
 
 // Number of tasks to process concurrently
-const CONCURRENT_TASKS: usize = 10;
+const CONCURRENT_TASKS: usize = 1;
 
 // Maximum number of retry attempts before moving to dead letter queue
 const MAX_RETRY_ATTEMPTS: i32 = 5;
@@ -56,7 +56,7 @@ async fn worker_loop(
     loop {
         match try_execute_tasks(pool, email_client, hmac_secret, base_url).await {
             Ok(ExecutionOutcome::EmptyQueue) => {
-                tokio::time::sleep(Duration::from_secs(10)).await;
+                tokio::time::sleep(Duration::from_hours(24)).await;
             }
             Err(_) => {
                 tokio::time::sleep(Duration::from_secs(1)).await;

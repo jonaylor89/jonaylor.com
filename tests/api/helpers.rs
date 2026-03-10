@@ -44,6 +44,14 @@ pub struct TestApp {
     server_task: tokio::task::JoinHandle<Result<(), std::io::Error>>,
 }
 
+pub struct QueueWorkerTestApp {
+    pub db_pool: PgPool,
+    pub email_server: MockServer,
+    pub email_client: EmailClient,
+    pub hmac_secret: String,
+    pub base_url: String,
+}
+
 impl Drop for TestApp {
     fn drop(&mut self) {
         // Signal the server to shut down when the test app is dropped
@@ -307,6 +315,33 @@ pub async fn spawn_app() -> TestApp {
     test_app.test_user.store(&test_app.db_pool).await;
 
     test_app
+}
+
+pub async fn spawn_queue_worker_app() -> QueueWorkerTestApp {
+    Lazy::force(&TRACING);
+
+    let email_server = MockServer::start().await;
+
+    let configuration = {
+        let mut c = get_configuration().expect("Failed to read configuration");
+        c.database.database_name = Uuid::new_v4().to_string();
+        c.email_client.base_url = email_server.uri();
+        c
+    };
+
+    let db_pool = configure_database(&configuration.database).await;
+
+    QueueWorkerTestApp {
+        db_pool,
+        email_server,
+        email_client: configuration.email_client.client(),
+        hmac_secret: configuration
+            .application
+            .hmac_secret
+            .expose_secret()
+            .clone(),
+        base_url: configuration.application.base_url.clone(),
+    }
 }
 
 async fn configure_database(config: &DatabaseSettings) -> PgPool {
