@@ -2,7 +2,6 @@
 application:
   port: 8000
   hmac_secret: "super-long-and-secret-random-key-needed-to-verify-message-integrity"
-  api_bearer_token: "dev-api-token-change-in-production"
 database:
   host: "localhost"
   port: 5432
@@ -15,7 +14,3 @@ email_client:
   authorization_token: "my-secret-token"
   timeout_milliseconds: 10000
 redis_uri: "redis://127.0.0.1:6379"
-rss_feed:
-  enabled: false
-  feed_url: ""
-  poll_interval_secs: 900
