@@ -1,0 +1,92 @@
+{
+  "pretax": 406.00,
+  "tax": 36.03,
+  "tip": 88.41,
+  "guests": 8,
+  "foodShared": {
+    "total": 88.00,
+    "items": [
+      "Khachapuri",
+      "Lamb Dumplings (x2)",
+      "Pork+Beef Dumplings",
+      "Cheese Sphere"
+    ]
+  },
+  "participates": [
+    {
+      "name": "Johannes",
+      "paid": true,
+      "total": 14.00,
+      "shared": true,
+      "items": [
+        "Lamb Dumplings"
+      ]
+    },
+    {
+      "name": "Ralph",
+      "paid": true,
+      "total": 53.00,
+      "shared": true,
+      "items": [
+        "Chicken Skewers",
+        "Melon Muse"
+      ]
+    },
+    {
+      "name": "Bryan",
+      "paid": false,
+      "total": 56.00,
+      "shared": true,
+      "items": [
+        "Smoked Cherry",
+        "Lamb Chanakhi"
+      ]
+    },
+    {
+      "name": "Alston",
+      "paid": true,
+      "total": 55.00,
+      "shared": true,
+      "items": [
+        "Espresso Martini",
+        "Lamb Chanakhi"
+      ]
+    },
+    {
+      "name": "Ilias",
+      "paid": false,
+      "total": 32.00,
+      "shared": false,
+      "items": [
+        "Chicken Skewers"
+      ]
+    },
+    {
+      "name": "Zinger",
+      "paid": true,
+      "total": 35.00,
+      "shared": true,
+      "items": [
+        "Crispy Salmon"
+      ]
+    },
+    {
+      "name": "Charles",
+      "paid": true,
+      "total": 41.00,
+      "shared": true,
+      "items": [
+        "Crispy Salmon"
+      ]
+    },
+    {
+      "name": "Kenny",
+      "paid": true,
+      "total": 32.00,
+      "shared": true,
+      "items": [
+        "Chicken Skewer"
+      ]
+    }
+  ]
+}

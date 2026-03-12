@@ -1,0 +1,62 @@
+---
+interface Props {
+  items: string[];
+  total: number;
+}
+
+const { items, total } = Astro.props;
+---
+
+<div class="shared-food">
+  <h2>🥟 Shared Dishes</h2>
+  <p class="description">
+    Family-style items split among those who shared (total:
+    <strong>${total.toFixed(2)}</strong>)
+  </p>
+  <div class="items-list">
+    {
+      items.map((item) => (
+        <span class="food-tag">{item}</span>
+      ))
+    }
+  </div>
+</div>
+
+<style>
+  .shared-food {
+    background: white;
+    border: 1px solid var(--cream-dark);
+    border-radius: 14px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  h2 {
+    font-family: "Playfair Display", Georgia, serif;
+    color: var(--wine);
+    font-size: 1.3rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .description {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .items-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .food-tag {
+    background: var(--cream);
+    border: 1px solid var(--cream-dark);
+    border-radius: 20px;
+    padding: 0.35rem 0.85rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--wood-light);
+  }
+</style>

@@ -1,0 +1,240 @@
+---
+import type { GuestBreakdown } from "../utils/calculateTotals";
+
+interface Props {
+  guest: GuestBreakdown;
+  bryanShare: number;
+  isBryan?: boolean;
+}
+
+const { guest, bryanShare, isBryan = false } = Astro.props;
+---
+
+<div class:list={["card", { paid: guest.amountPaid, bryan: isBryan }]}>
+  <div class="card-header">
+    <div class="name-row">
+      <h3>
+        {isBryan ? "🧑‍🦰" : ""}{guest.name}
+        {isBryan ? " (Birthday Boy!)" : ""}
+      </h3>
+      {
+        guest.amountPaid ? (
+          <span class="badge paid-badge">✅ Paid</span>
+        ) : isBryan ? (
+          <span class="badge birthday-badge">🎂 Free!</span>
+        ) : (
+          <span class="badge owes-badge">Owes</span>
+        )
+      }
+    </div>
+  </div>
+
+  <div class="items">
+    <span class="items-label">Ordered:</span>
+    {guest.items.join(", ")}
+  </div>
+
+  {
+    !isBryan && (
+      <div class="breakdown">
+        <div class="line">
+          <span>Personal items</span>
+          <span>${guest.subtotal.toFixed(2)}</span>
+        </div>
+        {guest.sharedTotal > 0 && (
+          <div class="line">
+            <span>Shared dishes split</span>
+            <span>${guest.sharedTotal.toFixed(2)}</span>
+          </div>
+        )}
+        <div class="line">
+          <span>Tax share</span>
+          <span>${guest.taxShare.toFixed(2)}</span>
+        </div>
+        <div class="line">
+          <span>Tip share</span>
+          <span>${guest.tipShare.toFixed(2)}</span>
+        </div>
+        {bryanShare > 0 && (
+          <div class="line bryan-line">
+            <span>🎂 Bryan's meal split (optional)</span>
+            <span>${bryanShare.toFixed(2)}</span>
+          </div>
+        )}
+        <div class="line total-line">
+          <span>Total</span>
+          <span>${guest.totalOwed.toFixed(2)}</span>
+        </div>
+        {!guest.amountPaid && (
+          <div class="remaining">
+            <span>Remaining balance:</span>
+            <span class="remaining-amount">
+              ${guest.remainingBalance.toFixed(2)}
+            </span>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  {
+    isBryan && (
+      <div class="breakdown">
+        <div class="line">
+          <span>Personal items</span>
+          <span>${guest.subtotal.toFixed(2)}</span>
+        </div>
+        {guest.sharedTotal > 0 && (
+          <div class="line">
+            <span>Shared dishes split</span>
+            <span>${guest.sharedTotal.toFixed(2)}</span>
+          </div>
+        )}
+        <div class="line total-line">
+          <span>Meal total</span>
+          <span>${(guest.subtotal + guest.sharedTotal).toFixed(2)}</span>
+        </div>
+        <div class="bryan-note">
+          🎉 Covered by friends — happy birthday!
+        </div>
+      </div>
+    )
+  }
+</div>
+
+<style>
+  .card {
+    background: white;
+    border: 1px solid var(--cream-dark);
+    border-radius: 12px;
+    padding: 1.25rem;
+    transition: box-shadow 0.2s;
+  }
+
+  .card:hover {
+    box-shadow: 0 4px 16px rgba(62, 39, 35, 0.08);
+  }
+
+  .card.paid {
+    opacity: 0.65;
+    background: linear-gradient(135deg, #f6fff6 0%, white 100%);
+    border-color: var(--green-light);
+  }
+
+  .card.bryan {
+    background: linear-gradient(
+      135deg,
+      #fff8f0 0%,
+      white 50%,
+      #fff0e8 100%
+    );
+    border: 2px solid var(--ginger-light);
+    opacity: 1;
+  }
+
+  .card-header {
+    margin-bottom: 0.6rem;
+  }
+
+  .name-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  h3 {
+    font-family: "Playfair Display", Georgia, serif;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--wood);
+  }
+
+  .badge {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+
+  .paid-badge {
+    background: #e8f5e9;
+    color: var(--green);
+  }
+
+  .owes-badge {
+    background: #fce4ec;
+    color: var(--wine);
+  }
+
+  .birthday-badge {
+    background: #fff3e0;
+    color: var(--ginger);
+  }
+
+  .items {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+    line-height: 1.4;
+  }
+
+  .items-label {
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .breakdown {
+    border-top: 1px solid var(--cream-dark);
+    padding-top: 0.6rem;
+    font-size: 0.88rem;
+  }
+
+  .line {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.2rem 0;
+    color: var(--text-muted);
+  }
+
+  .bryan-line {
+    color: var(--ginger);
+    font-style: italic;
+  }
+
+  .total-line {
+    border-top: 1px solid var(--cream-dark);
+    margin-top: 0.35rem;
+    padding-top: 0.35rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .remaining {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: #fce4ec;
+    border-radius: 8px;
+    font-weight: 600;
+    color: var(--wine);
+  }
+
+  .remaining-amount {
+    font-family: "Playfair Display", Georgia, serif;
+    font-size: 1.05rem;
+  }
+
+  .bryan-note {
+    text-align: center;
+    padding: 0.6rem;
+    margin-top: 0.5rem;
+    background: #fff3e0;
+    border-radius: 8px;
+    font-weight: 500;
+    color: var(--ginger);
+    font-size: 0.9rem;
+  }
+</style>

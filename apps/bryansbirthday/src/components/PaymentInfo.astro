@@ -1,0 +1,152 @@
+---
+const payments = [
+  { label: "Venmo", handle: "@John-Naylor-9", icon: "💸" },
+  { label: "Cash App", handle: "$jonaylor89", icon: "💵" },
+  { label: "Apple Pay", handle: "jonaylor89@protonmail.com", icon: "🍎" },
+];
+---
+
+<div class="payment-info">
+  <h2>💰 Pay Johannes Back</h2>
+  <p class="description">Pick your preferred method and send your share:</p>
+
+  <div class="payment-methods">
+    {
+      payments.map((p) => (
+        <div class="method">
+          <span class="method-icon">{p.icon}</span>
+          <div class="method-details">
+            <span class="method-label">{p.label}</span>
+            <code class="method-handle">{p.handle}</code>
+          </div>
+          <button
+            class="copy-btn"
+            data-copy={p.handle}
+            aria-label={`Copy ${p.label} handle`}
+          >
+            📋
+          </button>
+        </div>
+      ))
+    }
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll(".copy-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const text = (btn as HTMLElement).dataset.copy;
+      if (!text) return;
+
+      try {
+        await navigator.clipboard.writeText(text);
+        const original = btn.textContent;
+        btn.textContent = "✅";
+        setTimeout(() => {
+          btn.textContent = original;
+        }, 1500);
+      } catch {
+        // Fallback
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+        const original = btn.textContent;
+        btn.textContent = "✅";
+        setTimeout(() => {
+          btn.textContent = original;
+        }, 1500);
+      }
+    });
+  });
+</script>
+
+<style>
+  .payment-info {
+    background: white;
+    border: 1px solid var(--cream-dark);
+    border-radius: 14px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  h2 {
+    font-family: "Playfair Display", Georgia, serif;
+    color: var(--wine);
+    font-size: 1.3rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .description {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    margin-bottom: 1rem;
+  }
+
+  .payment-methods {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .method {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: var(--cream);
+    border: 1px solid var(--cream-dark);
+    border-radius: 10px;
+    padding: 0.65rem 0.9rem;
+  }
+
+  .method-icon {
+    font-size: 1.3rem;
+    flex-shrink: 0;
+  }
+
+  .method-details {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .method-label {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+  }
+
+  .method-handle {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text);
+    background: none;
+    padding: 0;
+    word-break: break-all;
+  }
+
+  .copy-btn {
+    background: white;
+    border: 1px solid var(--cream-dark);
+    border-radius: 8px;
+    padding: 0.35rem 0.55rem;
+    cursor: pointer;
+    font-size: 1rem;
+    flex-shrink: 0;
+    transition: background 0.2s, transform 0.1s;
+  }
+
+  .copy-btn:hover {
+    background: var(--cream-dark);
+  }
+
+  .copy-btn:active {
+    transform: scale(0.95);
+  }
+</style>

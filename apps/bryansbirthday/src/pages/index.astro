@@ -1,0 +1,261 @@
+---
+import Layout from "../layouts/Layout.astro";
+import GuestCard from "../components/GuestCard.astro";
+import BryanProgress from "../components/BryanProgress.astro";
+import PaymentInfo from "../components/PaymentInfo.astro";
+import SharedFood from "../components/SharedFood.astro";
+import { calculateTotals } from "../utils/calculateTotals";
+import type { Receipt } from "../utils/calculateTotals";
+
+import receiptData from "../../receipt.json";
+const receipt = receiptData as Receipt;
+const totals = calculateTotals(receipt);
+
+const bryan = totals.guests.find((g) => g.name === "Bryan")!;
+const others = totals.guests.filter((g) => g.name !== "Bryan");
+const paidCount = others.filter((g) => g.amountPaid).length;
+---
+
+<Layout>
+  <main>
+    <a href="https://photos.app.goo.gl/tfcWQxuFH5wcwj399" target="_blank" rel="noopener noreferrer" class="photo-banner">
+      <span>📸 View photos from the night →</span>
+    </a>
+
+    <header class="hero">
+      <div class="hero-inner">
+        <p class="hero-emoji">🎂🥟🍷</p>
+        <h1>Frumpkin's Birthday Dinner</h1>
+        <p class="subtitle">
+          A Georgian feast for the ginger boy 🧑‍🦰
+        </p>
+        <div class="receipt-summary">
+          <div class="stat">
+            <span class="stat-label">Subtotal</span>
+            <span class="stat-value">${receipt.pretax.toFixed(2)}</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Tax</span>
+            <span class="stat-value">${receipt.tax.toFixed(2)}</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Tip</span>
+            <span class="stat-value">${receipt.tip.toFixed(2)}</span>
+          </div>
+          <div class="stat total">
+            <span class="stat-label">Grand Total</span>
+            <span class="stat-value">
+              ${(receipt.pretax + receipt.tax + receipt.tip).toFixed(2)}
+            </span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <section class="content">
+      <SharedFood
+        items={totals.sharedFoodItems}
+        total={totals.sharedFoodTotal}
+      />
+
+      <PaymentInfo />
+
+      <h2 class="section-title">Who Owes What 🍽️</h2>
+      <p class="section-subtitle">
+        Tax & tip split equally (except Bryan — it's his birthday!). Shared
+        dishes split among those who partook.
+      </p>
+
+      <div class="guest-grid">
+        {
+          others.map((guest) => (
+            <GuestCard
+              guest={guest}
+              bryanShare={totals.bryanPerPersonShare}
+            />
+          ))
+        }
+      </div>
+
+      <div class="bryan-card-wrapper">
+        <h2 class="section-title">Frumpkin</h2>
+        <GuestCard guest={bryan} bryanShare={0} isBryan />
+      </div>
+
+      <footer class="footer">
+        <p>
+          🇬🇪 გმადლობთ!
+        </p>
+      </footer>
+    </section>
+  </main>
+</Layout>
+
+<style>
+  main {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .hero {
+    background:
+      linear-gradient(135deg, var(--wine) 0%, var(--wine-dark) 50%, var(--wood) 100%);
+    color: var(--cream);
+    padding: 3rem 1.5rem 2.5rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 20px,
+        rgba(255, 255, 255, 0.02) 20px,
+        rgba(255, 255, 255, 0.02) 40px
+      );
+  }
+
+  .hero-inner {
+    position: relative;
+    z-index: 1;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  .hero-emoji {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .hero h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    letter-spacing: -0.02em;
+  }
+
+  .subtitle {
+    font-size: 1.05rem;
+    opacity: 0.85;
+    margin-bottom: 1.5rem;
+  }
+
+  .receipt-summary {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .stat {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    padding: 0.6rem 1rem;
+    backdrop-filter: blur(4px);
+  }
+
+  .stat.total {
+    background: rgba(201, 168, 76, 0.2);
+    border-color: var(--gold);
+  }
+
+  .stat-label {
+    display: block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.7;
+    margin-bottom: 0.15rem;
+  }
+
+  .stat-value {
+    font-family: "Playfair Display", Georgia, serif;
+    font-size: 1.15rem;
+    font-weight: 600;
+  }
+
+  .content {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 3rem;
+  }
+
+  .section-title {
+    font-size: 1.5rem;
+    color: var(--wine);
+    margin-top: 2.5rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .section-subtitle {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin-bottom: 1.25rem;
+    line-height: 1.5;
+  }
+
+  .guest-grid {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .bryan-card-wrapper {
+    margin-top: 1rem;
+  }
+
+  .bryan-card-wrapper .section-title {
+    margin-top: 2rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .photo-banner {
+    display: block;
+    text-align: center;
+    background: var(--gold);
+    color: var(--wood);
+    padding: 0.55rem 1rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+    text-decoration: none;
+    letter-spacing: 0.02em;
+    transition: background 0.2s;
+  }
+
+  .photo-banner:hover {
+    background: var(--gold-light);
+  }
+
+  .footer {
+    text-align: center;
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--cream-dark);
+    color: var(--text-muted);
+    font-size: 0.95rem;
+  }
+
+  @media (max-width: 480px) {
+    .hero h1 {
+      font-size: 1.6rem;
+    }
+
+    .receipt-summary {
+      gap: 0.5rem;
+    }
+
+    .stat {
+      padding: 0.4rem 0.7rem;
+    }
+
+    .stat-value {
+      font-size: 1rem;
+    }
+  }
+</style>

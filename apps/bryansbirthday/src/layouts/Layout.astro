@@ -1,0 +1,71 @@
+---
+interface Props {
+  title?: string;
+}
+
+const { title = "Bryan's Birthday Dinner 🎂" } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>
+
+<style is:global>
+  :root {
+    --wine: #722f37;
+    --wine-dark: #5a252c;
+    --wine-light: #8b3a42;
+    --cream: #faf3e8;
+    --cream-dark: #f0e6d3;
+    --wood: #3e2723;
+    --wood-light: #5d4037;
+    --gold: #c9a84c;
+    --gold-light: #dfc06f;
+    --green: #2e7d32;
+    --green-light: #4caf50;
+    --text: #2c1810;
+    --text-muted: #6d5d53;
+    --ginger: #c45a20;
+    --ginger-light: #e8834a;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    font-family: "Inter", system-ui, sans-serif;
+    background: var(--cream);
+    color: var(--text);
+  }
+
+  body {
+    min-height: 100vh;
+    background:
+      radial-gradient(ellipse at top, rgba(114, 47, 55, 0.06) 0%, transparent 60%),
+      var(--cream);
+  }
+
+  h1, h2, h3, h4 {
+    font-family: "Playfair Display", Georgia, serif;
+  }
+</style>

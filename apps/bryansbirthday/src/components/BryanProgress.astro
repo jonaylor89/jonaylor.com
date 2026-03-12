@@ -1,0 +1,92 @@
+---
+interface Props {
+  bryansTotal: number;
+  coveredBy: string[];
+  perPersonShare: number;
+  paidCount: number;
+}
+
+const { bryansTotal, coveredBy, perPersonShare, paidCount } = Astro.props;
+const totalPeople = coveredBy.length;
+const amountCovered = paidCount * perPersonShare;
+const progressPercent = Math.min((amountCovered / bryansTotal) * 100, 100);
+---
+
+<div class="bryan-progress">
+  <h2>🎂 Cover Bryan's Meal</h2>
+  <p class="description">
+    It's his birthday! Everyone chips in
+    <strong>${perPersonShare.toFixed(2)}</strong> to cover Bryan's
+    <strong>${bryansTotal.toFixed(2)}</strong> meal. If anyone opts out,
+    Johannes covers the rest.
+  </p>
+
+  <div class="progress-bar-container">
+    <div class="progress-bar" style={`width: ${progressPercent}%`}>
+      <span class="progress-text">
+        {progressPercent > 15 ? `$${amountCovered.toFixed(2)}` : ""}
+      </span>
+    </div>
+  </div>
+  <div class="progress-labels">
+    <span>{paidCount} / {totalPeople} friends have paid</span>
+    <span>${bryansTotal.toFixed(2)} goal</span>
+  </div>
+</div>
+
+<style>
+  .bryan-progress {
+    background: linear-gradient(135deg, #fff8f0 0%, #fff0e8 100%);
+    border: 2px solid var(--ginger-light);
+    border-radius: 14px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  h2 {
+    font-family: "Playfair Display", Georgia, serif;
+    color: var(--ginger);
+    font-size: 1.3rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .description {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin-bottom: 1rem;
+  }
+
+  .progress-bar-container {
+    background: var(--cream-dark);
+    border-radius: 10px;
+    height: 28px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .progress-bar {
+    background: linear-gradient(90deg, var(--ginger) 0%, var(--ginger-light) 100%);
+    height: 100%;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: width 0.6s ease;
+    min-width: 0;
+  }
+
+  .progress-text {
+    color: white;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .progress-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.4rem;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+</style>
