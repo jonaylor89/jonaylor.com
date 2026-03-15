@@ -1,0 +1,7 @@
+name = "bryansbirthday"
+compatibility_date = "2025-03-15"
+workers_dev = true
+preview_urls = true
+
+[assets]
+directory = "./dist"

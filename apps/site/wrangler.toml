@@ -1,0 +1,17 @@
+name = "site"
+compatibility_date = "2025-03-15"
+workers_dev = true
+preview_urls = true
+
+[assets]
+directory = "./dist"
+
+[[routes]]
+pattern = "jonaylor.com"
+custom_domain = true
+
+
+[[routes]]
+pattern = "www.jonaylor.com"
+custom_domain = true
+

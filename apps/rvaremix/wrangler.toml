@@ -1,0 +1,17 @@
+name = "rvaremix"
+compatibility_date = "2025-03-15"
+workers_dev = true
+preview_urls = true
+
+[assets]
+directory = "./dist"
+
+[[routes]]
+pattern = "rvaremix.org"
+custom_domain = true
+
+
+[[routes]]
+pattern = "www.rvaremix.org"
+custom_domain = true
+

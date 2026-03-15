@@ -1,0 +1,11 @@
+{
+	"name": "redirects",
+	"type": "module",
+	"version": "0.1.0",
+	"private": true,
+	"scripts": {
+		"dev": "wrangler dev",
+		"build": "echo 'No build step needed'",
+		"deploy": "wrangler deploy"
+	}
+}

@@ -6,6 +6,7 @@
 	"scripts": {
 		"dev": "astro dev",
 		"build": "astro check && astro build",
+		"deploy": "wrangler deploy",
 		"preview": "astro preview",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
@@ -13,13 +14,12 @@
 	},
 	"dependencies": {
 		"@astrojs/check": "^0.9.6",
-		"@astrojs/tailwind": "^6.0.2",
-		"@astrojs/vercel": "^8.2.11",
 		"astro": "^6.0.1",
-		"tailwindcss": "^3.4.17",
 		"typescript": "^5.7.3"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^1.9.4"
+		"@biomejs/biome": "^1.9.4",
+		"@tailwindcss/vite": "^4.1.8",
+		"tailwindcss": "^4.1.8"
 	}
 }

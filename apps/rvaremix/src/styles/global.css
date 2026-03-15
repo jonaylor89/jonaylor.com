@@ -1,8 +1,9 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 @import url('https://fonts.googleapis.com/css2?family=Montserrat&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-rva-remix-purple: #521dcd;
+}
 
 body {
   margin: 0;

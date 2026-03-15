@@ -1,0 +1,17 @@
+name = "intheloopstudio"
+compatibility_date = "2025-03-15"
+workers_dev = true
+preview_urls = true
+
+[assets]
+directory = "./dist"
+
+[[routes]]
+pattern = "intheloopstudio.com"
+custom_domain = true
+
+
+[[routes]]
+pattern = "www.intheloopstudio.com"
+custom_domain = true
+

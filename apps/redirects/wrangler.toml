@@ -1,0 +1,29 @@
+name = "redirects"
+main = "src/index.ts"
+compatibility_date = "2025-03-15"
+workers_dev = true
+preview_urls = true
+
+[[routes]]
+pattern = "blog.jonaylor.com"
+custom_domain = true
+
+[[routes]]
+pattern = "bio.jonaylor.com"
+custom_domain = true
+
+[[routes]]
+pattern = "gm.jonaylor.com"
+custom_domain = true
+
+[[routes]]
+pattern = "resume.jonaylor.com"
+custom_domain = true
+
+[[routes]]
+pattern = "jonaylor.xyz"
+custom_domain = true
+
+[[routes]]
+pattern = "www.jonaylor.xyz"
+custom_domain = true

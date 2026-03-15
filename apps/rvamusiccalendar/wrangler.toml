@@ -1,0 +1,17 @@
+name = "rvamusiccalendar"
+compatibility_date = "2025-03-15"
+workers_dev = true
+preview_urls = true
+
+[assets]
+directory = "./dist"
+
+[[routes]]
+pattern = "rvamusiccalendar.com"
+custom_domain = true
+
+
+[[routes]]
+pattern = "www.rvamusiccalendar.com"
+custom_domain = true
+
