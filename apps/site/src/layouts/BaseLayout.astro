@@ -1,4 +1,5 @@
 ---
+import { Font } from "astro:assets";
 import "../styles/global.css";
 
 interface Props {
@@ -50,10 +51,9 @@ const twitterHandle = "@jonaylor89";
     <link rel="canonical" href={canonicalURL} />
     <meta name="generator" content={Astro.generator} />
 
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Figtree&family=PT+Serif:wght@400;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <Font cssVariable="--font-figtree" preload={[{ weight: 400, subset: "latin" }]} />
+    <Font cssVariable="--font-pt-serif" preload={[{ weight: 400, subset: "latin" }]} />
+    <Font cssVariable="--font-jetbrains-mono" />
 
     <!-- Primary Meta Tags -->
     <title>{title}</title>

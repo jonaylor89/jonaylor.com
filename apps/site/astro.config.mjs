@@ -3,7 +3,7 @@
 import mdx from "@astrojs/mdx";
 import sitemap from "@astrojs/sitemap";
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig } from "astro/config";
+import { defineConfig, fontProviders } from "astro/config";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 
@@ -25,6 +25,36 @@ export default defineConfig({
 			rehypePlugins: [rehypeHighlight],
 		}),
 		sitemap(),
+	],
+
+	fonts: [
+		{
+			provider: fontProviders.google(),
+			name: "Figtree",
+			cssVariable: "--font-figtree",
+			weights: [400],
+			styles: ["normal"],
+			subsets: ["latin"],
+			fallbacks: ["system-ui", "sans-serif"],
+		},
+		{
+			provider: fontProviders.google(),
+			name: "PT Serif",
+			cssVariable: "--font-pt-serif",
+			weights: [400, 700],
+			styles: ["normal"],
+			subsets: ["latin"],
+			fallbacks: ["Georgia", "Cambria", "Times New Roman", "Times", "serif"],
+		},
+		{
+			provider: fontProviders.google(),
+			name: "JetBrains Mono",
+			cssVariable: "--font-jetbrains-mono",
+			weights: [400, 500, 600],
+			styles: ["normal"],
+			subsets: ["latin"],
+			fallbacks: ["SFMono-Regular", "Menlo", "Monaco", "Consolas", "Courier New", "monospace"],
+		},
 	],
 
 	vite: {

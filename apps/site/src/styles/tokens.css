@@ -16,12 +16,10 @@
  */
 
 /* ── Foundation: palette primitives ─────────────────────────── */
-@theme {
-	--font-heading: "Figtree", ui-serif, Georgia, "Times New Roman", serif;
-	--font-body: "PT Serif", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-	--font-mono:
-		"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-		"Courier New", monospace;
+@theme inline {
+	--font-heading: var(--font-figtree);
+	--font-body: var(--font-pt-serif);
+	--font-mono: var(--font-jetbrains-mono);
 }
 
 /* ── Semantic roles ─────────────────────────────────────────── */
