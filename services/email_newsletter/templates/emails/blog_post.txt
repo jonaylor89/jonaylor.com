@@ -1,0 +1,7 @@
+New post from Johannes Naylor
+
+{{ title }}
+
+{% if !description.is_empty() %}{{ description }}
+
+{% endif %}Read the full post: {{ post_url }}
