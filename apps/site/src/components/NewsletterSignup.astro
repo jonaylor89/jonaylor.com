@@ -1,0 +1,257 @@
+---
+interface Props {
+	class?: string;
+	variant?: "default" | "compact" | "break" | "slidein";
+	heading?: string;
+	description?: string;
+}
+
+const {
+	class: className = "",
+	variant = "default",
+	heading = "Get essays on engineering, AI, and building things",
+	description = "Delivered when they're ready. No spam, unsubscribe anytime.",
+} = Astro.props;
+
+const newsletterApiUrl =
+	import.meta.env.PUBLIC_NEWSLETTER_API_URL || "https://newsletter.jonaylor.com";
+---
+
+{!newsletterApiUrl ? null : <>
+
+{/* ── Default: card/aside variant ──────────────────────────────── */}
+{variant === "default" && (
+  <aside
+    data-newsletter-signup
+    class:list={[
+      "bg-surface-muted rounded-lg p-6 md:p-8",
+      className,
+    ]}
+  >
+    <h3 class="text-xl font-bold mb-2">{heading}</h3>
+    <p class="text-text-secondary text-sm mb-4">
+      {description}
+    </p>
+
+    <form data-newsletter-form class="flex flex-col sm:flex-row gap-3">
+      <input
+        type="email"
+        name="email"
+        placeholder="you@example.com"
+        required
+        class="flex-1 px-3 py-2 rounded-md border border-default bg-bg text-text placeholder:text-text-muted text-sm focus:outline-none focus:border-border-strong transition-colors duration-200"
+      />
+      <button
+        type="submit"
+        class="px-5 py-2 rounded-md bg-accent-bg text-accent-text text-sm font-semibold hover:opacity-80 transition-opacity duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+      >
+        Subscribe
+      </button>
+    </form>
+
+    <div data-newsletter-success class="hidden mt-4 text-center animate-fade-in">
+      <p class="text-2xl mb-2">🎉</p>
+      <p class="text-success-text text-sm font-semibold">You're in! Check your email to confirm your subscription.</p>
+    </div>
+    <p data-newsletter-error class="hidden text-danger-text text-sm mt-3"></p>
+  </aside>
+)}
+
+{/* ── Compact: inline for footer ───────────────────────────────── */}
+{variant === "compact" && (
+  <div data-newsletter-signup class:list={["w-full", className]}>
+    <p class="text-sm font-semibold mb-2">{heading}</p>
+    <form data-newsletter-form class="flex gap-2">
+      <input
+        type="email"
+        name="email"
+        placeholder="you@example.com"
+        required
+        class="flex-1 min-w-0 px-3 py-1.5 rounded-md border border-default bg-bg text-text placeholder:text-text-muted text-sm focus:outline-none focus:border-border-strong transition-colors duration-200"
+      />
+      <button
+        type="submit"
+        class="px-4 py-1.5 rounded-md bg-accent-bg text-accent-text text-sm font-semibold hover:opacity-80 transition-opacity duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+      >
+        Subscribe
+      </button>
+    </form>
+    <div data-newsletter-success class="hidden mt-2 animate-fade-in">
+      <p class="text-success-text text-sm">🎉 Check your email to confirm!</p>
+    </div>
+    <p data-newsletter-error class="hidden text-danger-text text-sm mt-2"></p>
+  </div>
+)}
+
+{/* ── Break: full-bleed mid-article ────────────────────────────── */}
+{variant === "break" && (
+  <aside
+    data-newsletter-signup
+    class:list={[
+      "-mx-5 md:-mx-10 my-12 px-5 md:px-10 py-10 bg-accent-bg text-accent-text text-center",
+      className,
+    ]}
+  >
+    <p class="text-2xl font-bold mb-2">{heading}</p>
+    <p class="text-gray-300 dark:text-gray-600 mb-6 max-w-lg mx-auto text-sm">
+      {description}
+    </p>
+
+    <form data-newsletter-form class="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+      <input
+        type="email"
+        name="email"
+        placeholder="you@example.com"
+        required
+        class="flex-1 px-3 py-2 rounded-md border border-transparent bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder:text-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-white/30 transition-colors duration-200"
+      />
+      <button
+        type="submit"
+        class="px-5 py-2 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm font-semibold hover:opacity-80 transition-opacity duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+      >
+        Subscribe
+      </button>
+    </form>
+
+    <div data-newsletter-success class="hidden mt-4 animate-fade-in">
+      <p class="text-2xl mb-2">🎉</p>
+      <p class="text-sm font-semibold">You're in! Check your email to confirm.</p>
+    </div>
+    <p data-newsletter-error class="hidden text-sm mt-3"></p>
+  </aside>
+)}
+
+{/* ── Slide-in: scroll-triggered ───────────────────────────────── */}
+{variant === "slidein" && (
+  <div
+    id="newsletter-slidein"
+    data-newsletter-signup
+    class:list={[
+      "fixed bottom-6 right-6 z-50 max-w-xs w-full bg-white dark:bg-gray-800 border border-default rounded-lg shadow-lg p-5 translate-x-[calc(100%+2rem)] transition-transform duration-500 ease-out",
+      className,
+    ]}
+  >
+    <button
+      id="newsletter-slidein-dismiss"
+      class="absolute top-3 right-3 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+      aria-label="Dismiss"
+    >
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+    <p class="font-semibold mb-1">{heading}</p>
+    <p class="text-text-secondary text-sm mb-3">{description}</p>
+
+    <form data-newsletter-form class="flex flex-col gap-2">
+      <input
+        type="email"
+        name="email"
+        placeholder="you@example.com"
+        required
+        class="px-3 py-1.5 rounded-md border border-default bg-bg text-text placeholder:text-text-muted text-sm focus:outline-none focus:border-border-strong transition-colors duration-200"
+      />
+      <button
+        type="submit"
+        class="px-4 py-1.5 rounded-md bg-accent-bg text-accent-text text-sm font-semibold hover:opacity-80 transition-opacity duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        Subscribe
+      </button>
+    </form>
+
+    <div data-newsletter-success class="hidden mt-2 animate-fade-in">
+      <p class="text-success-text text-sm">🎉 Check your email to confirm!</p>
+    </div>
+    <p data-newsletter-error class="hidden text-danger-text text-sm mt-2"></p>
+  </div>
+
+  <script>
+    const slidein = document.getElementById('newsletter-slidein');
+    const slideinDismiss = document.getElementById('newsletter-slidein-dismiss');
+    let slideinShown = false;
+
+    function onScrollNewsletterSlidein() {
+      const scrollPercent = window.scrollY / (document.documentElement.scrollHeight - window.innerHeight);
+      if (!slideinShown && scrollPercent > 0.5) {
+        slideinShown = true;
+        slidein?.classList.remove('translate-x-[calc(100%+2rem)]');
+        slidein?.classList.add('translate-x-0');
+      }
+    }
+
+    slideinDismiss?.addEventListener('click', () => {
+      slidein?.classList.remove('translate-x-0');
+      slidein?.classList.add('translate-x-[calc(100%+2rem)]');
+      window.removeEventListener('scroll', onScrollNewsletterSlidein);
+    });
+
+    window.addEventListener('scroll', onScrollNewsletterSlidein, { passive: true });
+  </script>
+)}
+
+</>}
+
+<style>
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-in {
+    animation: fade-in 0.4s ease-out;
+  }
+</style>
+
+<script define:vars={{ newsletterApiUrl }}>
+  function initNewsletterForms() {
+    document.querySelectorAll("[data-newsletter-signup]").forEach((container) => {
+      const form = container.querySelector("[data-newsletter-form]");
+      const successMsg = container.querySelector("[data-newsletter-success]");
+      const errorMsg = container.querySelector("[data-newsletter-error]");
+
+      if (!form || form.dataset.initialized) return;
+      form.dataset.initialized = "true";
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const formData = new FormData(form);
+        const email = formData.get("email")?.toString().trim();
+
+        if (!email) return;
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Subscribing...";
+        successMsg.classList.add("hidden");
+        errorMsg.classList.add("hidden");
+
+        try {
+          const res = await fetch(`${newsletterApiUrl}/api/subscriptions`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email }),
+          });
+
+          if (res.ok) {
+            form.classList.add("hidden");
+            successMsg.classList.remove("hidden");
+          } else {
+            const data = await res.json().catch(() => null);
+            errorMsg.textContent = data?.error || "Something went wrong. Please try again.";
+            errorMsg.classList.remove("hidden");
+          }
+        } catch {
+          errorMsg.textContent = "Network error. Please try again.";
+          errorMsg.classList.remove("hidden");
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Subscribe";
+        }
+      });
+    });
+  }
+
+  initNewsletterForms();
+  document.addEventListener("astro:after-swap", initNewsletterForms);
+</script>

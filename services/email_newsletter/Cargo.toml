@@ -20,7 +20,7 @@ tower-sessions-redis-store = { version = "0.16.0", features = ["enable-rustls"] 
 http-body-util = "0.1.2"
 http = "1.1.0"
 tower = { version = "0.5.1", features = ["util"] }
-tower-http = { version = "0.6.1", features = ["trace"] }
+tower-http = { version = "0.6.1", features = ["trace", "cors"] }
 time = "0.3.45"
 anyhow = "1.0.100"
 argon2 = {version = "0.4.1", features = ["std"]}
@@ -40,7 +40,7 @@ quickcheck_macros = "0.9.1"
 rand = {version = "0.8.5", features = ["std_rng"]}
 reqwest = {version = "0.11.27", default-features = false, features = [
   "json",
-  "rustls",
+  "rustls-tls",
   "cookies",
 ]}
 secrecy = {version = "0.8.0", features = ["serde"]}

@@ -1,7 +1,19 @@
+use rand::{Rng, distributions::Alphanumeric, thread_rng};
+
 #[derive(Debug, Clone)]
 pub struct SubscriptionToken(String);
 
 impl SubscriptionToken {
+    /// Generates a cryptographically random 25-character alphanumeric token.
+    pub fn generate() -> Self {
+        let mut rng = thread_rng();
+        let token: String = std::iter::repeat_with(|| rng.sample(Alphanumeric))
+            .map(char::from)
+            .take(25)
+            .collect();
+        Self(token)
+    }
+
     /// Parses a string into a valid SubscriptionToken.
     ///
     /// Validation rules:

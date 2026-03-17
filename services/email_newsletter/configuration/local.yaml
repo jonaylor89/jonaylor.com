@@ -4,3 +4,8 @@ application:
 
 database:
   require_ssl: false
+
+rss_feed:
+  enabled: false
+  feed_url: "http://localhost:4321/blog/rss.xml"
+  poll_interval_secs: 900

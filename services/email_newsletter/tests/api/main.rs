@@ -1,4 +1,5 @@
 mod admin_dashboard;
+mod api_subscriptions;
 mod change_password;
 mod health_check;
 mod helpers;

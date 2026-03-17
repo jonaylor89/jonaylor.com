@@ -58,3 +58,7 @@ pnpm-debug.log*
 
 # Local Vercel folder
 .vercel
+
+# Playwright
+test-results/
+playwright-report/

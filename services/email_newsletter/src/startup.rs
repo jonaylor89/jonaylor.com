@@ -5,6 +5,7 @@ use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use time::Duration;
 use tokio::net::TcpListener;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tower_sessions::cookie::Key;
 use tower_sessions::service::PrivateCookie;
@@ -21,8 +22,8 @@ use crate::authentication::AuthenticatedUser;
 use crate::configuration::{DatabaseSettings, Settings};
 use crate::email_client::EmailClient;
 use crate::routes::{
-    admin_dashboard, api_publish_newsletter, change_password, change_password_form, confirm,
-    health_check, home, log_out, login, login_form, newsletters_form, publish_newsletter,
+    admin_dashboard, api_publish_newsletter, api_subscribe, change_password, change_password_form,
+    confirm, health_check, home, log_out, login, login_form, newsletters_form, publish_newsletter,
     subscribe, unsubscribe_get, unsubscribe_post,
 };
 
@@ -154,6 +155,15 @@ fn build_router(
         .route("/logout", post(log_out))
         .route_layer(middleware::from_extractor::<AuthenticatedUser>());
 
+    let cors = CorsLayer::new()
+        .allow_origin(AllowOrigin::list([
+            "https://jonaylor.com".parse().unwrap(),
+            "https://www.jonaylor.com".parse().unwrap(),
+            "http://localhost:4321".parse().unwrap(),
+        ]))
+        .allow_methods([http::Method::POST, http::Method::OPTIONS])
+        .allow_headers([http::header::CONTENT_TYPE]);
+
     Router::<AppState>::new()
         .route("/", get(home))
         .route("/health_check", get(health_check))
@@ -165,8 +175,10 @@ fn build_router(
         )
         .route("/login", get(login_form).post(login))
         .route("/api/newsletters", post(api_publish_newsletter))
+        .route("/api/subscriptions", post(api_subscribe))
         .nest("/admin", admin_routes)
         .layer(session_layer)
+        .layer(cors)
         .layer(TraceLayer::new_for_http())
 }
 

@@ -11,7 +11,7 @@ pub use admin::{
     admin_dashboard, change_password, change_password_form, get_username, log_out,
     newsletters_form, publish_newsletter,
 };
-pub use api::api_publish_newsletter;
+pub use api::{api_publish_newsletter, api_subscribe};
 pub use health_check::health_check;
 pub use home::home;
 pub use login::{login, login_form};

@@ -8,6 +8,7 @@ import ConsultingCTA from "../../components/ConsultingCTA.astro";
 import Footer from "../../components/Footer.astro";
 import { mdxComponents } from "../../components/mdx";
 import Navigation from "../../components/Navigation.astro";
+import NewsletterSignup from "../../components/NewsletterSignup.astro";
 import ReadingProgress from "../../components/ReadingProgress.astro";
 import RelatedPosts from "../../components/RelatedPosts.astro";
 import ShareButtons from "../../components/ShareButtons.astro";
@@ -102,7 +103,7 @@ const description = post.data.excerpt || post.data.subtitle || "";
         <Content components={mdxComponents} />
       </div>
 
-      <ConsultingCTA tags={post.data.tags} variant="break" />
+      <NewsletterSignup class="mt-12" />
       <ConsultingCTA tags={post.data.tags} variant="slidein" />
 
       <ShareButtons url={postUrl} title={post.data.title} description={description} />

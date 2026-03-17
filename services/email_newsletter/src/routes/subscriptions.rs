@@ -4,12 +4,12 @@ use axum::extract::{Form, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use chrono::Utc;
-use rand::{Rng, distributions::Alphanumeric, thread_rng};
+
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::{
-    domain::{NewSubscriber, SubscriberEmail, SubscriberName},
+    domain::{NewSubscriber, SubscriberEmail, SubscriberName, SubscriptionToken},
     email_client::EmailClient,
     email_templates::{
         AlreadySubscribedEmailHtml, AlreadySubscribedEmailText, ConfirmationEmailHtml,
@@ -21,7 +21,7 @@ use crate::{
 #[derive(serde::Deserialize)]
 pub struct FormData {
     email: String,
-    name: String,
+    name: Option<String>,
 }
 
 impl TryFrom<FormData> for NewSubscriber {
@@ -81,7 +81,7 @@ impl IntoResponse for SubscribeError {
     skip(form, pool, email_client, base_url),
     fields(
         subscriber_email = %form.email,
-        subscriber_name = %form.name
+        subscriber_name = ?form.name
     )
 )]
 pub async fn subscribe(
@@ -118,9 +118,9 @@ pub async fn subscribe(
         }
         Some((subscriber_id, _)) => {
             // Pending confirmation - generate new token and resend
-            let subscription_token = generate_subscription_token();
+            let subscription_token = SubscriptionToken::generate();
 
-            store_token(&mut transaction, subscriber_id, &subscription_token)
+            store_token(&mut transaction, subscriber_id, subscription_token.as_ref())
                 .await
                 .context("Failed to store the confirmation token for existing subscriber")?;
 
@@ -133,7 +133,7 @@ pub async fn subscribe(
                 &email_client,
                 new_subscriber,
                 &base_url.0,
-                &subscription_token,
+                subscription_token.as_ref(),
             )
             .await
             .context("Failed to send a confirmation email")?;
@@ -146,9 +146,9 @@ pub async fn subscribe(
                 .await
                 .context("Failed to insert new subcriber in the database")?;
 
-            let subscription_token = generate_subscription_token();
+            let subscription_token = SubscriptionToken::generate();
 
-            store_token(&mut transaction, subscriber_id, &subscription_token)
+            store_token(&mut transaction, subscriber_id, subscription_token.as_ref())
                 .await
                 .context("Failed to store the confirmation token for a new subscriber")?;
 
@@ -161,7 +161,7 @@ pub async fn subscribe(
                 &email_client,
                 new_subscriber,
                 &base_url.0,
-                &subscription_token,
+                subscription_token.as_ref(),
             )
             .await
             .context("Failed to send a confirmation email")?;
@@ -211,7 +211,7 @@ pub async fn insert_subscriber(
         "#,
         subscriber_id,
         new_subscriber.email.as_ref(),
-        new_subscriber.name.as_ref(),
+        new_subscriber.name.as_ref().map(|n| n.as_ref()),
         Utc::now(),
     )
     .execute(transaction.as_mut())
@@ -266,13 +266,19 @@ pub async fn send_confirmation_email(
         base_url, subscription_token,
     );
 
+    let name_str = new_subscriber
+        .name
+        .as_ref()
+        .map(|n| n.as_ref().to_string())
+        .unwrap_or_else(|| "there".to_string());
+
     let html_template = ConfirmationEmailHtml {
-        subscriber_name: new_subscriber.name.as_ref().to_string(),
+        subscriber_name: name_str.clone(),
         confirmation_link: confirmation_link.clone(),
     };
 
     let text_template = ConfirmationEmailText {
-        subscriber_name: new_subscriber.name.as_ref().to_string(),
+        subscriber_name: name_str,
         confirmation_link,
     };
 
@@ -299,12 +305,18 @@ pub async fn send_already_subscribed_email(
     email_client: &EmailClient,
     subscriber: &NewSubscriber,
 ) -> Result<(), reqwest::Error> {
+    let name_str = subscriber
+        .name
+        .as_ref()
+        .map(|n| n.as_ref().to_string())
+        .unwrap_or_else(|| "there".to_string());
+
     let html_template = AlreadySubscribedEmailHtml {
-        subscriber_name: subscriber.name.as_ref().to_string(),
+        subscriber_name: name_str.clone(),
     };
 
     let text_template = AlreadySubscribedEmailText {
-        subscriber_name: subscriber.name.as_ref().to_string(),
+        subscriber_name: name_str,
     };
 
     let html_body = html_template
@@ -323,12 +335,4 @@ pub async fn send_already_subscribed_email(
             None,
         )
         .await
-}
-
-fn generate_subscription_token() -> String {
-    let mut rng = thread_rng();
-    std::iter::repeat_with(|| rng.sample(Alphanumeric))
-        .map(char::from)
-        .take(25)
-        .collect()
 }

@@ -10,23 +10,12 @@ Self-hosted newsletter features, prioritized for maximum value with minimal depe
   - Store metrics in PostgreSQL / Clickhouse
   - Dashboard to view per-issue stats
 
-- [ ] **Unsubscribe handling**
-  - One-click unsubscribe header (RFC 8058)
-  - Unsubscribe landing page
-  - List-Unsubscribe header in all emails
-  - Required for CAN-SPAM/GDPR compliance
-
 - [ ] **Subscriber import/export**
   - CSV import endpoint with validation
   - CSV export for full data portability
   - Preserve confirmation status on import
 
 ## 🟡 Medium Priority
-
-- [ ] **Segmentation/tags**
-  - Tags table linked to subscriptions
-  - Filter subscribers by tag on send
-  - Auto-tagging based on signup source
 
 - [ ] **A/B testing**
   - Split audience for subject line tests
@@ -54,11 +43,6 @@ Self-hosted newsletter features, prioritized for maximum value with minimal depe
   - Simple voting endpoint (no external deps)
   - Store results in PostgreSQL
   - Display results in follow-up emails
-
-- [ ] **RSS-to-email**
-  - Background worker polls configured RSS feeds
-  - Auto-generate newsletter from new items
-  - Configurable frequency
 
 - [ ] **MJML support**
   - Compile MJML templates to HTML at build time

@@ -40,7 +40,7 @@ async fn subscribe_persists_the_new_subscriber() {
         .expect("Failed to fetch saved subscription");
 
     assert_eq!(saved.email, "ursula_le_guin@gmail.com");
-    assert_eq!(saved.name, "le guin");
+    assert_eq!(saved.name.as_deref(), Some("le guin"));
     assert_eq!(saved.status, "pending_confirmation");
 }
 
@@ -50,7 +50,6 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
 
     let test_cases = vec![
         ("name=le%20guin", "missing the email"),
-        ("email=ursula_le_guin%40gmail.com", "missing the name"),
         ("", "missing both name and email"),
     ];
 
@@ -71,7 +70,6 @@ async fn subscribe_returns_a_400_when_fields_are_present_but_empty() {
     let app = spawn_app().await;
 
     let test_cases = vec![
-        ("name=&email=ursula_le_guin%40gmail.com", "empty name"),
         ("name=Ursula&email=", "empty email"),
         ("name=Ursula&email=definitely-not-an-email", "invalid email"),
     ];
@@ -85,6 +83,34 @@ async fn subscribe_returns_a_400_when_fields_are_present_but_empty() {
             "The API did not return a 400 OK when the payload was {}",
             description,
         )
+    }
+}
+
+#[tokio::test]
+async fn subscribe_accepts_missing_or_empty_name() {
+    let app = spawn_app().await;
+
+    let test_cases = vec![
+        ("email=ursula_le_guin%40gmail.com", "missing name"),
+        ("name=&email=ursula_le_guin%40gmail.com", "empty name"),
+    ];
+
+    for (body, description) in test_cases {
+        let _mock_guard = Mock::given(path("/email"))
+            .and(method("POST"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount_as_scoped(&app.email_server)
+            .await;
+
+        let response = app.post_subscriptions(body.into()).await;
+
+        assert_eq!(
+            200,
+            response.status().as_u16(),
+            "The form endpoint did not accept a payload with {}",
+            description,
+        );
     }
 }
 

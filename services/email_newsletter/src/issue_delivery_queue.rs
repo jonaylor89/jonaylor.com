@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use chrono::Utc;
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{PgPool, Postgres, Row, Transaction};
 use tokio::task::JoinSet;
 use tracing::{Span, field::display};
 use uuid::Uuid;
@@ -30,9 +30,22 @@ struct NewsletterIssue {
     html_content: String,
 }
 
+struct DequeuedTask {
+    transaction: PgTransaction,
+    issue_id: Uuid,
+    email: String,
+    attempt_count: i32,
+    last_attempted_at: Option<chrono::DateTime<Utc>>,
+}
+
 pub enum ExecutionOutcome {
     TaskCompleted,
     EmptyQueue,
+}
+
+enum TaskExecutionResult {
+    Processed,
+    SkippedBackoff,
 }
 
 pub async fn run_worker_until_stopped(configuration: Settings) -> Result<(), anyhow::Error> {
@@ -74,59 +87,73 @@ pub async fn try_execute_tasks(
     hmac_secret: &str,
     base_url: &str,
 ) -> Result<ExecutionOutcome, anyhow::Error> {
-    // Dequeue multiple tasks at once
-    let tasks = dequeue_tasks(pool, CONCURRENT_TASKS).await?;
+    let mut processed_any_batch = false;
 
-    if tasks.is_empty() {
-        return Ok(ExecutionOutcome::EmptyQueue);
-    }
+    loop {
+        let tasks = dequeue_tasks(pool, CONCURRENT_TASKS).await?;
 
-    let task_count = tasks.len();
-    tracing::info!("Processing {} tasks concurrently", task_count);
+        if tasks.is_empty() {
+            let exec_outcome = if processed_any_batch {
+                ExecutionOutcome::TaskCompleted
+            } else {
+                ExecutionOutcome::EmptyQueue
+            };
 
-    // Process tasks concurrently using JoinSet
-    let mut join_set = JoinSet::new();
+            return Ok(exec_outcome);
+        }
 
-    for (transaction, issue_id, email) in tasks {
-        let pool_clone = pool.clone();
-        let email_client_clone = email_client.clone();
-        let hmac_secret = hmac_secret.to_string();
-        let base_url = base_url.to_string();
+        let task_count = tasks.len();
+        tracing::info!("Processing {} tasks concurrently", task_count);
 
-        join_set.spawn(async move {
-            execute_single_task(
-                pool_clone,
-                email_client_clone,
-                transaction,
-                issue_id,
-                email,
-                &hmac_secret,
-                &base_url,
-            )
-            .await
-        });
-    }
+        let mut join_set = JoinSet::new();
 
-    // Wait for all tasks to complete
-    while let Some(result) = join_set.join_next().await {
-        match result {
-            Ok(Ok(())) => {}
-            Ok(Err(e)) => {
-                tracing::error!(
-                    error.cause_chain = ?e,
-                    "Task execution failed"
-                );
-            }
-            Err(e) => {
-                tracing::error!(
-                    error.cause_chain = ?e,
-                    "Task join failed"
-                );
+        for task in tasks {
+            let pool_clone = pool.clone();
+            let email_client_clone = email_client.clone();
+            let hmac_secret = hmac_secret.to_string();
+            let base_url = base_url.to_string();
+
+            join_set.spawn(async move {
+                execute_single_task(
+                    pool_clone,
+                    email_client_clone,
+                    task,
+                    &hmac_secret,
+                    &base_url,
+                )
+                .await
+            });
+        }
+
+        let mut processed_in_batch = false;
+
+        while let Some(result) = join_set.join_next().await {
+            match result {
+                Ok(Ok(TaskExecutionResult::Processed)) => {
+                    processed_in_batch = true;
+                }
+                Ok(Ok(TaskExecutionResult::SkippedBackoff)) => {}
+                Ok(Err(e)) => {
+                    tracing::error!(
+                        error.cause_chain = ?e,
+                        "Task execution failed"
+                    );
+                }
+                Err(e) => {
+                    tracing::error!(
+                        error.cause_chain = ?e,
+                        "Task join failed"
+                    );
+                }
             }
         }
-    }
 
-    Ok(ExecutionOutcome::TaskCompleted)
+        processed_any_batch = true;
+
+        if !processed_in_batch {
+            return Ok(ExecutionOutcome::TaskCompleted);
+        }
+    }
 }
 
 #[tracing::instrument(
@@ -139,23 +166,18 @@ pub async fn try_execute_tasks(
 async fn execute_single_task(
     pool: PgPool,
     email_client: EmailClient,
-    transaction: PgTransaction,
-    issue_id: Uuid,
-    email: String,
+    mut task: DequeuedTask,
     hmac_secret: &str,
     base_url: &str,
-) -> Result<(), anyhow::Error> {
+) -> Result<TaskExecutionResult, anyhow::Error> {
     Span::current()
-        .record("newsletter_issue_id", display(issue_id))
-        .record("subscriber_email", display(&email));
-
-    // Get current attempt count
-    let attempt_count = get_attempt_count(&pool, issue_id, &email).await?;
+        .record("newsletter_issue_id", display(task.issue_id))
+        .record("subscriber_email", display(&task.email));
 
     // Check if we should retry this task based on exponential backoff
-    if let Some(last_attempted) = get_last_attempted(&pool, issue_id, &email).await? {
+    if let Some(last_attempted) = task.last_attempted_at {
         let backoff_duration = Duration::from_secs(
-            (RETRY_BACKOFF_MINUTES * 60 * 2_i64.pow(attempt_count as u32).min(32)) as u64,
+            (RETRY_BACKOFF_MINUTES * 60 * 2_i64.pow(task.attempt_count as u32).min(32)) as u64,
         );
         let elapsed = Utc::now() - last_attempted;
 
@@ -163,20 +185,20 @@ async fn execute_single_task(
             // Too soon to retry - skip this task for now
             tracing::debug!(
                 "Skipping task (backoff): attempt {}, last_attempted {:?} ago",
-                attempt_count,
+                task.attempt_count,
                 elapsed
             );
             // Just rollback transaction without deleting
-            transaction.rollback().await?;
-            return Ok(());
+            task.transaction.rollback().await?;
+            return Ok(TaskExecutionResult::SkippedBackoff);
         }
     }
 
-    let unsubscribe_url = generate_unsubscribe_url(base_url, &email, hmac_secret);
+    let unsubscribe_url = generate_unsubscribe_url(base_url, &task.email, hmac_secret);
 
-    let send_result = match SubscriberEmail::parse(email.clone()) {
+    let send_result = match SubscriberEmail::parse(task.email.clone()) {
         Ok(email_addr) => {
-            let issue = get_issue(&pool, issue_id).await?;
+            let issue = get_issue(&pool, task.issue_id).await?;
 
             let html_with_footer = format!(
                 "{}\n<hr style=\"border:none;border-top:1px solid #eee;margin:30px 0\">\
@@ -206,73 +228,86 @@ async fn execute_single_task(
                 error.message = %e,
                 "Invalid email address - moving to dead letter queue"
             );
-            move_to_dead_letter_queue(&pool, issue_id, &email, attempt_count, &e.to_string())
-                .await?;
-            delete_task(transaction, issue_id, &email).await?;
-            return Ok(());
+            move_to_dead_letter_queue(
+                &pool,
+                task.issue_id,
+                &task.email,
+                task.attempt_count,
+                &e.to_string(),
+            )
+            .await?;
+            delete_task(task.transaction, task.issue_id, &task.email).await?;
+            return Ok(TaskExecutionResult::Processed);
         }
     };
 
     match send_result {
         Ok(_) => {
             // Success - delete from queue
-            tracing::info!("Successfully sent email to {}", email);
-            delete_task(transaction, issue_id, &email).await?;
+            tracing::info!("Successfully sent email to {}", task.email);
+            delete_task(task.transaction, task.issue_id, &task.email).await?;
         }
         Err(e) => {
             let error_message = e.to_string();
             tracing::error!(
                 error.cause_chain = ?e,
                 error.message = %error_message,
-                attempt = attempt_count + 1,
+                attempt = task.attempt_count + 1,
                 "Failed to deliver issue to confirmed subscriber"
             );
 
             // Update attempt count and error message
-            let new_attempt_count = attempt_count + 1;
+            let new_attempt_count = task.attempt_count + 1;
 
             if new_attempt_count >= MAX_RETRY_ATTEMPTS {
                 // Max retries reached - move to dead letter queue
                 tracing::warn!(
                     "Max retry attempts ({}) reached for {}. Moving to dead letter queue.",
                     MAX_RETRY_ATTEMPTS,
-                    email
+                    task.email
                 );
                 move_to_dead_letter_queue(
                     &pool,
-                    issue_id,
-                    &email,
+                    task.issue_id,
+                    &task.email,
                     new_attempt_count,
                     &error_message,
                 )
                 .await?;
-                delete_task(transaction, issue_id, &email).await?;
+                delete_task(task.transaction, task.issue_id, &task.email).await?;
             } else {
                 // Update retry tracking and keep in queue
-                update_retry_tracking(&pool, issue_id, &email, new_attempt_count, &error_message)
-                    .await?;
-                transaction.rollback().await?;
+                update_retry_tracking(
+                    &mut task.transaction,
+                    task.issue_id,
+                    &task.email,
+                    new_attempt_count,
+                    &error_message,
+                )
+                .await?;
+                task.transaction.commit().await?;
             }
         }
     }
 
-    Ok(())
+    Ok(TaskExecutionResult::Processed)
 }
 
 #[tracing::instrument(skip_all)]
-async fn dequeue_tasks(
-    pool: &PgPool,
-    limit: usize,
-) -> Result<Vec<(PgTransaction, Uuid, String)>, anyhow::Error> {
+async fn dequeue_tasks(pool: &PgPool, limit: usize) -> Result<Vec<DequeuedTask>, anyhow::Error> {
     let mut tasks = Vec::new();
 
     // Dequeue tasks one by one to get separate transactions for each
     // This allows parallel processing without holding locks
     for _ in 0..limit {
         let mut transaction = pool.begin().await?;
-        let r = sqlx::query!(
+        let r = sqlx::query(
             r#"
-            SELECT newsletter_issue_id, subscriber_email
+            SELECT
+                newsletter_issue_id,
+                subscriber_email,
+                attempt_count,
+                last_attempted_at
             FROM issue_delivery_queue
             FOR UPDATE
             SKIP LOCKED
@@ -283,9 +318,16 @@ async fn dequeue_tasks(
         .await?;
 
         if let Some(r) = r {
-            tasks.push((transaction, r.newsletter_issue_id, r.subscriber_email));
+            tasks.push(DequeuedTask {
+                transaction,
+                issue_id: r.get("newsletter_issue_id"),
+                email: r.get("subscriber_email"),
+                attempt_count: r.get("attempt_count"),
+                last_attempted_at: r.get("last_attempted_at"),
+            });
         } else {
             // No more tasks available
+            transaction.rollback().await?;
             break;
         }
     }
@@ -302,8 +344,8 @@ async fn delete_task(
     sqlx::query!(
         r#"
         DELETE FROM issue_delivery_queue
-        WHERE 
-            newsletter_issue_id = $1 
+        WHERE
+            newsletter_issue_id = $1
         AND
             subscriber_email = $2
         "#,
@@ -337,50 +379,8 @@ async fn get_issue(pool: &PgPool, issue_id: Uuid) -> Result<NewsletterIssue, any
 }
 
 #[tracing::instrument(skip_all)]
-async fn get_attempt_count(
-    pool: &PgPool,
-    issue_id: Uuid,
-    email: &str,
-) -> Result<i32, anyhow::Error> {
-    let result = sqlx::query!(
-        r#"
-        SELECT attempt_count
-        FROM issue_delivery_queue
-        WHERE newsletter_issue_id = $1 AND subscriber_email = $2
-        "#,
-        issue_id,
-        email,
-    )
-    .fetch_one(pool)
-    .await?;
-
-    Ok(result.attempt_count)
-}
-
-#[tracing::instrument(skip_all)]
-async fn get_last_attempted(
-    pool: &PgPool,
-    issue_id: Uuid,
-    email: &str,
-) -> Result<Option<chrono::DateTime<Utc>>, anyhow::Error> {
-    let result = sqlx::query!(
-        r#"
-        SELECT last_attempted_at
-        FROM issue_delivery_queue
-        WHERE newsletter_issue_id = $1 AND subscriber_email = $2
-        "#,
-        issue_id,
-        email,
-    )
-    .fetch_one(pool)
-    .await?;
-
-    Ok(result.last_attempted_at)
-}
-
-#[tracing::instrument(skip_all)]
 async fn update_retry_tracking(
-    pool: &PgPool,
+    transaction: &mut PgTransaction,
     issue_id: Uuid,
     email: &str,
     attempt_count: i32,
@@ -400,7 +400,7 @@ async fn update_retry_tracking(
         Utc::now(),
         error_message,
     )
-    .execute(pool)
+    .execute(transaction.as_mut())
     .await?;
 
     Ok(())

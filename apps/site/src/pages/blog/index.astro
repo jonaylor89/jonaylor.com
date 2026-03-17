@@ -4,6 +4,7 @@ import { getCollection } from "astro:content";
 import { format } from "date-fns";
 import Footer from "../../components/Footer.astro";
 import Navigation from "../../components/Navigation.astro";
+import NewsletterSignup from "../../components/NewsletterSignup.astro";
 import BaseLayout from "../../layouts/BaseLayout.astro";
 
 const allPosts = await getCollection("posts", ({ data }) => {
@@ -128,6 +129,8 @@ function formatReadTime(minutes: number): string {
         </div>
       </section>
     )}
+
+    <NewsletterSignup class="mt-12" />
   </main>
 
   <Footer />
