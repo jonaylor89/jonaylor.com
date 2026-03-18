@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO issue_delivery_queue (newsletter_issue_id, subscriber_email, attempt_count)\n        VALUES ($1, $2, 0)\n        ON CONFLICT (newsletter_issue_id, subscriber_email) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "80815c6e4d480ffacda566969182086ed770ed4b600cd173c447acbb713824df"
+}

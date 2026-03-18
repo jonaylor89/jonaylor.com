@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            n.newsletter_issue_id,\n            n.title,\n            n.published_at,\n            COALESCE(q.pending, 0) as \"pending!\",\n            COALESCE(d.failed, 0) as \"failed!\"\n        FROM newsletter_issues n\n        LEFT JOIN (\n            SELECT newsletter_issue_id, COUNT(*) as pending\n            FROM issue_delivery_queue\n            GROUP BY newsletter_issue_id\n        ) q ON q.newsletter_issue_id = n.newsletter_issue_id\n        LEFT JOIN (\n            SELECT newsletter_issue_id, COUNT(*) as failed\n            FROM dead_letter_queue\n            GROUP BY newsletter_issue_id\n        ) d ON d.newsletter_issue_id = n.newsletter_issue_id\n        ORDER BY n.published_at DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "newsletter_issue_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "published_at",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "pending!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "failed!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "71ef1931412b6725d4595bd55d1ff4484e9f20dbf790d7a3faa860eb9039b6b1"
+}

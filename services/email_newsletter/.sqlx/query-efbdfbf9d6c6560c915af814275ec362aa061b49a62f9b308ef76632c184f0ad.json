@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COUNT(*) as \"count!\"\n        FROM subscriptions\n        WHERE ($1::TEXT IS NULL OR status = $1)\n          AND ($2::TEXT IS NULL OR email ILIKE $2 OR name ILIKE $2)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "efbdfbf9d6c6560c915af814275ec362aa061b49a62f9b308ef76632c184f0ad"
+}

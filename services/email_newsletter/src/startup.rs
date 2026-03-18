@@ -1,4 +1,4 @@
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::{Router, middleware, serve::Serve};
 use secrecy::ExposeSecret;
 use sqlx::PgPool;
@@ -22,9 +22,11 @@ use crate::authentication::AuthenticatedUser;
 use crate::configuration::{DatabaseSettings, Settings};
 use crate::email_client::EmailClient;
 use crate::routes::{
-    admin_dashboard, api_publish_newsletter, api_subscribe, change_password, change_password_form,
-    confirm, health_check, home, log_out, login, login_form, newsletters_form, publish_newsletter,
-    subscribe, unsubscribe_get, unsubscribe_post,
+    admin_dashboard, admin_stats, api_publish_newsletter, api_subscribe, change_password,
+    change_password_form, confirm, delete_subscriber, get_newsletter, health_check, home,
+    list_dead_letters, list_newsletters, list_subscribers, log_out, login, login_form,
+    newsletters_form, preview_newsletter, publish_newsletter, retry_dead_letter, subscribe,
+    unsubscribe_get, unsubscribe_post,
 };
 
 pub struct Application {
@@ -150,6 +152,17 @@ fn build_router(
         .route(
             "/newsletters",
             get(newsletters_form).post(publish_newsletter),
+        )
+        .route("/newsletters/list", get(list_newsletters))
+        .route("/newsletters/preview", post(preview_newsletter))
+        .route("/newsletters/{issue_id}", get(get_newsletter))
+        .route("/subscribers", get(list_subscribers))
+        .route("/subscribers/{subscriber_id}", delete(delete_subscriber))
+        .route("/stats", get(admin_stats))
+        .route("/dead-letters", get(list_dead_letters))
+        .route(
+            "/dead-letters/{newsletter_issue_id}/{subscriber_email}",
+            post(retry_dead_letter),
         )
         .route("/password", get(change_password_form).post(change_password))
         .route("/logout", post(log_out))

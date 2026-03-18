@@ -8,8 +8,9 @@ mod subscriptions_confirm;
 mod unsubscribe;
 
 pub use admin::{
-    admin_dashboard, change_password, change_password_form, get_username, log_out,
-    newsletters_form, publish_newsletter,
+    admin_dashboard, admin_stats, change_password, change_password_form, delete_subscriber,
+    get_newsletter, get_username, list_dead_letters, list_newsletters, list_subscribers, log_out,
+    newsletters_form, preview_newsletter, publish_newsletter, retry_dead_letter,
 };
 pub use api::{api_publish_newsletter, api_subscribe};
 pub use health_check::health_check;

@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            d.newsletter_issue_id,\n            n.title as \"newsletter_title?\",\n            d.subscriber_email,\n            d.attempt_count,\n            d.last_error,\n            d.failed_at\n        FROM dead_letter_queue d\n        LEFT JOIN newsletter_issues n ON n.newsletter_issue_id = d.newsletter_issue_id\n        ORDER BY d.failed_at DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "newsletter_issue_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "newsletter_title?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "subscriber_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "attempt_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "last_error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "failed_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "42987f03121308923b899a04b54ecf01d1a7c52bcebf5d445d13f614e14b08f2"
+}
