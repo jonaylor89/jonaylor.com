@@ -2,17 +2,39 @@
 <html>
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
     <title>Already Subscribed</title>
+    <link href="https://fonts.googleapis.com/css2?family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <style>
+        @media (prefers-color-scheme: dark) {
+            body { background-color: #111827 !important; color: #ffffff !important; }
+            .email-container { background-color: #111827 !important; }
+            .header-name { color: #ffffff !important; }
+            .heading { color: #ffffff !important; }
+            .body-text { color: #d1d5db !important; }
+            .divider { border-top-color: #374151 !important; }
+            .footer-text { color: #9ca3af !important; }
+        }
+    </style>
 </head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h1 style="color: #2c3e50;">You're Already Subscribed!</h1>
-        <p>Hi {{ subscriber_name }},</p>
-        <p>Good news! You're already subscribed to our newsletter.</p>
-        <p>Thank you for your continued interest and support. You'll keep receiving our updates at this email address.</p>
-        <hr style="border: none; border-top: 1px solid: #ecf0f1; margin: 30px 0;">
-        <p style="color: #95a5a6; font-size: 12px;">
-            If you'd like to unsubscribe, please click the unsubscribe link in any of our newsletter emails.
+<body style="font-family: 'PT Serif', Georgia, 'Times New Roman', serif; line-height: 1.6; color: #000000; background-color: #ffffff; margin: 0; padding: 0;">
+    <div class="email-container" style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+        <div class="header-name" style="font-family: 'Figtree', 'Segoe UI', Roboto, sans-serif; font-size: 14px; font-weight: 600; color: #000000; letter-spacing: 0.025em; margin-bottom: 32px;">Johannes Naylor</div>
+
+        <h1 class="heading" style="font-family: 'Figtree', 'Segoe UI', Roboto, sans-serif; color: #000000; font-size: 24px; font-weight: 700; margin: 0 0 24px 0;">You're Already Subscribed!</h1>
+
+        <p class="body-text" style="color: #000000; font-size: 16px; margin: 0 0 16px 0;">Hi {{ subscriber_name }},</p>
+
+        <p class="body-text" style="color: #000000; font-size: 16px; margin: 0 0 16px 0;">Looks like you're already on the Buried Treasure list — no action needed. You'll keep getting new posts at this email address.</p>
+
+        <p class="body-text" style="color: #000000; font-size: 16px; margin: 0 0 8px 0;">Appreciate you being here!</p>
+
+        <hr class="divider" style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;">
+
+        <p class="footer-text" style="color: #6b7280; font-size: 12px; margin: 0;">
+            If you'd like to unsubscribe, click the unsubscribe link in any of my newsletter emails.
         </p>
     </div>
 </body>

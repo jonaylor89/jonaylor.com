@@ -2,23 +2,48 @@
 <html>
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
     <title>New Post: {{ title }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <style>
+        @media (prefers-color-scheme: dark) {
+            body { background-color: #111827 !important; color: #ffffff !important; }
+            .email-container { background-color: #111827 !important; }
+            .header-name { color: #ffffff !important; }
+            .subheader { color: #d1d5db !important; }
+            .heading { color: #ffffff !important; }
+            .body-text { color: #d1d5db !important; }
+            .cta-button { background-color: #f3f4f6 !important; color: #111827 !important; }
+            .divider { border-top-color: #374151 !important; }
+            .footer-text { color: #9ca3af !important; }
+        }
+    </style>
 </head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; background-color: #f5f5f5; margin: 0; padding: 0;">
-    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="background: white; border-radius: 8px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <p style="color: #666; font-size: 14px; margin-top: 0;">New post from Johannes Naylor</p>
-            <h1 style="color: #1a1a2e; margin-top: 8px; font-size: 24px;">{{ title }}</h1>
-            {% if !description.is_empty() %}
-            <p style="color: #555; font-size: 16px; line-height: 1.5;">{{ description }}</p>
-            {% endif %}
-            <div style="text-align: center; margin: 32px 0;">
-                <a href="{{ post_url }}"
-                   style="background-color: #1a1a2e; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 500;">
-                    Read the Full Post →
-                </a>
-            </div>
+<body style="font-family: 'PT Serif', Georgia, 'Times New Roman', serif; line-height: 1.6; color: #000000; background-color: #ffffff; margin: 0; padding: 0;">
+    <div class="email-container" style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+        <div class="header-name" style="font-family: 'Figtree', 'Segoe UI', Roboto, sans-serif; font-size: 14px; font-weight: 600; color: #000000; letter-spacing: 0.025em; margin-bottom: 4px;">Johannes Naylor</div>
+        <p class="subheader" style="color: #4b5563; font-size: 13px; margin: 0 0 32px 0; font-family: 'Figtree', 'Segoe UI', Roboto, sans-serif;">New post on Buried Treasure</p>
+
+        <h1 class="heading" style="font-family: 'Figtree', 'Segoe UI', Roboto, sans-serif; color: #000000; font-size: 24px; font-weight: 700; margin: 0 0 16px 0;">{{ title }}</h1>
+
+        {% if !description.is_empty() %}
+        <p class="body-text" style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 24px 0;">{{ description }}</p>
+        {% endif %}
+
+        <div style="text-align: center; margin: 32px 0;">
+            <a href="{{ post_url }}" class="cta-button"
+               style="background-color: #111827; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 0.375rem; display: inline-block; font-family: 'Figtree', 'Segoe UI', Roboto, sans-serif; font-weight: 600; font-size: 15px;">
+                Read the Full Post →
+            </a>
         </div>
+
+        <hr class="divider" style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;">
+
+        <p class="footer-text" style="color: #6b7280; font-size: 12px; margin: 0;">
+            You're receiving this because you subscribed to Buried Treasure. If you'd like to stop, click the unsubscribe link in the footer.
+        </p>
     </div>
 </body>
 </html>

@@ -1,7 +1,12 @@
-New post from Johannes Naylor
+New post on Buried Treasure
 
 {{ title }}
 
 {% if !description.is_empty() %}{{ description }}
 
 {% endif %}Read the full post: {{ post_url }}
+
+—
+You're receiving this because you subscribed to Buried Treasure.
+
+— Johannes

@@ -2,8 +2,10 @@ You're Already Subscribed!
 
 Hi {{ subscriber_name }},
 
-Good news! You're already subscribed to our newsletter.
+Looks like you're already on the Buried Treasure list — no action needed. You'll keep getting new posts at this email address.
 
-Thank you for your continued interest and support. You'll keep receiving our updates at this email address.
+Appreciate you being here!
 
-If you'd like to unsubscribe, please click the unsubscribe link in any of our newsletter emails.
+If you'd like to unsubscribe, click the unsubscribe link in any of my newsletter emails.
+
+— Johannes

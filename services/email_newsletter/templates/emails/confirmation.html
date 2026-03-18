@@ -2,26 +2,53 @@
 <html>
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
     <title>Confirm Your Subscription</title>
+    <link href="https://fonts.googleapis.com/css2?family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <style>
+        @media (prefers-color-scheme: dark) {
+            body { background-color: #111827 !important; color: #ffffff !important; }
+            .email-container { background-color: #111827 !important; }
+            .header-name { color: #ffffff !important; }
+            .heading { color: #ffffff !important; }
+            .body-text { color: #d1d5db !important; }
+            .secondary-text { color: #d1d5db !important; }
+            .cta-button { background-color: #f3f4f6 !important; color: #111827 !important; }
+            .divider { border-top-color: #374151 !important; }
+            .footer-text { color: #9ca3af !important; }
+            .fallback-link a { color: #d1d5db !important; }
+        }
+    </style>
 </head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h1 style="color: #2c3e50;">Welcome to Our Newsletter!</h1>
-        <p>Hi {{ subscriber_name }},</p>
-        <p>Thank you for subscribing to our newsletter. We're excited to have you on board!</p>
-        <p>Please confirm your subscription by clicking the button below:</p>
-        <div style="text-align: center; margin: 30px 0;">
-            <a href="{{ confirmation_link }}"
-               style="background-color: #3498db; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
+<body style="font-family: 'PT Serif', Georgia, 'Times New Roman', serif; line-height: 1.6; color: #000000; background-color: #ffffff; margin: 0; padding: 0;">
+    <div class="email-container" style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+        <div class="header-name" style="font-family: 'Figtree', 'Segoe UI', Roboto, sans-serif; font-size: 14px; font-weight: 600; color: #000000; letter-spacing: 0.025em; margin-bottom: 32px;">Johannes Naylor</div>
+
+        <h1 class="heading" style="font-family: 'Figtree', 'Segoe UI', Roboto, sans-serif; color: #000000; font-size: 24px; font-weight: 700; margin: 0 0 24px 0;">Welcome to Buried Treasure</h1>
+
+        <p class="body-text" style="color: #000000; font-size: 16px; margin: 0 0 16px 0;">Hi {{ subscriber_name }},</p>
+
+        <p class="body-text" style="color: #000000; font-size: 16px; margin: 0 0 16px 0;">Thanks for signing up — I'm glad you're here. I write about software, side projects, and whatever else I find interesting. No spam, just the occasional post worth reading.</p>
+
+        <p class="body-text" style="color: #000000; font-size: 16px; margin: 0 0 24px 0;">One quick thing: please confirm your subscription by clicking the button below.</p>
+
+        <div style="text-align: center; margin: 32px 0;">
+            <a href="{{ confirmation_link }}" class="cta-button"
+               style="background-color: #111827; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 0.375rem; display: inline-block; font-family: 'Figtree', 'Segoe UI', Roboto, sans-serif; font-weight: 600; font-size: 15px;">
                 Confirm Subscription
             </a>
         </div>
-        <p style="color: #7f8c8d; font-size: 14px;">
+
+        <p class="secondary-text fallback-link" style="color: #4b5563; font-size: 13px; margin: 0 0 8px 0;">
             If the button doesn't work, copy and paste this link into your browser:<br>
-            <a href="{{ confirmation_link }}">{{ confirmation_link }}</a>
+            <a href="{{ confirmation_link }}" style="color: #4b5563;">{{ confirmation_link }}</a>
         </p>
-        <hr style="border: none; border-top: 1px solid #ecf0f1; margin: 30px 0;">
-        <p style="color: #95a5a6; font-size: 12px;">
+
+        <hr class="divider" style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;">
+
+        <p class="footer-text" style="color: #6b7280; font-size: 12px; margin: 0;">
             If you didn't request this subscription, you can safely ignore this email.
         </p>
     </div>

@@ -82,15 +82,14 @@ impl TestApp {
             let links: Vec<_> = linkify::LinkFinder::new()
                 .links(s)
                 .filter(|l| *l.kind() == linkify::LinkKind::Url)
+                .filter_map(|l| reqwest::Url::parse(l.as_str()).ok())
+                .filter(|url| url.host_str() == Some("127.0.0.1"))
                 .collect();
             assert!(
                 !links.is_empty(),
-                "Expected at least one link in the email body, found none. Body: {s}"
+                "Expected at least one 127.0.0.1 link in the email body, found none. Body: {s}"
             );
-            let raw_link = links[0].as_str().to_owned();
-            let mut confirmation_link = reqwest::Url::parse(&raw_link).unwrap();
-            // Let's make sure we don't call random APIs on the web
-            assert_eq!(confirmation_link.host_str().unwrap(), "127.0.0.1");
+            let mut confirmation_link = links[0].clone();
             confirmation_link.set_port(Some(self.port)).unwrap();
             confirmation_link
         };
