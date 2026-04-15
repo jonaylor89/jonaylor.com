@@ -53,10 +53,10 @@
 	--site-accent-text: #ffffff;
 
 	/* Sponsor / pink */
-	--site-sponsor-bg: #fdf2f8;
-	--site-sponsor-bg-hover: #fce7f3;
-	--site-sponsor-text: #db2777;
-	--site-sponsor-border: #fbcfe8;
+	--site-sponsor-bg: #fce7f3;
+	--site-sponsor-bg-hover: #fbcfe8;
+	--site-sponsor-text: #9d174d;
+	--site-sponsor-border: #f9a8d4;
 
 	/* Share / social blue */
 	--site-social-bg: #eff6ff;
@@ -106,10 +106,10 @@
 		--site-accent-bg: #f3f4f6;
 		--site-accent-text: #111827;
 
-		--site-sponsor-bg: rgba(131, 24, 67, 0.2);
-		--site-sponsor-bg-hover: rgba(131, 24, 67, 0.4);
-		--site-sponsor-text: #f472b6;
-		--site-sponsor-border: #9d174d;
+		--site-sponsor-bg: rgba(131, 24, 67, 0.4);
+		--site-sponsor-bg-hover: rgba(131, 24, 67, 0.56);
+		--site-sponsor-text: #fce7f3;
+		--site-sponsor-border: #f472b6;
 
 		--site-social-bg: rgba(30, 58, 138, 0.2);
 		--site-social-bg-hover: rgba(30, 58, 138, 0.4);
