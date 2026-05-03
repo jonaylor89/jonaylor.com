@@ -1,0 +1,43 @@
+---
+title: "The Deaf Composer"
+date: "2026-05-03"
+subtitle: "AI agents can't listen to music (yet)"
+tags: ["music", "ai", "ai-agents", "audio", "music-tech", "generative-ai"]
+coverImage: "../../assets/images/covers/the-deaf-composer-cover.jpg"
+coverImageAlt: "The Deaf Composer cover image"
+---
+
+If you've used a modern coding agent like Claude Code, [pi](https://pi.dev), or even Replit Agent, you know the "magic" isn't just in the code generation. The magic is in the loop. A coding agent typically operates with a trio of essential tools: Read File, Write File, and Bash. It proposes a solution, runs the code to see if it breaks, reads the error log, and tries again.
+
+In the world of AI music, we are currently living in a world of "Write Only."
+
+# The "One-Way Street" of Generation
+
+The current state-of-the-art products like Suno, Google's Lyria, and Eleven Labs (which I understand are primarily foundational models and not necessarily agents; many have consumer products that are basically agents) have reached a level of "Write File" capability that's very good. They can generate a pop song or a cinematic score that generally sounds good and not ["like AI"](https://www.linkedin.com/pulse/suno-fine-long-doesnt-sound-like-virginie-berger-boo0c/). However, anyone who has spent an hour on those music slot machines knows that they can still struggle with prompt adherence.
+
+You ask for a "minimalist piano track that grows into a heavy industrial techno beat at 120 BPM," and you _might_ get that. Why? Because these models are essentially black boxes. They output a finished audio file, but they have no internal mechanism to "read" what they just created. They can’t verify if they hit the requested BPM, and they can't "hear" that the transition at the two-minute mark was a muddy mess.
+
+# The Missing "Read" Tool
+
+There are products that allow machines to "listen" to music; the technology exists. Tools like Cyanite.ai or various open-source Music Information Retrieval (MIR) tools are fantastic at "reading" music—tagging genres, detecting BPM, identifying key signatures, and analyzing mood.
+
+Currently, these "ear" tools and the "voice" tools (the generative models) are siloed. At Udio, we used MIR for cataloging and preprocessing but only ever talked about what it would be like to do a post-generation pass to analyze the output dynamically (specifically with our experimental agent used in [moments.fm](https://moments.fm)). The next leap in AI music won't come from a model with more parameters; it will come from an agentic architecture that treats MIR as a core tool in the chain.
+
+### The Ideal Creation Loop
+
+A true Music Coauthor Agent wouldn't just spit out a .wav file and call it a day. It would function like the coding agents that are so good right now:
+
+1. **Generate**: Create a musical snippet based on a prompt.
+
+2. **Listen (The "Read" Step)**: Run the audio through an MIR tool to assess: Is this actually in G-Major? Is the energy level what the user asked for?
+
+3. **Assess & Iterate**: If the prompt called for a "drop" and the agent detects a "fade," it identifies the discrepancy.
+
+4. **Refine**: Use inpainting or dynamic stems to fix the specific section that failed, rather than regenerating the whole song from scratch.
+
+# The Agentic Era of Sound
+
+The next age of music creation won't be led by some insanely good audio model (e.g. Suno v5), but rather it will be defined by orchestration.
+
+We are moving toward a workflow where the foundational generative model is just one tool in an agent’s toolbelt. The agent will "Read" your existing project files, "Write" a new melody line, and "Listen" to the result to ensure it fits the vibe. Let's see if someone like [Mozart AI](https://mozartai.com/) can be one of the first to make this happen effectively.
+
