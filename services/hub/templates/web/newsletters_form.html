@@ -1,0 +1,28 @@
+{% extends "web/_admin_layout.html" %}
+
+{% block title %}Create newsletter{% endblock %}
+
+{% block content %}
+<a href="/admin/dashboard" class="back-link">back to dashboard</a>
+<h1>Create newsletter</h1>
+
+<div class="flash-messages">
+  {% for message in flash_messages %}
+    <div class="flash-message">{{ message.content }}</div>
+  {% endfor %}
+</div>
+
+<form action="/admin/newsletters" method="post" class="stacked">
+  <label>Title
+    <input type="text" placeholder="Subject line" name="title" required>
+  </label>
+  <label>Text content
+    <textarea placeholder="Plain text body" name="text" required></textarea>
+  </label>
+  <label>HTML content
+    <textarea placeholder="HTML body" name="html" required></textarea>
+  </label>
+  <input type="hidden" name="idempotency_key" value="{{ idempotency_key }}">
+  <div><button type="submit">Send newsletter</button></div>
+</form>
+{% endblock %}

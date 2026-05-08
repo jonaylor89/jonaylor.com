@@ -1,0 +1,27 @@
+{% extends "web/_admin_layout.html" %}
+
+{% block title %}Threads{% endblock %}
+
+{% block content %}
+<h1>Threads</h1>
+<section class="card">
+  {% if threads.len() == 0 %}
+    <p class="muted">No threads have synced yet. Start streaming with the VS Code extension.</p>
+  {% else %}
+    <ul class="thread-list">
+    {% for thread in threads %}
+      <li>
+        <a href="/admin/threads/{{ thread.id }}">{% match thread.title %}{% when Some with (title) %}{{ title }}{% when None %}{{ thread.id }}{% endmatch %}</a>
+        <span class="pill">{{ thread.default_visibility }}</span>
+        <span class="muted">{{ thread.event_count }} events · updated <time datetime="{{ thread.updated_at }}">{{ thread.updated_at_display }}</time></span>
+        <div class="muted">
+          {% match thread.repo_remote %}{% when Some with (repo) %}{{ repo }}{% when None %}{% endmatch %}
+          {% match thread.repo_branch %}{% when Some with (branch) %} · {{ branch }}{% when None %}{% endmatch %}
+          {% match thread.repo_head %}{% when Some with (head) %} · {{ head }}{% when None %}{% endmatch %}
+        </div>
+      </li>
+    {% endfor %}
+    </ul>
+  {% endif %}
+</section>
+{% endblock %}

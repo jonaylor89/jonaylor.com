@@ -1,0 +1,28 @@
+{% extends "web/_admin_layout.html" %}
+
+{% block title %}Search{% endblock %}
+
+{% block content %}
+<h1>Search events</h1>
+{% match thread_id %}{% when Some with (id) %}<a class="back-link" href="/admin/threads/{{ id }}">back to thread</a>{% when None %}{% endmatch %}
+
+<section class="card">
+  <form method="get" class="stacked" style="flex-direction:row; gap:0.5rem; max-width:none; align-items:flex-end;">
+    <label style="flex:1;">Query
+      <input type="search" name="q" value="{{ query }}" placeholder="websocket reconnect…" autofocus>
+    </label>
+    <button type="submit">Search</button>
+  </form>
+  {% if query.len() > 0 %}<p class="muted" style="margin-top: 1rem;">{{ results.len() }} results for <code>{{ query }}</code>.</p>{% endif %}
+</section>
+
+{% for result in results %}
+<section class="card search-result">
+  <header>
+    <a href="/admin/threads/{{ result.thread_id }}">{% match result.thread_title %}{% when Some with (title) %}{{ title }}{% when None %}{{ result.thread_id }}{% endmatch %}</a>
+    <span class="pill">{{ result.role }}/{{ result.kind }}</span>
+  </header>
+  <pre>{% match result.content %}{% when Some with (content) %}{{ content }}{% when None %}{% endmatch %}</pre>
+</section>
+{% endfor %}
+{% endblock %}

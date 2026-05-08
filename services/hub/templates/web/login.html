@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login · jonaylor.com</title>
+  <style>{% include "web/_admin_styles.css" %}</style>
+  <style>
+    body { display: flex; align-items: center; justify-content: center; }
+    .login-card { width: 100%; max-width: 24rem; }
+    .login-card h1 { text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="login-card card">
+    <h1>Sign in</h1>
+    <div class="flash-messages">
+      {% for message in flash_messages %}
+        <div class="flash-message">{{ message.content }}</div>
+      {% endfor %}
+    </div>
+    <form action="/login" method="post" class="stacked">
+      <label>Username
+        <input type="text" placeholder="username" name="username" required autofocus>
+      </label>
+      <label>Password
+        <input type="password" placeholder="password" name="password" required>
+      </label>
+      <div><button type="submit">Sign in</button></div>
+    </form>
+  </div>
+</body>
+</html>

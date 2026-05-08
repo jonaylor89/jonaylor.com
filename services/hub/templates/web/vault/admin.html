@@ -1,0 +1,65 @@
+{% extends "web/_admin_layout.html" %}
+
+{% block title %}Vault admin{% endblock %}
+
+{% block content %}
+<h1>Vault admin</h1>
+<p class="muted">Public sharing: <code>{{ public_sharing }}</code></p>
+
+<section class="card">
+  <h2>issue API key</h2>
+  <p class="muted">Used by the VS Code extension to stream Pi sessions. The token is shown <strong>once</strong> on creation; only its SHA-256 hash is stored. Lost tokens can't be recovered &mdash; revoke and reissue.</p>
+  <form action="/admin/vault/clients" method="post" class="stacked">
+    <label>Client name
+      <input type="text" name="name" placeholder='e.g. "Pi extension on laptop"' required maxlength="80">
+    </label>
+    <div><button type="submit">Generate token</button></div>
+  </form>
+</section>
+
+<section class="card">
+  <h2>API clients</h2>
+  {% if clients.len() == 0 %}
+    <p class="muted">No API clients issued.</p>
+  {% else %}
+  <table>
+    <thead><tr><th>Name</th><th>Token</th><th>Created</th><th>Last seen</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for client in clients %}
+      <tr>
+        <td>{{ client.name }}</td>
+        <td>{% match client.token_prefix %}{% when Some with (prefix) %}<code>{{ prefix }}&hellip;</code>{% when None %}<span class="muted">(unknown)</span>{% endmatch %}</td>
+        <td><time datetime="{{ client.created_at }}">{{ client.created_at_display }}</time></td>
+        <td>{% match client.last_seen_at %}{% when Some with (seen) %}<time datetime="{{ seen }}">{% match client.last_seen_at_display %}{% when Some with (display) %}{{ display }}{% when None %}{{ seen }}{% endmatch %}</time>{% when None %}<span class="muted">never</span>{% endmatch %}</td>
+        <td>{% match client.revoked_at %}{% when Some with (revoked) %}<span class="muted">revoked <time datetime="{{ revoked }}">{% match client.revoked_at_display %}{% when Some with (display) %}{{ display }}{% when None %}{{ revoked }}{% endmatch %}</time></span>{% when None %}<span class="success">active</span>{% endmatch %}</td>
+        <td>{% match client.revoked_at %}{% when Some with (_) %}{% when None %}<form method="post" action="/admin/vault/clients/{{ client.id }}/revoke" onsubmit="return confirm('Revoke this key? Any client using it will start getting 401s immediately.')"><button type="submit" class="secondary">Revoke</button></form>{% endmatch %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Shares</h2>
+  {% if shares.len() == 0 %}
+    <p class="muted">No shares created.</p>
+  {% else %}
+  <table>
+    <thead><tr><th>ID</th><th>Thread</th><th>Kind</th><th>Created</th><th>Revoked</th><th></th></tr></thead>
+    <tbody>
+    {% for share in shares %}
+      <tr>
+        <td><code>{{ share.id }}</code></td>
+        <td><a href="/admin/threads/{{ share.thread_id }}"><code>{{ share.thread_id }}</code></a></td>
+        <td><span class="pill">{{ share.share_kind }}</span></td>
+        <td><time datetime="{{ share.created_at }}">{{ share.created_at_display }}</time></td>
+        <td>{% match share.revoked_at %}{% when Some with (revoked) %}<time datetime="{{ revoked }}">{% match share.revoked_at_display %}{% when Some with (display) %}{{ display }}{% when None %}{{ revoked }}{% endmatch %}</time>{% when None %}<span class="muted">&mdash;</span>{% endmatch %}</td>
+        <td>{% match share.revoked_at %}{% when Some with (_) %}<span class="muted">revoked</span>{% when None %}<form method="post" action="/admin/vault/shares/{{ share.id }}/revoke"><button type="submit" class="secondary">Revoke</button></form>{% endmatch %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% endblock %}

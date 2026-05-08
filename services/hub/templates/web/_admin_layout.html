@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Admin{% endblock %} · jonaylor.com</title>
+  <style>{% include "web/_admin_styles.css" %}</style>
+  {% block head_extra %}{% endblock %}
+</head>
+<body class="pi-session-view pi-standard-page">
+  <header>
+    <h1>jonaylor.com admin</h1>
+    <nav class="admin-nav">
+      <a href="/admin/dashboard">dashboard</a>
+      <a href="/admin/newsletters">newsletters</a>
+      <a href="/admin/threads">threads</a>
+      <a href="/admin/vault/search">search</a>
+      <form class="nav-account" action="/admin/logout" method="post">
+        <button type="submit">logout</button>
+      </form>
+    </nav>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

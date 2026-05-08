@@ -1,0 +1,33 @@
+{% extends "web/_admin_layout.html" %}
+
+{% block title %}API key created{% endblock %}
+
+{% block content %}
+<a class="back-link" href="/admin/vault">vault admin</a>
+<h1>API key created</h1>
+
+<section class="card">
+  <p class="warning"><strong>Save this token now.</strong> Only its hash is stored, so this is the only time you will see it. If you lose it, revoke and issue a new one.</p>
+
+  <dl style="margin: 8px 0 0;">
+    <dt class="muted">name</dt><dd><strong>{{ name }}</strong></dd>
+    <dt class="muted" style="margin-top: 6px;">client id</dt><dd><code>{{ client_id }}</code></dd>
+    <dt class="muted" style="margin-top: 6px;">token prefix</dt><dd><code>{{ token_prefix }}&hellip;</code> <span class="muted">(shown in the admin list)</span></dd>
+  </dl>
+
+  <p style="margin-top: 12px;" class="muted">Plaintext token (copy now):</p>
+  <pre style="user-select: all; word-break: break-all; padding: 10px; background: var(--page); border: 1px solid var(--border); border-radius: 3px; font-family: var(--mono); font-size: 13px;">{{ plaintext_token }}</pre>
+
+  <p style="margin-top: 16px;"><a href="/admin/vault">Done &mdash; back to vault admin</a></p>
+</section>
+
+<section class="card">
+  <h2>using it</h2>
+  <p>VS Code extension: set <code>PI_THREAD_VAULT_API_TOKEN</code> or put it in <code>~/.pi-thread-vault/config.toml</code> as <code>api_token = "&lt;the token above&gt;"</code>.</p>
+  <p>cURL test:</p>
+  <pre style="padding: 10px; background: var(--page); border: 1px solid var(--border); border-radius: 3px; font-family: var(--mono); font-size: 12px;">curl -X POST &lt;hub-url&gt;/api/v1/events/batch \
+  -H "Authorization: Bearer &lt;token&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{...}'</pre>
+</section>
+{% endblock %}

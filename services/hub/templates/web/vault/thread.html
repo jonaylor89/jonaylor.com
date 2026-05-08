@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% match thread.title %}{% when Some with (title) %}{{ title }}{% when None %}{{ thread.id }}{% endmatch %} · Pi Thread Vault</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/github-dark.min.css">
+  <style>{% include "web/_admin_styles.css" %}</style>
+</head>
+<body class="pi-session-view">
+<div id="app">
+  <aside id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-title">π thread vault</div>
+      <a class="sidebar-link" href="/admin/threads">← threads</a>
+      <a class="sidebar-link" href="/admin/threads/{{ thread.id }}/tree">tree</a>
+      <a class="sidebar-link" href="/admin/threads/{{ thread.id }}/search">search</a>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">thread</div>
+      <div class="info-item"><span class="info-label">title</span><span class="info-value">{% match thread.title %}{% when Some with (title) %}{{ title }}{% when None %}{{ thread.id }}{% endmatch %}</span></div>
+      <div class="info-item"><span class="info-label">events</span><span class="info-value">{{ total_events }}</span></div>
+      <div class="info-item"><span class="info-label">updated</span><span class="info-value"><time datetime="{{ thread.updated_at }}">{{ thread.updated_at_display }}</time></span></div>
+      <div class="info-item"><span class="info-label">visibility</span><span class="info-value">{{ thread.default_visibility }}</span></div>
+    </div>
+
+    <details class="sidebar-section" open>
+      <summary class="sidebar-section-title">metadata</summary>
+      <div class="info-item"><span class="info-label">repo</span><span class="info-value">{% match thread.repo_remote %}{% when Some with (repo) %}{{ repo }}{% when None %}—{% endmatch %}</span></div>
+      <div class="info-item"><span class="info-label">branch</span><span class="info-value">{% match thread.repo_branch %}{% when Some with (branch) %}{{ branch }}{% when None %}—{% endmatch %}</span></div>
+      <div class="info-item"><span class="info-label">commit</span><span class="info-value">{% match thread.repo_head %}{% when Some with (head) %}{{ head }}{% when None %}—{% endmatch %}</span></div>
+      <div class="info-item"><span class="info-label">cwd</span><span class="info-value">{% match thread.cwd %}{% when Some with (cwd) %}{{ cwd }}{% when None %}—{% endmatch %}</span></div>
+      <div class="info-item"><span class="info-label">id</span><span class="info-value">{{ thread.id }}</span></div>
+      <div class="info-item"><span class="info-label">session</span><span class="info-value">{{ thread.external_session_id }}</span></div>
+      <div class="info-item"><span class="info-label">created</span><span class="info-value"><time datetime="{{ thread.created_at }}">{{ thread.created_at_display }}</time></span></div>
+    </details>
+
+    <details class="sidebar-section">
+      <summary class="sidebar-section-title">sharing</summary>
+      {% if can_share_publicly %}
+      <form action="/admin/threads/{{ thread.id }}/share" method="post" class="sidebar-form">
+        <label>kind
+          <select name="share_kind">
+            <option value="private">private</option>
+            <option value="public">public</option>
+            <option value="secret-link">secret-link</option>
+            <option value="password-protected">password-protected</option>
+          </select>
+        </label>
+        <label>password <input type="password" name="password" autocomplete="new-password"></label>
+        <button type="submit">apply sharing</button>
+      </form>
+      {% endif %}
+      <div class="sidebar-subtitle">shares</div>
+      {% if shares.len() == 0 %}<p class="sidebar-muted">No shares.</p>{% endif %}
+      <ul class="sidebar-list">
+      {% for share in shares %}
+        <li>{{ share.share_kind }} · <time datetime="{{ share.created_at }}">{{ share.created_at_display }}</time> {% match share.url %}{% when Some with (url) %}<a href="{{ url }}">open</a>{% when None %}<span>secret URL shown once</span>{% endmatch %}</li>
+      {% endfor %}
+      </ul>
+    </details>
+
+    <details class="sidebar-section">
+      <summary class="sidebar-section-title">handoffs</summary>
+      {% if handoffs.len() == 0 %}<p class="sidebar-muted">No handoffs recorded.</p>{% endif %}
+      <ul class="sidebar-list">
+      {% for handoff in handoffs %}
+        <li>{{ handoff.goal }} <span><time datetime="{{ handoff.created_at }}">{{ handoff.created_at_display }}</time></span></li>
+      {% endfor %}
+      </ul>
+    </details>
+  </aside>
+
+  <main id="content">
+    <div class="help-bar">
+      <span class="help-hint">Session preview · tool work is folded into expandable thinking blocks</span>
+      <span class="help-actions"><a href="/admin/threads">threads</a><a href="/admin/vault">vault admin</a><a href="/admin/dashboard">newsletter</a></span>
+    </div>
+
+    <section class="header">
+      <h1>{% match thread.title %}{% when Some with (title) %}{{ title }}{% when None %}{{ thread.id }}{% endmatch %}</h1>
+      <div class="header-info">
+        <div class="info-item"><span class="info-label">Repo</span><span class="info-value">{% match thread.repo_remote %}{% when Some with (repo) %}{{ repo }}{% when None %}—{% endmatch %}</span></div>
+        <div class="info-item"><span class="info-label">Branch</span><span class="info-value">{% match thread.repo_branch %}{% when Some with (branch) %}{{ branch }}{% when None %}—{% endmatch %}</span></div>
+        <div class="info-item"><span class="info-label">Commit</span><span class="info-value">{% match thread.repo_head %}{% when Some with (head) %}{{ head }}{% when None %}—{% endmatch %}</span></div>
+        <div class="info-item"><span class="info-label">Updated</span><span class="info-value"><time datetime="{{ thread.updated_at }}">{{ thread.updated_at_display }}</time></span></div>
+      </div>
+    </section>
+
+    {% match system_prompt %}{% when Some with (prompt) %}
+    <details class="system-prompt expandable">
+      <summary class="system-prompt-header">System prompt</summary>
+      <pre class="system-prompt-full">{{ prompt }}</pre>
+    </details>
+    {% when None %}{% endmatch %}
+
+    {% if available_tools.len() > 0 %}
+    <details class="tools-list">
+      <summary class="tools-header">Available tools</summary>
+      <div class="tools-grid">
+      {% for tool in available_tools %}
+        <div class="tool-item"><span class="tool-item-name">{{ tool.name }}</span>{% if tool.count > 0 %}<span class="tool-item-desc"> used {{ tool.count }}×</span>{% endif %}</div>
+      {% endfor %}
+      </div>
+    </details>
+    {% endif %}
+
+    <section id="messages">
+    {% for item in events %}
+      {% if item.is_thought_group %}
+        <details class="thinking-block thought-group">
+          <summary class="thinking-collapsed">thought for {% match item.thought_duration %}{% when Some with (duration) %}{{ duration }}{% when None %}a bit{% endmatch %} · {{ item.children.len() }} tool/thought events{% match item.thought_summary %}{% when Some with (summary) %} · {{ summary }}{% when None %}{% endmatch %}</summary>
+          <div class="thought-events">
+          {% for event in item.children %}
+            <details class="tool-execution {% if event.tool_result_is_error %}error{% else %}success{% endif %}">
+              <summary class="tool-header"><span class="tool-name">{% match event.tool_label %}{% when Some with (label) %}{{ label }}{% when None %}{{ event.role }}/{{ event.kind }}{% endmatch %}</span> <span class="pill">{{ event.kind }}</span>{% if event.tool_result_content.is_some() %} <span class="pill {% if event.tool_result_is_error %}pill-error{% else %}pill-done{% endif %}">{% if event.tool_result_is_error %}error{% else %}done{% endif %}</span>{% endif %} <span class="message-timestamp">{{ event.timestamp_display }}</span></summary>
+              <pre class="tool-output tool-input raw-message-content">{% match event.content %}{% when Some with (content) %}{{ content }}{% when None %}{% endmatch %}</pre>
+              {% match event.tool_result_content %}{% when Some with (result) %}
+              <div class="tool-result">
+                <div class="tool-result-label">{% if event.tool_result_is_error %}error{% else %}result{% endif %}</div>
+                <pre class="tool-output tool-result-output">{{ result }}</pre>
+                {% match event.tool_result_metadata_json %}{% when Some with (result_meta) %}<details class="tool-metadata"><summary>result metadata</summary><pre>{{ result_meta }}</pre></details>{% when None %}{% endmatch %}
+              </div>
+              {% when None %}{% endmatch %}
+              <details class="tool-metadata"><summary>metadata</summary><pre>{{ event.metadata_json }}</pre></details>
+            </details>
+          {% endfor %}
+          </div>
+        </details>
+      {% else %}
+        {% if item.event.role == "user" %}
+          <article class="user-message message" id="{{ item.event.id }}">
+            <div class="message-timestamp">{{ item.event.timestamp_display }}</div>
+            <div class="markdown-content"><pre class="raw-message-content">{% match item.event.display_content %}{% when Some with (content) %}{{ content }}{% when None %}{% endmatch %}</pre></div>
+          </article>
+        {% else %}
+          <article class="assistant-message message" id="{{ item.event.id }}">
+            <div class="message-timestamp">{{ item.event.timestamp_display }}</div>
+            <div class="assistant-text markdown-content"><pre class="raw-message-content">{% match item.event.display_content %}{% when Some with (content) %}{{ content }}{% when None %}{% endmatch %}</pre></div>
+          </article>
+        {% endif %}
+      {% endif %}
+    {% endfor %}
+    </section>
+  </main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/lib/common.min.js"></script>
+<script>
+  if (window.marked && window.DOMPurify) {
+    marked.setOptions({ breaks: true, gfm: true });
+    for (const body of document.querySelectorAll(".markdown-content")) {
+      const raw = body.querySelector(".raw-message-content");
+      const source = raw?.textContent ?? "";
+      if (!source.trim()) {
+        body.innerHTML = "<p class=\"sidebar-muted\">No content.</p>";
+        continue;
+      }
+      body.innerHTML = DOMPurify.sanitize(marked.parse(source));
+    }
+  }
+  if (window.hljs) hljs.highlightAll();
+</script>
+<script type="module">
+  import { FileDiff, DEFAULT_THEMES } from "https://cdn.jsdelivr.net/npm/@pierre/diffs/+esm";
+
+  const DIFFABLE = new Set(["edit", "multiedit", "write"]);
+
+  function parseToolCall(pre) {
+    const raw = pre.textContent ?? "";
+    if (!raw.trim()) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return null;
+      const toolName = String(parsed.toolName ?? "").toLowerCase();
+      if (!DIFFABLE.has(toolName)) return null;
+      return { toolName, input: parsed.input ?? {} };
+    } catch {
+      return null;
+    }
+  }
+
+  const themeType = document.documentElement.dataset.theme === "light" ? "light" : "dark";
+
+  function makeDiffElement(path, before, after) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "diff-wrapper";
+
+    const toolbar = document.createElement("div");
+    toolbar.className = "diff-toolbar";
+    const wrapBtn = document.createElement("button");
+    wrapBtn.type = "button";
+    wrapBtn.className = "diff-wrap-toggle";
+    wrapBtn.title = "Toggle line wrap";
+    wrapBtn.setAttribute("aria-label", "Toggle line wrap");
+    wrapBtn.setAttribute("aria-pressed", "false");
+    wrapBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M3 12h15a3 3 0 1 1 0 6h-4"/><polyline points="16 16 14 18 16 20"/><path d="M3 18h7"/></svg>`;
+    toolbar.appendChild(wrapBtn);
+
+    const host = document.createElement("div");
+    host.className = "diff-host";
+
+    wrapper.appendChild(host);
+    wrapper.appendChild(toolbar);
+
+    const diff = new FileDiff({
+      theme: DEFAULT_THEMES,
+      themeType,
+      diffStyle: "unified",
+      overflow: "scroll",
+    });
+    diff.render({
+      oldFile: { name: path || "edit", contents: before ?? "" },
+      newFile: { name: path || "edit", contents: after ?? "" },
+      containerWrapper: host,
+    });
+
+    wrapBtn.addEventListener("click", () => {
+      const next = wrapBtn.getAttribute("aria-pressed") !== "true";
+      wrapBtn.setAttribute("aria-pressed", String(next));
+      diff.mergeOptions({ overflow: next ? "wrap" : "scroll" });
+      diff.rerender();
+    });
+
+    return wrapper;
+  }
+
+  function wrapRaw(pre) {
+    const details = document.createElement("details");
+    details.className = "tool-raw";
+    const summary = document.createElement("summary");
+    summary.textContent = "raw JSON";
+    details.appendChild(summary);
+    pre.replaceWith(details);
+    details.appendChild(pre);
+    return details;
+  }
+
+  function renderAt(pre, elements) {
+    const host = document.createElement("div");
+    host.className = "diff-render";
+    for (const el of elements) host.appendChild(el);
+    const raw = wrapRaw(pre);
+    raw.parentElement.insertBefore(host, raw);
+  }
+
+  for (const exec of document.querySelectorAll(".tool-execution")) {
+    const pre = exec.querySelector("pre.tool-input");
+    if (!pre) continue;
+    const call = parseToolCall(pre);
+    if (!call) continue;
+    const input = call.input || {};
+    const path = input.path ?? input.file_path;
+    try {
+      if (call.toolName === "edit" || call.toolName === "multiedit") {
+        const edits = Array.isArray(input.edits) ? input.edits : [];
+        if (edits.length === 0) continue;
+        renderAt(pre, edits.map((e) => makeDiffElement(path, e.oldText ?? e.old_string, e.newText ?? e.new_string)));
+      } else if (call.toolName === "write") {
+        renderAt(pre, [makeDiffElement(path, "", input.content)]);
+      }
+    } catch (err) {
+      console.warn("diff render failed", call.toolName, err);
+    }
+  }
+</script>
+</body>
+</html>

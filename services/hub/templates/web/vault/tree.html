@@ -1,0 +1,22 @@
+{% extends "web/_admin_layout.html" %}
+
+{% block title %}Tree · {{ thread.id }}{% endblock %}
+
+{% block content %}
+<a href="/admin/threads/{{ thread.id }}" class="back-link">timeline</a>
+<h1>Event tree</h1>
+
+<section class="card">
+  <p class="muted">Parent/child relationships are shown by external event IDs when the client provides them.</p>
+  <ul style="list-style:none; padding:0; margin:0;">
+  {% for event in events %}
+    <li style="padding:0.5rem 0; border-bottom:1px solid var(--border);">
+      <code>{% match event.external_event_id %}{% when Some with (id) %}{{ id }}{% when None %}{{ event.id }}{% endmatch %}</code>
+      <span class="pill">{{ event.role }}/{{ event.kind }}</span>
+      {% match event.parent_external_event_id %}{% when Some with (parent) %}<span class="muted"> parent: <code>{{ parent }}</code></span>{% when None %}{% endmatch %}
+      <pre style="margin-top:0.4rem; padding:0.5rem; background:var(--bg-elev-2); border:1px solid var(--border); border-radius:3px; font-family:var(--mono); font-size:12px; max-height:8rem; overflow:auto; white-space:pre-wrap;">{% match event.content %}{% when Some with (content) %}{{ content }}{% when None %}{% endmatch %}</pre>
+    </li>
+  {% endfor %}
+  </ul>
+</section>
+{% endblock %}

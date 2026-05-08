@@ -1,0 +1,39 @@
+{% extends "web/_admin_layout.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<h1>Dashboard</h1>
+<p class="muted">Welcome, {{ username }}</p>
+
+<section class="card">
+  <h2>newsletter</h2>
+  <ul class="section-list">
+    <li><a class="item-link" href="/admin/newsletters">create issue</a><span class="item-desc">compose and queue a new newsletter</span></li>
+    <li><a class="item-link" href="/admin/newsletters/list">issue archive</a><span class="item-desc">JSON list of past newsletters</span></li>
+    <li><a class="item-link" href="/admin/subscribers">subscribers</a><span class="item-desc">JSON list of current subscribers</span></li>
+    <li><a class="item-link" href="/admin/stats">stats</a><span class="item-desc">JSON delivery and subscription metrics</span></li>
+    <li><a class="item-link" href="/admin/dead-letters">dead letter queue</a><span class="item-desc">JSON list of permanently failed deliveries</span></li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>pi thread vault</h2>
+  <ul class="section-list">
+    <li><a class="item-link" href="/admin/threads">threads</a><span class="item-desc">captured coding-agent sessions</span></li>
+    <li><a class="item-link" href="/admin/vault/search">search events</a><span class="item-desc">full-text search across all threads</span></li>
+    <li><a class="item-link" href="/admin/vault">vault admin</a><span class="item-desc">API clients and share links</span></li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>account</h2>
+  <ul class="section-list">
+    <li><a class="item-link" href="/admin/password">change password</a><span class="item-desc">rotate your admin credentials</span></li>
+    <li>
+      <form action="/admin/logout" method="post"><button type="submit" class="link-button">logout</button></form>
+      <span class="item-desc">end the current session</span>
+    </li>
+  </ul>
+</section>
+{% endblock %}
