@@ -22,11 +22,11 @@ use crate::authentication::AuthenticatedUser;
 use crate::configuration::{DatabaseSettings, Settings};
 use crate::email_client::EmailClient;
 use crate::routes::{
-    admin_dashboard, admin_stats, api_publish_newsletter, api_subscribe, change_password,
-    change_password_form, confirm, delete_subscriber, get_newsletter, health_check, home,
-    list_dead_letters, list_newsletters, list_subscribers, log_out, login, login_form,
-    newsletters_form, preview_newsletter, publish_newsletter, retry_dead_letter, subscribe,
-    unsubscribe_get, unsubscribe_post,
+    admin_dashboard, admin_stats, api_publish_newsletter, api_subscribe, apple_touch_icon,
+    change_password, change_password_form, confirm, delete_subscriber, favicon_ico, favicon_svg,
+    get_newsletter, health_check, home, list_dead_letters, list_newsletters, list_subscribers,
+    log_out, login, login_form, newsletters_form, og_image, preview_newsletter, publish_newsletter,
+    retry_dead_letter, robots_txt, subscribe, unsubscribe_get, unsubscribe_post,
 };
 use crate::vault::api::{handoff_record, ingest_events};
 use crate::vault::web::{
@@ -226,6 +226,11 @@ fn build_router(
     Router::<AppState>::new()
         .route("/", get(home))
         .route("/health_check", get(health_check))
+        .route("/favicon.ico", get(favicon_ico))
+        .route("/favicon.svg", get(favicon_svg))
+        .route("/apple-touch-icon.png", get(apple_touch_icon))
+        .route("/og-image.jpg", get(og_image))
+        .route("/robots.txt", get(robots_txt))
         .route("/subscriptions", post(subscribe))
         .route("/subscriptions/confirm", get(confirm))
         .route(

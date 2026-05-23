@@ -116,6 +116,7 @@ pub struct IndexTemplate {
 #[template(path = "web/vault/thread.html")]
 pub struct ThreadTemplate {
     pub thread: ThreadDetail,
+    pub page_url: String,
     pub events: Vec<EventView>,
     pub total_events: usize,
     pub system_prompt: Option<String>,

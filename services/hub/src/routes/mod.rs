@@ -1,5 +1,6 @@
 mod admin;
 mod api;
+mod assets;
 mod health_check;
 mod home;
 mod login;
@@ -13,6 +14,7 @@ pub use admin::{
     newsletters_form, preview_newsletter, publish_newsletter, retry_dead_letter,
 };
 pub use api::{api_publish_newsletter, api_subscribe};
+pub use assets::{apple_touch_icon, favicon_ico, favicon_svg, og_image, robots_txt};
 pub use health_check::health_check;
 pub use home::home;
 pub use login::{login, login_form};

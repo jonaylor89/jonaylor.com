@@ -36,7 +36,12 @@ pub async fn thread_page(State(state): State<AppState>, Path(thread_id): Path<St
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };
-    render_thread(&state, thread).await
+    let page_url = format!(
+        "{}/admin/threads/{}",
+        state.vault.base_url.trim_end_matches('/'),
+        thread.id
+    );
+    render_thread(&state, thread, page_url).await
 }
 
 pub async fn thread_tree(State(state): State<AppState>, Path(thread_id): Path<String>) -> Response {
@@ -358,7 +363,12 @@ pub async fn get_shared_thread(
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };
-    render_thread(&state, thread).await
+    let page_url = format!(
+        "{}/s/{}",
+        state.vault.base_url.trim_end_matches('/'),
+        share_token
+    );
+    render_thread(&state, thread, page_url).await
 }
 
 #[derive(Deserialize)]
@@ -418,7 +428,7 @@ async fn render_search(state: &AppState, query: String, thread_id: Option<String
     }
 }
 
-async fn render_thread(state: &AppState, thread: ThreadDetail) -> Response {
+async fn render_thread(state: &AppState, thread: ThreadDetail, page_url: String) -> Response {
     let events = match load_events(&state.db_pool, &thread.id).await {
         Ok(events) => events,
         Err(error) => {
@@ -450,13 +460,14 @@ async fn render_thread(state: &AppState, thread: ThreadDetail) -> Response {
     let events = merge_tool_results(events);
     HtmlTemplate(ThreadTemplate {
         thread,
+        page_url,
         events: group_thought_events(events),
         total_events,
         system_prompt,
         available_tools,
         shares,
         handoffs,
-        base_url: state.vault.base_url.clone(),
+        base_url: state.vault.base_url.trim_end_matches('/').to_string(),
         can_share_publicly: state.vault.public_sharing,
     })
     .into_response()
