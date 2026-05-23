@@ -1,3 +1,4 @@
+use axum::extract::DefaultBodyLimit;
 use axum::routing::{delete, get, post};
 use axum::{Router, middleware, serve::Serve};
 use secrecy::ExposeSecret;
@@ -241,7 +242,10 @@ fn build_router(
         .route("/api/newsletters", post(api_publish_newsletter))
         .route("/api/subscriptions", post(api_subscribe))
         // Vault: stateless API ingest from the VS Code extension (Bearer token in DB).
-        .route("/api/v1/events/batch", post(ingest_events))
+        .route(
+            "/api/v1/events/batch",
+            post(ingest_events).layer(DefaultBodyLimit::max(25 * 1024 * 1024)),
+        )
         .route("/api/v1/handoffs", post(handoff_record))
         // Vault: public share URLs (no auth; password-protected shares present a form).
         .route(

@@ -14,10 +14,6 @@ name = "hub"
 path = "src/main.rs"
 
 [[bin]]
-name = "backfill_pi_sessions"
-path = "src/bin/backfill_pi_sessions.rs"
-
-[[bin]]
 name = "issue_api_token"
 path = "src/bin/issue_api_token.rs"
 

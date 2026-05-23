@@ -23,6 +23,8 @@ pub struct SessionPayload {
     pub repo_remote: Option<String>,
     pub repo_branch: Option<String>,
     pub repo_head: Option<String>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -69,6 +71,16 @@ pub async fn ingest_events(
         .title
         .clone()
         .or_else(|| derive_thread_title(&payload.events));
+    let thread_created_at = payload
+        .session
+        .created_at
+        .clone()
+        .unwrap_or_else(|| now.clone());
+    let thread_updated_at = payload
+        .session
+        .updated_at
+        .clone()
+        .unwrap_or_else(|| now.clone());
 
     sqlx::query(
         r#"INSERT INTO vault_threads (
@@ -91,8 +103,8 @@ pub async fn ingest_events(
     .bind(&payload.session.repo_branch)
     .bind(&payload.session.repo_head)
     .bind(&state.vault.default_visibility)
-    .bind(&now)
-    .bind(&now)
+    .bind(&thread_created_at)
+    .bind(&thread_updated_at)
     .execute(&state.db_pool)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -333,6 +345,8 @@ fn sanitize_batch(payload: &mut BatchPayload) {
     sanitize_opt(&mut s.repo_remote);
     sanitize_opt(&mut s.repo_branch);
     sanitize_opt(&mut s.repo_head);
+    sanitize_opt(&mut s.created_at);
+    sanitize_opt(&mut s.updated_at);
     for event in &mut payload.events {
         sanitize_opt(&mut event.external_event_id);
         sanitize_opt(&mut event.parent_external_event_id);

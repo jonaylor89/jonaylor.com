@@ -22,6 +22,17 @@ cargo run
 cargo test
 ```
 
+## Vault backfill
+
+Backfill existing pi-coding-agent JSONL sessions from the machine that has the session files:
+
+```bash
+PI_THREAD_VAULT_API_TOKEN=<token> scripts/backfill_pi_sessions.sh --server-url https://example.com
+```
+
+The script scans `~/.pi/agent/sessions` by default, or accepts explicit JSONL files/directories.
+Use `--dry-run` to preview counts. Requires `bash`, `jq`, `curl`, and `shasum`/`sha256sum`.
+
 ## Container Usage
 
 The container image does not include the `configuration/` directory. Mount it at runtime so the application can read `/app/configuration`.
