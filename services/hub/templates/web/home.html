@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="description" content="jonaylor.com hub for newsletter and admin tools.">
+  <meta property="og:site_name" content="jonaylor.com">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="jonaylor.com hub">
+  <meta property="og:description" content="Newsletter service and private admin tools for jonaylor.com.">
+  <meta property="og:image" content="/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0f1115">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="alternate icon" href="/favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <title>Hub · jonaylor.com</title>
+  <style>{% include "web/_admin_styles.css" %}</style>
+</head>
+<body class="pi-session-view pi-standard-page">
+  <header>
+    <h1>jonaylor.com hub</h1>
+    <nav class="admin-nav">
+      <a href="https://www.jonaylor.com/">main site</a>
+      <a href="https://www.jonaylor.com/newsletter/">newsletter</a>
+      {% if is_signed_in %}
+      <a href="/admin/dashboard">dashboard</a>
+      {% else %}
+      <a href="/login">admin login</a>
+      {% endif %}
+    </nav>
+  </header>
+  <main>
+    <h1>Hub</h1>
+    <p class="muted">Newsletter service and private tools for jonaylor.com.</p>
+
+    <section class="card">
+      <h2>public site</h2>
+      <ul class="section-list">
+        <li><a class="item-link" href="https://www.jonaylor.com/">www.jonaylor.com</a><span class="item-desc">read posts, projects, and notes on the main site</span></li>
+        <li><a class="item-link" href="https://www.jonaylor.com/newsletter/">newsletter</a><span class="item-desc">subscribe to new writing from Jon</span></li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>admin</h2>
+      <ul class="section-list">
+        {% if is_signed_in %}
+        <li><a class="item-link" href="/admin/dashboard">dashboard</a><span class="item-desc">manage newsletters and private tools</span></li>
+        {% else %}
+        <li><a class="item-link" href="/login">admin login</a><span class="item-desc">sign in to manage newsletters and private tools</span></li>
+        {% endif %}
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

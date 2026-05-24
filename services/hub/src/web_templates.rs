@@ -2,6 +2,12 @@ use crate::session_state::FlashMessage;
 use askama::Template;
 
 #[derive(Template)]
+#[template(path = "web/home.html")]
+pub struct HomeTemplate {
+    pub is_signed_in: bool,
+}
+
+#[derive(Template)]
 #[template(path = "web/login.html")]
 pub struct LoginTemplate {
     pub flash_messages: Vec<FlashMessage>,

@@ -3,6 +3,7 @@ mod api_subscriptions;
 mod change_password;
 mod health_check;
 mod helpers;
+mod home;
 mod issue_delivery_queue;
 mod login;
 mod newsletter;
