@@ -22,7 +22,7 @@ export function activate(pi, extensionConfig = {}) {
     const enqueue = (rawEvent, session) => {
         const event = normalizeEvent(rawEvent, config.redaction.enabled);
         queue.enqueue({
-            id: event.external_event_id ?? crypto.randomUUID(),
+            id: crypto.randomUUID(),
             thread_external_id: session.external_session_id,
             event_hash: event.event_hash,
             payload_json: JSON.stringify(event),
