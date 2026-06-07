@@ -1,5 +1,5 @@
 use axum::extract::DefaultBodyLimit;
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get, post, put};
 use axum::{Router, middleware, serve::Serve};
 use secrecy::ExposeSecret;
 use sqlx::PgPool;
@@ -22,6 +22,9 @@ use tower_sessions_redis_store::{
 use crate::authentication::AuthenticatedUser;
 use crate::configuration::{DatabaseSettings, Settings};
 use crate::email_client::EmailClient;
+use crate::pastebin::{
+    api_create_paste, create_paste_from_form, delete_paste, pastebin_admin, show_paste,
+};
 use crate::routes::{
     admin_dashboard, admin_stats, api_publish_newsletter, api_subscribe, apple_touch_icon,
     change_password, change_password_form, confirm, delete_subscriber, favicon_ico, favicon_svg,
@@ -200,6 +203,11 @@ fn build_router(
             "/dead-letters/{newsletter_issue_id}/{subscriber_email}",
             post(retry_dead_letter),
         )
+        .route(
+            "/pastebin",
+            get(pastebin_admin).post(create_paste_from_form),
+        )
+        .route("/pastebin/{paste_id}/delete", post(delete_paste))
         .route("/password", get(change_password_form).post(change_password))
         .route("/logout", post(log_out))
         // Vault admin portal — same session guard as newsletter admin
@@ -221,8 +229,8 @@ fn build_router(
             "https://www.jonaylor.com".parse().unwrap(),
             "http://localhost:4321".parse().unwrap(),
         ]))
-        .allow_methods([http::Method::POST, http::Method::OPTIONS])
-        .allow_headers([http::header::CONTENT_TYPE]);
+        .allow_methods([http::Method::POST, http::Method::PUT, http::Method::OPTIONS])
+        .allow_headers([http::header::CONTENT_TYPE, http::header::AUTHORIZATION]);
 
     Router::<AppState>::new()
         .route("/", get(home))
@@ -241,12 +249,17 @@ fn build_router(
         .route("/login", get(login_form).post(login))
         .route("/api/newsletters", post(api_publish_newsletter))
         .route("/api/subscriptions", post(api_subscribe))
+        .route(
+            "/api/pastes",
+            put(api_create_paste).layer(DefaultBodyLimit::max(256 * 1024)),
+        )
         // Vault: stateless API ingest from the VS Code extension (Bearer token in DB).
         .route(
             "/api/v1/events/batch",
             post(ingest_events).layer(DefaultBodyLimit::max(25 * 1024 * 1024)),
         )
         .route("/api/v1/handoffs", post(handoff_record))
+        .route("/p/{paste}", get(show_paste))
         // Vault: public share URLs (no auth; password-protected shares present a form).
         .route(
             "/s/{share_token}",

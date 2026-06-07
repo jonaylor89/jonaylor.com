@@ -41,6 +41,7 @@ pub struct TestApp {
     pub hmac_secret: String,
     pub base_url: String,
     pub vault_api_token: String,
+    pub api_bearer_token: String,
     shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
     server_task: tokio::task::JoinHandle<Result<(), std::io::Error>>,
 }
@@ -335,6 +336,7 @@ pub async fn spawn_app() -> TestApp {
         let mut c = get_configuration().expect("Failed to read configuration");
         c.database.database_name = Uuid::new_v4().to_string();
         c.application.port = 0;
+        c.application.api_bearer_token = secrecy::Secret::new("test-api-token".to_string());
         c.email_client.base_url = email_server.uri();
 
         c
@@ -386,6 +388,11 @@ pub async fn spawn_app() -> TestApp {
             .clone(),
         base_url: configuration.application.base_url.clone(),
         vault_api_token: vault_key.plaintext_token,
+        api_bearer_token: configuration
+            .application
+            .api_bearer_token
+            .expose_secret()
+            .clone(),
         shutdown_tx: Some(shutdown_tx),
         server_task,
     };

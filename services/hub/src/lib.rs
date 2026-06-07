@@ -6,6 +6,7 @@ pub mod email_templates;
 pub mod idempotency;
 pub mod idempotency_cleanup;
 pub mod issue_delivery_queue;
+pub mod pastebin;
 pub mod routes;
 pub mod rss_worker;
 pub mod session_state;

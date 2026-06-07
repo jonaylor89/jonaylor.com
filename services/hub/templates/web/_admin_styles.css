@@ -1717,3 +1717,65 @@ main .card { padding: 10px 12px; margin-bottom: 10px; }
 .back-link:hover { text-decoration: underline; }
 .back-link::before { content: "← "; }
 
+.paste-form textarea {
+  min-height: 42vh;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--borderMuted, var(--border));
+  background: var(--body-bg, var(--bg));
+  color: var(--text);
+  caret-color: var(--borderAccent, currentColor);
+  font: 12px ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.paste-form textarea::placeholder {
+  color: var(--dim, var(--muted));
+}
+
+.paste-actions,
+.paste-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.paste-table-preview {
+  max-width: 34rem;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}
+
+.paste-view-card { padding: 0; }
+.paste-view-card .paste-toolbar {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--soft-border);
+  background: color-mix(in srgb, var(--panel) 92%, var(--chrome));
+}
+
+.paste-view {
+  min-height: 60vh;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  counter-reset: paste-line;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.paste-view code {
+  display: block;
+  font: inherit;
+}
+
+kbd {
+  display: inline-block;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font: 10px ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+}
+

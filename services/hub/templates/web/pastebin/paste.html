@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="description" content="Shared paste from jonaylor.com hub.">
+  <meta property="og:site_name" content="jonaylor.com">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Paste {{ paste.id }} · jonaylor.com">
+  <meta property="og:description" content="Shared paste from jonaylor.com hub.">
+  <meta property="og:image" content="/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0f1115">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="alternate icon" href="/favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <title>Paste {{ paste.id }} · jonaylor.com</title>
+  <style>{% include "web/_admin_styles.css" %}</style>
+</head>
+<body class="pi-session-view pi-standard-page">
+  <header>
+    <h1>jonaylor.com paste</h1>
+    <nav class="admin-nav">
+      <a href="/">hub</a>
+      <a href="/admin/pastebin">pastebin</a>
+      <a href="{{ paste.raw_url }}">plain</a>
+    </nav>
+  </header>
+  <main>
+    <h1>Paste <code>{{ paste.id }}</code></h1>
+    <p class="muted">
+      <time datetime="{{ paste.created_at }}">{{ paste.created_at_display }}</time>
+      · {{ paste.size_bytes }} bytes
+      · {{ paste.line_count }} lines
+    </p>
+
+    <section class="card paste-view-card">
+      <div class="paste-toolbar">
+        <a href="{{ paste.raw_url }}">plain text</a>
+        <span class="muted">curl {{ paste.public_url }}</span>
+      </div>
+      <pre class="paste-view"><code>{{ paste.content }}</code></pre>
+    </section>
+  </main>
+</body>
+</html>

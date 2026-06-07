@@ -7,6 +7,7 @@ mod home;
 mod issue_delivery_queue;
 mod login;
 mod newsletter;
+mod pastebin;
 mod subscriptions;
 mod subscriptions_confirm;
 mod vault_admin;

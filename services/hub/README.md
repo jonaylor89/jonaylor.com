@@ -1,6 +1,6 @@
 # Hub
 
-Personal services hub built with Rust, Axum, and PostgreSQL. Hosts the email newsletter, the pi-thread-vault (captured coding-agent sessions), and the unified admin portal.
+Personal services hub built with Rust, Axum, and PostgreSQL. Hosts the email newsletter, a pastebin for shareable text snippets, the pi-thread-vault (captured coding-agent sessions), and the unified admin portal.
 
 ## Setup
 
@@ -58,9 +58,22 @@ docker run \
   <image-name>
 ```
 
+## Pastebin
+
+Create snippets from `/admin/pastebin` after signing in, or from scripts with the configured API bearer token:
+
+```bash
+curl -X PUT \
+  -H "Authorization: Bearer $HUB_API_BEARER_TOKEN" \
+  --data-binary @snippet.txt \
+  https://hub.example.com/api/pastes
+```
+
+Paste URLs are public to anyone with the secret link. Append `?raw=1`, send `Accept: text/plain`, or use `curl` to retrieve plain text.
+
 ## Architecture
 
-- **API Server**: Subscription and newsletter endpoints
+- **API Server**: Subscription, newsletter, pastebin, and vault endpoints
 - **Email Delivery Worker**: Background queue with retry logic
 - **Idempotency Cleanup Worker**: Daily cleanup of expired keys
 

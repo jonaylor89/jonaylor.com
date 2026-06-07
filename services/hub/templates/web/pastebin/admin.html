@@ -1,0 +1,60 @@
+{% extends "web/_admin_layout.html" %}
+
+{% block title %}Pastebin{% endblock %}
+
+{% block content %}
+<h1>Pastebin</h1>
+<p class="muted">Minimal snippet sharing for text up to {{ max_paste_kb }} KiB. Secret URLs are public to anyone who has the link.</p>
+
+<section class="card">
+  <h2>new paste</h2>
+  <form action="/admin/pastebin" method="post" class="paste-form stack">
+    <label>Content
+      <textarea name="content" placeholder="paste something" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" required autofocus></textarea>
+    </label>
+    <div class="paste-actions">
+      <button type="submit">Create paste</button>
+      <span class="muted">Tip: submit with <kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>Enter</kbd>.</span>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <h2>recent pastes</h2>
+  {% if pastes.len() == 0 %}
+    <p class="muted">No pastes yet.</p>
+  {% else %}
+    <table class="paste-table">
+      <thead>
+        <tr><th>Paste</th><th>Created</th><th>Size</th><th>Preview</th><th></th></tr>
+      </thead>
+      <tbody>
+      {% for paste in pastes %}
+        <tr>
+          <td><a href="/p/{{ paste.id }}"><code>{{ paste.id }}</code></a></td>
+          <td><time datetime="{{ paste.created_at }}">{{ paste.created_at_display }}</time></td>
+          <td>{{ paste.size_bytes }} bytes / {{ paste.line_count }} lines</td>
+          <td class="paste-table-preview">{{ paste.preview }}</td>
+          <td>
+            <form action="/admin/pastebin/{{ paste.id }}/delete" method="post" onsubmit="return confirm('Delete this paste?')">
+              <button type="submit" class="secondary">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</section>
+
+<script>
+  const pasteForm = document.querySelector('.paste-form');
+  const pasteInput = pasteForm?.querySelector('textarea');
+  pasteInput?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      pasteForm.requestSubmit();
+    }
+  });
+</script>
+{% endblock %}
