@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 export class VaultClient {
     config;
     queue;
@@ -27,17 +29,56 @@ export class VaultClient {
                 throw new Error(`server returned ${response.status}: ${await response.text()}`);
             const body = await response.json();
             this.queue.markSynced(batch.map((event) => event.id));
-            this.currentContexts.set(session.external_session_id, {
+            const context = {
                 threadId: body.thread_id,
                 threadUrl: body.thread_url,
                 serverUrl: this.config.serverUrl,
                 sessionExternalId: session.external_session_id,
                 lastSyncedEventId: events.at(-1)?.external_event_id,
-            });
+            };
+            this.currentContexts.set(session.external_session_id, context);
+            await this.writeCurrentThreadContext(context);
         }
         catch (error) {
             this.queue.markFailed(batch.map((event) => event.id), error instanceof Error ? error.message : String(error));
         }
+    }
+    async searchMemories(userId, query) {
+        const response = await fetch(new URL("/api/memory/search", this.config.serverUrl), {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${this.config.apiToken}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ user_id: userId, query }),
+        });
+        if (!response.ok)
+            return [];
+        const body = await response.json();
+        return body.memories ?? [];
+    }
+    async addMemory(userId, text) {
+        await fetch(new URL("/api/memory", this.config.serverUrl), {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${this.config.apiToken}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ user_id: userId, text }),
+        });
+    }
+    async listMemories(userId) {
+        const response = await fetch(new URL(`/api/memory/${encodeURIComponent(userId)}`, this.config.serverUrl), {
+            headers: { "Authorization": `Bearer ${this.config.apiToken}` },
+        });
+        if (!response.ok)
+            return [];
+        const body = await response.json();
+        return body.memories ?? [];
+    }
+    async writeCurrentThreadContext(context) {
+        await mkdir(this.config.dataDir, { recursive: true });
+        await writeFile(path.join(this.config.dataDir, "current-thread.json"), `${JSON.stringify(context, null, 2)}\n`);
     }
     async recordHandoff(input) {
         await fetch(new URL("/api/v1/handoffs", this.config.serverUrl), {

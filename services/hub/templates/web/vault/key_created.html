@@ -23,7 +23,7 @@
 
 <section class="card">
   <h2>using it</h2>
-  <p>VS Code extension: set <code>PI_THREAD_VAULT_API_TOKEN</code> or put it in <code>~/.pi-thread-vault/config.toml</code> as <code>api_token = "&lt;the token above&gt;"</code>.</p>
+  <p>CLI/extension: run <code>jonaylor login --token &lt;the token above&gt;</code>, set <code>JONAYLOR_TOKEN</code>, or put it in <code>~/.config/jonaylor/config.toml</code> as <code>token = "&lt;the token above&gt;"</code>.</p>
   <p>cURL test:</p>
   <pre style="padding: 10px; background: var(--page); border: 1px solid var(--border); border-radius: 3px; font-family: var(--mono); font-size: 12px;">curl -X POST &lt;hub-url&gt;/api/v1/events/batch \
   -H "Authorization: Bearer &lt;token&gt;" \

@@ -54,8 +54,13 @@ pub async fn login(
 
             session.renew().await.map_err(e500)?;
             session.insert_user_id(user_id).await.map_err(e500)?;
+            let redirect_to = session
+                .take_login_redirect()
+                .await
+                .map_err(e500)?
+                .unwrap_or_else(|| "/admin/dashboard".to_string());
 
-            Ok(Redirect::to("/admin/dashboard"))
+            Ok(Redirect::to(&redirect_to))
         }
         Err(e) => {
             let e = match e {

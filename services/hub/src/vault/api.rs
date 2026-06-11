@@ -1,9 +1,11 @@
 use crate::startup::AppState;
 use crate::vault::auth::require_api_token;
-use crate::vault::{new_id, now_rfc3339, strip_nuls, strip_nuls_json};
+use crate::vault::{new_id, now_rfc3339, strip_nuls, strip_nuls_json, token_hash};
 use axum::Json;
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
+use axum::response::{IntoResponse, Response};
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -176,6 +178,84 @@ pub struct HandoffResponse {
     pub handoff_id: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ShareThreadPayload {
+    pub share_kind: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ShareThreadResponse {
+    pub thread_id: String,
+    pub share_kind: String,
+    pub share_url: String,
+}
+
+#[tracing::instrument(name = "Vault: Create thread share", skip_all, fields(thread_id = %thread_id))]
+pub async fn create_thread_share(
+    State(state): State<AppState>,
+    Path(thread_id): Path<String>,
+    headers: HeaderMap,
+    Json(payload): Json<ShareThreadPayload>,
+) -> Response {
+    if require_api_token(&headers, &state.db_pool).await.is_err() {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    if !state.vault.public_sharing {
+        return (StatusCode::FORBIDDEN, "public sharing is disabled").into_response();
+    }
+    let share_kind = payload
+        .share_kind
+        .unwrap_or_else(|| "secret-link".to_string());
+    if share_kind != "secret-link" {
+        return (
+            StatusCode::BAD_REQUEST,
+            "only secret-link shares are supported by this API",
+        )
+            .into_response();
+    }
+
+    let exists: Option<String> =
+        match sqlx::query_scalar("SELECT id FROM vault_threads WHERE id = $1")
+            .bind(&thread_id)
+            .fetch_optional(&state.db_pool)
+            .await
+        {
+            Ok(exists) => exists,
+            Err(error) => {
+                tracing::error!(?error, "failed to check thread before sharing");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        };
+    if exists.is_none() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+
+    let token = random_share_token();
+    let result = sqlx::query(
+        r#"INSERT INTO vault_shares
+             (id, thread_id, share_kind, token_hash, is_public, created_at)
+           VALUES ($1, $2, 'secret-link', $3, FALSE, $4)"#,
+    )
+    .bind(new_id("shr"))
+    .bind(&thread_id)
+    .bind(token_hash(&token))
+    .bind(now_rfc3339())
+    .execute(&state.db_pool)
+    .await;
+
+    if let Err(error) = result {
+        tracing::error!(?error, "failed to create thread share");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+
+    Json(ShareThreadResponse {
+        thread_id,
+        share_kind,
+        share_url: format!("{}/s/{token}", state.vault.base_url.trim_end_matches('/')),
+    })
+    .into_response()
+}
+
 #[tracing::instrument(name = "Vault: Record handoff", skip_all)]
 pub async fn handoff_record(
     State(state): State<AppState>,
@@ -335,6 +415,12 @@ fn short_hash(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
     hex::encode(hasher.finalize())[..12].to_string()
+}
+
+fn random_share_token() -> String {
+    let mut bytes = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    base64::encode_config(bytes, base64::URL_SAFE_NO_PAD)
 }
 
 fn sanitize_batch(payload: &mut BatchPayload) {

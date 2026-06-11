@@ -2,27 +2,61 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 export function loadConfig(extensionConfig = {}) {
-    const fileConfig = readTomlLikeConfig(path.join(os.homedir(), ".pi-thread-vault", "config.toml"));
+    const fileConfig = readTomlLikeConfig(configPath());
+    const section = (key) => fileConfig[`pi_thread_vault.${key}`];
+    const clientId = extensionConfig.clientId ?? section("client_id") ?? os.hostname();
     return {
-        serverUrl: extensionConfig.serverUrl ?? fileConfig.server_url ?? process.env.PI_THREAD_VAULT_SERVER_URL ?? "http://127.0.0.1:4378",
-        apiToken: extensionConfig.apiToken ?? fileConfig.api_token ?? process.env.PI_THREAD_VAULT_API_TOKEN ?? "ptv_dev_token",
-        defaultVisibility: (extensionConfig.defaultVisibility ?? fileConfig.default_visibility ?? "private"),
-        dataDir: extensionConfig.dataDir ?? fileConfig.data_dir ?? path.join(os.homedir(), ".pi-thread-vault", "extension"),
-        clientId: extensionConfig.clientId ?? fileConfig.client_id ?? os.hostname(),
-        redaction: { enabled: extensionConfig.redaction?.enabled ?? fileConfig.redaction_enabled !== "false" },
+        serverUrl: extensionConfig.serverUrl ?? fileConfig.base_url ?? process.env.JONAYLOR_BASE_URL ?? "http://127.0.0.1:8000",
+        apiToken: requiredToken(extensionConfig.apiToken ?? fileConfig.token ?? process.env.JONAYLOR_TOKEN),
+        defaultVisibility: (extensionConfig.defaultVisibility ?? section("default_visibility") ?? "private"),
+        dataDir: extensionConfig.dataDir ?? section("data_dir") ?? defaultDataDir(),
+        clientId,
+        redaction: { enabled: extensionConfig.redaction?.enabled ?? section("redaction_enabled") !== "false" },
+        memory: {
+            enabled: extensionConfig.memory?.enabled ?? section("memory_enabled") === "true",
+            userId: extensionConfig.memory?.userId ?? process.env.JONAYLOR_MEMORY_USER_ID ?? section("memory_user_id") ?? clientId,
+        },
     };
+}
+function configPath() {
+    return process.env.JONAYLOR_CONFIG ?? path.join(configHome(), "jonaylor", "config.toml");
+}
+function configHome() {
+    return process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config");
+}
+function defaultDataDir() {
+    return path.join(process.env.XDG_DATA_HOME ?? path.join(os.homedir(), ".local", "share"), "jonaylor", "pi-thread-vault");
+}
+function requiredToken(token) {
+    if (token?.trim())
+        return token;
+    throw new Error("No Jonaylor token configured; set token in ~/.config/jonaylor/config.toml or JONAYLOR_TOKEN");
 }
 function readTomlLikeConfig(filePath) {
     if (!fs.existsSync(filePath))
         return {};
     const out = {};
+    let section;
     for (const rawLine of fs.readFileSync(filePath, "utf8").split(/\r?\n/)) {
-        const line = rawLine.trim();
-        if (!line || line.startsWith("#") || line.startsWith("["))
+        const line = rawLine.replace(/#.*/, "").trim();
+        if (!line)
             continue;
-        const match = line.match(/^([A-Za-z0-9_]+)\s*=\s*"?([^"#]+)"?/);
-        if (match)
-            out[match[1]] = match[2].trim();
+        const sectionMatch = line.match(/^\[([A-Za-z0-9_.-]+)]$/);
+        if (sectionMatch) {
+            section = sectionMatch[1];
+            continue;
+        }
+        const match = line.match(/^([A-Za-z0-9_]+)\s*=\s*(.+)$/);
+        if (!match)
+            continue;
+        const key = section ? `${section}.${match[1]}` : match[1];
+        out[key] = unquoteTomlValue(match[2].trim());
     }
     return out;
+}
+function unquoteTomlValue(value) {
+    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+        return value.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+    }
+    return value;
 }

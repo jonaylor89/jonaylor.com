@@ -35,10 +35,11 @@ use crate::routes::{
     log_out, login, login_form, newsletters_form, og_image, preview_newsletter, publish_newsletter,
     retry_dead_letter, robots_txt, subscribe, unsubscribe_get, unsubscribe_post,
 };
-use crate::vault::api::{handoff_record, ingest_events};
+use crate::vault::api::{create_thread_share, handoff_record, ingest_events};
 use crate::vault::web::{
-    create_api_key, create_share, get_shared_thread, global_search, password_share, revoke_api_key,
-    revoke_share, thread_page, thread_search, thread_tree, threads_index, vault_admin,
+    cli_login, create_api_key, create_share, get_shared_thread, global_search, password_share,
+    revoke_api_key, revoke_share, thread_page, thread_search, thread_tree, threads_index,
+    vault_admin,
 };
 
 pub struct Application {
@@ -99,11 +100,6 @@ impl Application {
                 .hmac_secret
                 .expose_secret()
                 .clone(),
-            api_bearer_token: configuration
-                .application
-                .api_bearer_token
-                .expose_secret()
-                .clone(),
             vault: VaultState {
                 data_dir: configuration.vault.data_dir.clone(),
                 base_url: configuration.application.base_url.clone(),
@@ -158,7 +154,6 @@ pub struct AppState {
     pub email_client: EmailClient,
     pub base_url: ApplicationBaseUrl,
     pub hmac_secret: String,
-    pub api_bearer_token: String,
     pub vault: VaultState,
     pub memory: MemoryEngine,
 }
@@ -254,6 +249,7 @@ fn build_router(
             get(unsubscribe_get).post(unsubscribe_post),
         )
         .route("/login", get(login_form).post(login))
+        .route("/cli-login", get(cli_login))
         .route("/api/newsletters", post(api_publish_newsletter))
         .route("/api/subscriptions", post(api_subscribe))
         .route(
@@ -266,6 +262,10 @@ fn build_router(
             post(ingest_events).layer(DefaultBodyLimit::max(25 * 1024 * 1024)),
         )
         .route("/api/v1/handoffs", post(handoff_record))
+        .route(
+            "/api/v1/threads/{thread_id}/shares",
+            post(create_thread_share),
+        )
         // Memory API
         .route(
             "/api/memory",

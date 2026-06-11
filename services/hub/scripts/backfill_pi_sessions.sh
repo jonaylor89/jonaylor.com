@@ -12,27 +12,27 @@ If no paths are provided, the script scans ~/.pi/agent/sessions.
 
 Options:
   --server-url URL       Vault server URL (default: config/env or http://127.0.0.1:8000)
-  --api-token TOKEN      Vault API token (default: config/env PI_THREAD_VAULT_API_TOKEN)
-  --client-id ID         Client id to send with API batches (default: config/env/hostname)
-  --config PATH          Config file (default: ~/.pi-thread-vault/config.toml)
+  --api-token TOKEN      Vault API token (default: config/env JONAYLOR_TOKEN)
+  --client-id ID         Client id to send with API batches (default: config/hostname)
+  --config PATH          Config file (default: ~/.config/jonaylor/config.toml)
   --dry-run              Parse and summarize without posting
   --limit N              Only process the first N discovered files
   --batch-bytes N        Target max request size before chunking (default: 1500000)
   -h, --help             Show this help
 
 Requires: bash, jq, curl, and shasum/sha256sum.
-Config values are read from ~/.pi-thread-vault/config.toml using the same keys as the extension:
-server_url, api_token, and client_id.
+Config values are read from ~/.config/jonaylor/config.toml using the same keys as the CLI/extension:
+base_url, token, and pi_thread_vault.client_id.
 EOF
 }
 
 server_url=""
 api_token=""
 client_id=""
-config_file="${PI_THREAD_VAULT_CONFIG:-$HOME/.pi-thread-vault/config.toml}"
+config_file="${JONAYLOR_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/jonaylor/config.toml}"
 dry_run=0
 limit=""
-batch_bytes="${PI_THREAD_VAULT_BACKFILL_BATCH_BYTES:-1500000}"
+batch_bytes="${JONAYLOR_BACKFILL_BATCH_BYTES:-1500000}"
 paths=()
 
 die() {
@@ -44,10 +44,18 @@ read_toml_value() {
   local key="$1"
   local file="$2"
   [[ -f "$file" ]] || return 1
-  grep -E "^[[:space:]]*${key}[[:space:]]*=" "$file" \
-    | head -n 1 \
-    | cut -d= -f2- \
-    | sed -E "s/^[[:space:]]*//; s/[[:space:]]*(#.*)?$//; s/^\"//; s/\"$//; s/^'//; s/'$//"
+  awk -v wanted="$key" '
+    function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+    function unquote(s) { s=trim(s); sub(/[[:space:]]*(#.*)?$/, "", s); s=trim(s); if ((substr(s,1,1)=="\"" && substr(s,length(s),1)=="\"") || (substr(s,1,1)=="'"'"'" && substr(s,length(s),1)=="'"'"'")) s=substr(s,2,length(s)-2); return s }
+    /^[[:space:]]*#/ || /^[[:space:]]*$/ { next }
+    /^\[/ { section=$0; gsub(/^\[[[:space:]]*|[[:space:]]*\]$/, "", section); next }
+    index($0, "=") {
+      name=trim(substr($0, 1, index($0, "=") - 1));
+      full=section ? section "." name : name;
+      if (full == wanted) { print unquote(substr($0, index($0, "=") + 1)); found=1; exit }
+    }
+    END { if (!found) exit 1 }
+  ' "$file"
 }
 
 expand_path() {
@@ -163,22 +171,22 @@ if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1
 fi
 
 if [[ -z "$server_url" ]]; then
-  server_url="${PI_THREAD_VAULT_SERVER_URL:-$(read_toml_value server_url "$config_file" || true)}"
+  server_url="${JONAYLOR_BASE_URL:-$(read_toml_value base_url "$config_file" || true)}"
 fi
 server_url="${server_url:-http://127.0.0.1:8000}"
 server_url="${server_url%/}"
 
 if [[ -z "$api_token" ]]; then
-  api_token="${PI_THREAD_VAULT_API_TOKEN:-$(read_toml_value api_token "$config_file" || true)}"
+  api_token="${JONAYLOR_TOKEN:-$(read_toml_value token "$config_file" || true)}"
 fi
 
 if [[ -z "$client_id" ]]; then
-  client_id="${PI_THREAD_VAULT_CLIENT_ID:-$(read_toml_value client_id "$config_file" || true)}"
+  client_id="$(read_toml_value pi_thread_vault.client_id "$config_file" || true)"
 fi
 client_id="${client_id:-backfill-$(hostname 2>/dev/null || echo local)}"
 
 if [[ "$dry_run" -eq 0 && -z "$api_token" ]]; then
-  die "missing API token; set PI_THREAD_VAULT_API_TOKEN, add api_token to $config_file, or pass --api-token"
+  die "missing API token; set JONAYLOR_TOKEN, add token to $config_file, or pass --api-token"
 fi
 
 if [[ ${#paths[@]} -eq 0 ]]; then

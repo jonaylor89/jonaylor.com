@@ -64,9 +64,7 @@ async fn memory_add_returns_503_when_disabled() {
         "user_id": "test-user",
         "text": "I prefer dark mode"
     });
-    let response = app
-        .post_memory_add(&body, Some(&app.api_bearer_token))
-        .await;
+    let response = app.post_memory_add(&body, Some(&app.vault_api_token)).await;
 
     assert_eq!(response.status().as_u16(), 503);
 }
@@ -80,7 +78,7 @@ async fn memory_search_returns_503_when_disabled() {
         "query": "preferences"
     });
     let response = app
-        .post_memory_search(&body, Some(&app.api_bearer_token))
+        .post_memory_search(&body, Some(&app.vault_api_token))
         .await;
 
     assert_eq!(response.status().as_u16(), 503);
@@ -91,7 +89,7 @@ async fn memory_list_returns_503_when_disabled() {
     let app = spawn_app().await;
 
     let response = app
-        .get_memory_list("test-user", Some(&app.api_bearer_token))
+        .get_memory_list("test-user", Some(&app.vault_api_token))
         .await;
 
     assert_eq!(response.status().as_u16(), 503);
@@ -124,9 +122,7 @@ async fn memory_add_rejects_empty_user_id_after_auth_and_enabled() {
         "user_id": "",
         "text": "some text"
     });
-    let response = app
-        .post_memory_add(&body, Some(&app.api_bearer_token))
-        .await;
+    let response = app.post_memory_add(&body, Some(&app.vault_api_token)).await;
 
     // 503 because memory is disabled (checked before validation)
     assert_eq!(response.status().as_u16(), 503);
@@ -141,7 +137,7 @@ async fn memory_search_rejects_empty_query_after_auth() {
         "query": ""
     });
     let response = app
-        .post_memory_search(&body, Some(&app.api_bearer_token))
+        .post_memory_search(&body, Some(&app.vault_api_token))
         .await;
 
     // 503 because memory is disabled

@@ -14,8 +14,8 @@ name = "hub"
 path = "src/main.rs"
 
 [[bin]]
-name = "issue_api_token"
-path = "src/bin/issue_api_token.rs"
+name = "jonaylor"
+path = "src/bin/jonaylor.rs"
 
 [dependencies]
 axum = "0.8.4"

@@ -4,8 +4,8 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use uuid::Uuid;
 
-use crate::authentication::verify_bearer_token;
 use crate::startup::AppState;
+use crate::vault::auth::require_api_token;
 
 // ---------------------------------------------------------------------------
 // Request / response types
@@ -52,7 +52,7 @@ pub async fn add_memory_handler(
     State(state): State<AppState>,
     Json(body): Json<AddMemoryRequest>,
 ) -> Response {
-    if !verify_bearer_token(&headers, &state.api_bearer_token) {
+    if require_api_token(&headers, &state.db_pool).await.is_err() {
         return (
             StatusCode::UNAUTHORIZED,
             Json(serde_json::json!({"error": "Invalid or missing bearer token"})),
@@ -121,7 +121,7 @@ pub async fn search_memory_handler(
     State(state): State<AppState>,
     Json(body): Json<SearchMemoryRequest>,
 ) -> Response {
-    if !verify_bearer_token(&headers, &state.api_bearer_token) {
+    if require_api_token(&headers, &state.db_pool).await.is_err() {
         return (
             StatusCode::UNAUTHORIZED,
             Json(serde_json::json!({"error": "Invalid or missing bearer token"})),
@@ -176,7 +176,7 @@ pub async fn list_memories_handler(
     State(state): State<AppState>,
     Path(user_id): Path<String>,
 ) -> Response {
-    if !verify_bearer_token(&headers, &state.api_bearer_token) {
+    if require_api_token(&headers, &state.db_pool).await.is_err() {
         return (
             StatusCode::UNAUTHORIZED,
             Json(serde_json::json!({"error": "Invalid or missing bearer token"})),

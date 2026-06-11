@@ -30,6 +30,7 @@ pub struct TypedSession(Session);
 impl TypedSession {
     const USER_ID_KEY: &'static str = "user_id";
     const FLASH_KEY: &'static str = "flash_messages";
+    const LOGIN_REDIRECT_KEY: &'static str = "login_redirect";
 
     pub async fn renew(&self) -> Result<(), anyhow::Error> {
         if let Some(user_id) = self.get_user_id().await? {
@@ -68,6 +69,19 @@ impl TypedSession {
             .ok()
             .flatten()
             .unwrap_or_default()
+    }
+
+    pub async fn insert_login_redirect(&self, path_and_query: &str) -> Result<(), anyhow::Error> {
+        if path_and_query.starts_with('/') && !path_and_query.starts_with("//") {
+            self.0
+                .insert(Self::LOGIN_REDIRECT_KEY, path_and_query)
+                .await?;
+        }
+        Ok(())
+    }
+
+    pub async fn take_login_redirect(&self) -> Result<Option<String>, anyhow::Error> {
+        Ok(self.0.remove(Self::LOGIN_REDIRECT_KEY).await?)
     }
 
     async fn push_flash(&self, level: FlashLevel, content: String) {

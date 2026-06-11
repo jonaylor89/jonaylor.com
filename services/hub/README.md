@@ -27,7 +27,7 @@ cargo test
 Backfill existing pi-coding-agent JSONL sessions from the machine that has the session files:
 
 ```bash
-PI_THREAD_VAULT_API_TOKEN=<token> scripts/backfill_pi_sessions.sh --server-url https://example.com
+JONAYLOR_TOKEN=<token> scripts/backfill_pi_sessions.sh --server-url https://example.com
 ```
 
 The script scans `~/.pi/agent/sessions` by default, or accepts explicit JSONL files/directories.
@@ -58,13 +58,27 @@ docker run \
   <image-name>
 ```
 
+## Jonaylor CLI
+
+This repo includes a personal Hub CLI:
+
+```bash
+cargo run --bin jonaylor -- --help
+cargo install --path . --bin jonaylor
+jonaylor login
+jonaylor vault share-current-thread
+jonaylor github pi-threads-block
+```
+
+`jonaylor login` opens the Hub in your browser, asks you to sign in as admin if needed, and writes the unified config to `~/.config/jonaylor/config.toml`. pi-thread-vault reads the same file for `base_url`, `token`, and `[pi_thread_vault]` settings, including memory settings. The vault share commands create reviewer-openable `/s/...` pi-thread links for use in PR descriptions.
+
 ## Pastebin
 
-Create snippets from `/admin/pastebin` after signing in, or from scripts with the configured API bearer token:
+Create snippets from `/admin/pastebin` after signing in, or from scripts with a Hub API token issued by `jonaylor auth issue-token`:
 
 ```bash
 curl -X PUT \
-  -H "Authorization: Bearer $HUB_API_BEARER_TOKEN" \
+  -H "Authorization: Bearer $JONAYLOR_TOKEN" \
   --data-binary @snippet.txt \
   https://hub.example.com/api/pastes
 ```

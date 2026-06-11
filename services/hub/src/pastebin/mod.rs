@@ -4,13 +4,13 @@ use axum::extract::{Form, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Redirect, Response};
 
-use crate::authentication::verify_bearer_token;
 use chrono::{DateTime, Local, Utc};
 use rand::Rng;
 use serde::Deserialize;
 use sqlx::{PgPool, Row};
 
 use crate::startup::AppState;
+use crate::vault::auth::require_api_token;
 use crate::vault::templates::HtmlTemplate;
 
 const MAX_PASTE_BYTES: usize = 256 * 1024;
@@ -121,7 +121,7 @@ pub async fn api_create_paste(
     State(state): State<AppState>,
     body: Bytes,
 ) -> Response {
-    if !verify_bearer_token(&headers, &state.api_bearer_token) {
+    if require_api_token(&headers, &state.db_pool).await.is_err() {
         return (StatusCode::UNAUTHORIZED, "invalid or missing bearer token").into_response();
     }
     if body.is_empty() {

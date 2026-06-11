@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from "node:fs/promises"
+import path from "node:path"
 import type { VaultConfig } from "./config.js"
 import type { PendingEvent, UploadQueue } from "./queue.js"
 
@@ -69,13 +71,15 @@ export class VaultClient {
       if (!response.ok) throw new Error(`server returned ${response.status}: ${await response.text()}`)
       const body = await response.json() as { thread_id: string, thread_url: string }
       this.queue.markSynced(batch.map((event) => event.id))
-      this.currentContexts.set(session.external_session_id, {
+      const context = {
         threadId: body.thread_id,
         threadUrl: body.thread_url,
         serverUrl: this.config.serverUrl,
         sessionExternalId: session.external_session_id,
         lastSyncedEventId: events.at(-1)?.external_event_id,
-      })
+      }
+      this.currentContexts.set(session.external_session_id, context)
+      await this.writeCurrentThreadContext(context)
     } catch (error) {
       this.queue.markFailed(batch.map((event) => event.id), error instanceof Error ? error.message : String(error))
     }
@@ -113,6 +117,11 @@ export class VaultClient {
     if (!response.ok) return []
     const body = await response.json() as { memories: MemoryEntry[] }
     return body.memories ?? []
+  }
+
+  private async writeCurrentThreadContext(context: CurrentThreadContext): Promise<void> {
+    await mkdir(this.config.dataDir, { recursive: true })
+    await writeFile(path.join(this.config.dataDir, "current-thread.json"), `${JSON.stringify(context, null, 2)}\n`)
   }
 
   async recordHandoff(input: {

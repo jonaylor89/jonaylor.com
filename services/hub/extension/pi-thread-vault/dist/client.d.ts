@@ -25,6 +25,19 @@ export interface CurrentThreadContext {
     sessionExternalId: string;
     lastSyncedEventId?: string;
 }
+export interface MemoryMatch {
+    id: string;
+    fact: string;
+    similarity: number;
+    created_at: string;
+}
+export interface MemoryEntry {
+    id: string;
+    user_id: string;
+    fact: string;
+    created_at: string;
+    updated_at: string;
+}
 export declare class VaultClient {
     private readonly config;
     private readonly queue;
@@ -32,6 +45,10 @@ export declare class VaultClient {
     constructor(config: VaultConfig, queue: UploadQueue);
     currentThreadContext(sessionExternalId: string): CurrentThreadContext | undefined;
     flush(session: NormalizedSession): Promise<void>;
+    searchMemories(userId: string, query: string): Promise<MemoryMatch[]>;
+    addMemory(userId: string, text: string): Promise<void>;
+    listMemories(userId: string): Promise<MemoryEntry[]>;
+    private writeCurrentThreadContext;
     recordHandoff(input: {
         sourceThreadId: string;
         targetExternalSessionId?: string;

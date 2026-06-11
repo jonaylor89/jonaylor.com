@@ -105,7 +105,7 @@ async fn api_can_create_pastes_with_bearer_token() {
     let response = app
         .api_client
         .put(format!("{}/api/pastes", &app.address))
-        .header("Authorization", format!("Bearer {}", app.api_bearer_token))
+        .header("Authorization", format!("Bearer {}", app.vault_api_token))
         .body("secret snippet")
         .send()
         .await

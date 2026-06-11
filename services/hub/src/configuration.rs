@@ -130,10 +130,6 @@ fn default_poll_interval() -> u64 {
     900 // 15 minutes
 }
 
-fn default_api_bearer_token() -> Secret<String> {
-    Secret::new(String::new())
-}
-
 impl Default for RssFeedSettings {
     fn default() -> Self {
         Self {
@@ -151,8 +147,6 @@ pub struct ApplicationSettings {
     pub host: String,
     pub base_url: String,
     pub hmac_secret: Secret<String>,
-    #[serde(default = "default_api_bearer_token")]
-    pub api_bearer_token: Secret<String>,
 }
 
 #[derive(serde::Deserialize, Clone)]

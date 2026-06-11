@@ -5,7 +5,6 @@ use axum::response::{IntoResponse, Response};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::authentication::verify_bearer_token;
 use crate::domain::{NewSubscriber, SubscriberEmail, SubscriberName, SubscriptionToken};
 use crate::email_client::EmailClient;
 use crate::routes::subscriptions::{
@@ -13,6 +12,7 @@ use crate::routes::subscriptions::{
     send_confirmation_email, store_token,
 };
 use crate::startup::{AppState, ApplicationBaseUrl};
+use crate::vault::auth::require_api_token;
 
 #[derive(serde::Deserialize)]
 pub struct CreateNewsletterRequest {
@@ -27,7 +27,7 @@ pub async fn api_publish_newsletter(
     State(state): State<AppState>,
     Json(body): Json<CreateNewsletterRequest>,
 ) -> Response {
-    if !verify_bearer_token(&headers, &state.api_bearer_token) {
+    if require_api_token(&headers, &state.db_pool).await.is_err() {
         return (
             StatusCode::UNAUTHORIZED,
             Json(serde_json::json!({"error": "Invalid or missing bearer token"})),

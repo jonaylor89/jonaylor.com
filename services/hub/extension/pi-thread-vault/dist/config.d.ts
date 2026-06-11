@@ -7,5 +7,9 @@ export interface VaultConfig {
     redaction: {
         enabled: boolean;
     };
+    memory: {
+        enabled: boolean;
+        userId: string;
+    };
 }
 export declare function loadConfig(extensionConfig?: Partial<VaultConfig>): VaultConfig;

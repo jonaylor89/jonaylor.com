@@ -1,3 +1,4 @@
+use crate::session_state::TypedSession;
 use crate::startup::AppState;
 use crate::vault::auth::{sign, verify_signature};
 use crate::vault::search::search_events;
@@ -5,7 +6,7 @@ use crate::vault::templates::*;
 use crate::vault::{new_id, now_rfc3339, token_hash};
 use argon2::password_hash::SaltString;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
-use axum::extract::{Form, Path, Query, State};
+use axum::extract::{Form, OriginalUri, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use chrono::{DateTime, Local, Utc};
@@ -14,6 +15,91 @@ use serde::Deserialize;
 use serde_json::Value;
 use sqlx::{PgPool, Row};
 use std::collections::BTreeMap;
+
+// ---------- Browser-assisted CLI login route ----------
+
+#[derive(Deserialize)]
+pub struct CliLoginQuery {
+    pub callback: String,
+    pub client_name: Option<String>,
+}
+
+pub async fn cli_login(
+    State(state): State<AppState>,
+    session: TypedSession,
+    OriginalUri(original_uri): OriginalUri,
+    Query(query): Query<CliLoginQuery>,
+) -> Response {
+    if validate_local_callback(&query.callback).is_err() {
+        return (
+            StatusCode::BAD_REQUEST,
+            "callback must be a localhost http URL",
+        )
+            .into_response();
+    }
+
+    let logged_in = match session.get_user_id().await {
+        Ok(Some(_)) => true,
+        Ok(None) => false,
+        Err(error) => {
+            tracing::error!(?error, "failed to inspect session during CLI login");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    if !logged_in {
+        if let Err(error) = session
+            .insert_login_redirect(&original_uri.to_string())
+            .await
+        {
+            tracing::error!(?error, "failed to store CLI login redirect");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+        session
+            .flash_info("Sign in to finish authorizing the jonaylor CLI")
+            .await;
+        return Redirect::to("/login").into_response();
+    }
+
+    let name = query
+        .client_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .unwrap_or("jonaylor CLI");
+    let key = match crate::vault::keys::issue_api_key(&state.db_pool, name).await {
+        Ok(key) => key,
+        Err(error) => {
+            tracing::error!(?error, "failed to issue CLI token");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let separator = if query.callback.contains('?') {
+        '&'
+    } else {
+        '?'
+    };
+    let redirect = format!(
+        "{}{}token={}&base_url={}",
+        query.callback,
+        separator,
+        urlencoding::encode(&key.plaintext_token),
+        urlencoding::encode(state.vault.base_url.trim_end_matches('/')),
+    );
+    Redirect::to(&redirect).into_response()
+}
+
+fn validate_local_callback(callback: &str) -> Result<(), ()> {
+    let url = reqwest::Url::parse(callback).map_err(|_| ())?;
+    if url.scheme() != "http" {
+        return Err(());
+    }
+    match url.host_str() {
+        Some("127.0.0.1") | Some("localhost") => Ok(()),
+        _ => Err(()),
+    }
+}
 
 // ---------- Admin-portal vault routes (session-guarded by router layer) ----------
 
