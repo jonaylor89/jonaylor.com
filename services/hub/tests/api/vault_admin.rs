@@ -50,7 +50,7 @@ async fn admin_can_issue_and_revoke_api_key() {
 
     let create = app
         .api_client
-        .post(&format!("{}/admin/vault/clients", &app.address))
+        .post(format!("{}/admin/vault/clients", &app.address))
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body("name=laptop")
         .send()
@@ -98,7 +98,7 @@ async fn admin_can_issue_and_revoke_api_key() {
 
     let revoke = app
         .api_client
-        .post(&format!(
+        .post(format!(
             "{}/admin/vault/clients/{}/revoke",
             &app.address, client_id
         ))
@@ -133,7 +133,7 @@ async fn anonymous_cannot_create_api_key() {
     let app = spawn_app().await;
     let response = app
         .api_client
-        .post(&format!("{}/admin/vault/clients", &app.address))
+        .post(format!("{}/admin/vault/clients", &app.address))
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body("name=evil")
         .send()
@@ -154,7 +154,7 @@ async fn create_api_key_rejects_empty_name() {
     let _ = app.test_user.login(&app).await;
     let response = app
         .api_client
-        .post(&format!("{}/admin/vault/clients", &app.address))
+        .post(format!("{}/admin/vault/clients", &app.address))
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body("name=   ")
         .send()

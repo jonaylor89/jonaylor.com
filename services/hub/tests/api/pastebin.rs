@@ -10,7 +10,7 @@ async fn pastebin_admin_is_available_from_the_dashboard() {
 
     let response = app
         .api_client
-        .get(&format!("{}/admin/pastebin", &app.address))
+        .get(format!("{}/admin/pastebin", &app.address))
         .send()
         .await
         .expect("Failed to execute request");
@@ -27,7 +27,7 @@ async fn you_must_be_logged_in_to_access_pastebin_admin() {
 
     let response = app
         .api_client
-        .get(&format!("{}/admin/pastebin", &app.address))
+        .get(format!("{}/admin/pastebin", &app.address))
         .send()
         .await
         .expect("Failed to execute request");
@@ -42,7 +42,7 @@ async fn create_and_read_a_paste_from_the_admin_form() {
 
     let response = app
         .api_client
-        .post(&format!("{}/admin/pastebin", &app.address))
+        .post(format!("{}/admin/pastebin", &app.address))
         .form(&serde_json::json!({
             "content": "fn main() {\n    println!(\"hello paste\");\n}\n",
         }))
@@ -95,7 +95,7 @@ async fn api_can_create_pastes_with_bearer_token() {
 
     let unauthorized = app
         .api_client
-        .put(&format!("{}/api/pastes", &app.address))
+        .put(format!("{}/api/pastes", &app.address))
         .body("secret snippet")
         .send()
         .await
@@ -104,7 +104,7 @@ async fn api_can_create_pastes_with_bearer_token() {
 
     let response = app
         .api_client
-        .put(&format!("{}/api/pastes", &app.address))
+        .put(format!("{}/api/pastes", &app.address))
         .header("Authorization", format!("Bearer {}", app.api_bearer_token))
         .body("secret snippet")
         .send()

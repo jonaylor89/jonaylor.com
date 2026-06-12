@@ -14,7 +14,7 @@ async fn api_subscribe_returns_200_for_valid_json() {
 
     let response = app
         .api_client
-        .post(&format!("{}/api/subscriptions", &app.address))
+        .post(format!("{}/api/subscriptions", &app.address))
         .json(&serde_json::json!({
             "name": "le guin",
             "email": "ursula@gmail.com"
@@ -47,7 +47,7 @@ async fn api_subscribe_returns_400_for_invalid_data() {
     for (body, description) in test_cases {
         let response = app
             .api_client
-            .post(&format!("{}/api/subscriptions", &app.address))
+            .post(format!("{}/api/subscriptions", &app.address))
             .json(&body)
             .send()
             .await
@@ -87,7 +87,7 @@ async fn api_subscribe_accepts_missing_or_empty_name() {
 
         let response = app
             .api_client
-            .post(&format!("{}/api/subscriptions", &app.address))
+            .post(format!("{}/api/subscriptions", &app.address))
             .json(&body)
             .send()
             .await
@@ -108,7 +108,7 @@ async fn api_subscribe_returns_422_for_missing_fields() {
 
     let response = app
         .api_client
-        .post(&format!("{}/api/subscriptions", &app.address))
+        .post(format!("{}/api/subscriptions", &app.address))
         .json(&serde_json::json!({"name": "le guin"}))
         .send()
         .await
@@ -128,7 +128,7 @@ async fn api_subscribe_persists_subscriber() {
         .await;
 
     app.api_client
-        .post(&format!("{}/api/subscriptions", &app.address))
+        .post(format!("{}/api/subscriptions", &app.address))
         .json(&serde_json::json!({
             "name": "le guin",
             "email": "ursula@gmail.com"
@@ -159,7 +159,7 @@ async fn api_subscribe_sends_confirmation_email() {
         .await;
 
     app.api_client
-        .post(&format!("{}/api/subscriptions", &app.address))
+        .post(format!("{}/api/subscriptions", &app.address))
         .json(&serde_json::json!({
             "name": "le guin",
             "email": "ursula@gmail.com"
