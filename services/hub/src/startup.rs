@@ -22,6 +22,9 @@ use tower_sessions_redis_store::{
 use crate::authentication::AuthenticatedUser;
 use crate::configuration::{DatabaseSettings, Settings};
 use crate::email_client::EmailClient;
+use crate::memory::{
+    MemoryEngine, add_memory_handler, list_memories_handler, search_memory_handler,
+};
 use crate::pastebin::{
     api_create_paste, create_paste_from_form, delete_paste, pastebin_admin, show_paste,
 };
@@ -85,6 +88,8 @@ impl Application {
 
         let port = listener.local_addr().unwrap().port();
 
+        let memory_engine = MemoryEngine::new(connection_pool.clone(), &configuration.memory);
+
         let state = AppState {
             db_pool: connection_pool.clone(),
             email_client: email_client.clone(),
@@ -110,6 +115,7 @@ impl Application {
                     .expose_secret()
                     .clone(),
             },
+            memory: memory_engine,
         };
 
         let _ = connection_pool;
@@ -154,6 +160,7 @@ pub struct AppState {
     pub hmac_secret: String,
     pub api_bearer_token: String,
     pub vault: VaultState,
+    pub memory: MemoryEngine,
 }
 
 #[derive(Clone)]
@@ -259,6 +266,16 @@ fn build_router(
             post(ingest_events).layer(DefaultBodyLimit::max(25 * 1024 * 1024)),
         )
         .route("/api/v1/handoffs", post(handoff_record))
+        // Memory API
+        .route(
+            "/api/memory",
+            post(add_memory_handler).layer(DefaultBodyLimit::max(128 * 1024)),
+        )
+        .route(
+            "/api/memory/search",
+            post(search_memory_handler).layer(DefaultBodyLimit::max(16 * 1024)),
+        )
+        .route("/api/memory/{user_id}", get(list_memories_handler))
         .route("/p/{paste}", get(show_paste))
         // Vault: public share URLs (no auth; password-protected shares present a form).
         .route(

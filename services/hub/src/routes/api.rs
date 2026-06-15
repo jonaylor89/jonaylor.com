@@ -5,6 +5,7 @@ use axum::response::{IntoResponse, Response};
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::authentication::verify_bearer_token;
 use crate::domain::{NewSubscriber, SubscriberEmail, SubscriberName, SubscriptionToken};
 use crate::email_client::EmailClient;
 use crate::routes::subscriptions::{
@@ -86,15 +87,6 @@ pub async fn api_publish_newsletter(
         })),
     )
         .into_response()
-}
-
-fn verify_bearer_token(headers: &HeaderMap, expected_token: &str) -> bool {
-    headers
-        .get("Authorization")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-        .map(|token| token == expected_token)
-        .unwrap_or(false)
 }
 
 #[derive(serde::Deserialize)]

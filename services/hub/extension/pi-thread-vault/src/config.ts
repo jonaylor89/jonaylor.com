@@ -11,6 +11,10 @@ export interface VaultConfig {
   redaction: {
     enabled: boolean
   }
+  memory: {
+    enabled: boolean
+    userId: string
+  }
 }
 
 export function loadConfig(extensionConfig: Partial<VaultConfig> = {}): VaultConfig {
@@ -22,6 +26,10 @@ export function loadConfig(extensionConfig: Partial<VaultConfig> = {}): VaultCon
     dataDir: extensionConfig.dataDir ?? fileConfig.data_dir ?? path.join(os.homedir(), ".pi-thread-vault", "extension"),
     clientId: extensionConfig.clientId ?? fileConfig.client_id ?? os.hostname(),
     redaction: { enabled: extensionConfig.redaction?.enabled ?? fileConfig.redaction_enabled !== "false" },
+    memory: {
+      enabled: extensionConfig.memory?.enabled ?? fileConfig.memory_enabled === "true",
+      userId: extensionConfig.memory?.userId ?? fileConfig.memory_user_id ?? os.hostname(),
+    },
   }
 }
 

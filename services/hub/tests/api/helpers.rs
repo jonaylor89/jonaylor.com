@@ -262,6 +262,46 @@ impl TestApp {
             .expect("Failed to execute request")
     }
 
+    pub async fn post_memory_add(
+        &self,
+        body: &serde_json::Value,
+        token: Option<&str>,
+    ) -> reqwest::Response {
+        let mut req = self
+            .api_client
+            .post(format!("{}/api/memory", &self.address))
+            .json(body);
+        if let Some(t) = token {
+            req = req.bearer_auth(t);
+        }
+        req.send().await.expect("Failed to execute request")
+    }
+
+    pub async fn post_memory_search(
+        &self,
+        body: &serde_json::Value,
+        token: Option<&str>,
+    ) -> reqwest::Response {
+        let mut req = self
+            .api_client
+            .post(format!("{}/api/memory/search", &self.address))
+            .json(body);
+        if let Some(t) = token {
+            req = req.bearer_auth(t);
+        }
+        req.send().await.expect("Failed to execute request")
+    }
+
+    pub async fn get_memory_list(&self, user_id: &str, token: Option<&str>) -> reqwest::Response {
+        let mut req = self
+            .api_client
+            .get(format!("{}/api/memory/{}", &self.address, user_id));
+        if let Some(t) = token {
+            req = req.bearer_auth(t);
+        }
+        req.send().await.expect("Failed to execute request")
+    }
+
     pub async fn dispatch_all_pending_emails(&self) {
         loop {
             if let ExecutionOutcome::EmptyQueue = try_execute_tasks(

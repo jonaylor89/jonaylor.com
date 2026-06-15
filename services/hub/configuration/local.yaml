@@ -9,3 +9,15 @@ rss_feed:
   enabled: false
   feed_url: "http://localhost:4321/blog/rss.xml"
   poll_interval_secs: 900
+
+# Memory: disabled by default in local dev.
+# Enable and set api_key via env vars to test:
+#   APP_MEMORY__ENABLED=true
+#   APP_MEMORY__API_KEY=sk-...
+# Or point at Ollama:
+#   APP_MEMORY__API_BASE_URL=http://localhost:11434
+#   APP_MEMORY__EXTRACTION_MODEL=llama3.2
+#   APP_MEMORY__EMBEDDING_MODEL=nomic-embed-text
+
+memory:
+  enabled: false

@@ -416,6 +416,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-link",
 ]
@@ -481,6 +482,12 @@ name = "const-oid"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
+
+[[package]]
+name = "constant_time_eq"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a1ec0cfec728a79a5109075543131387f911cb4d07716436d7ae20533657a96"
 
 [[package]]
 name = "cookie"
@@ -1346,6 +1353,7 @@ dependencies = [
  "chrono",
  "claim",
  "config",
+ "constant_time_eq",
  "fake",
  "hex",
  "hmac",
@@ -1354,6 +1362,7 @@ dependencies = [
  "http-body-util",
  "linkify",
  "once_cell",
+ "pgvector",
  "quickcheck",
  "quickcheck_macros",
  "rand 0.8.5",
@@ -2052,6 +2061,15 @@ checksum = "602113b5b5e8621770cfd490cfd90b9f84ab29bd2b0e49ad83eb6d186cef2365"
 dependencies = [
  "pest",
  "sha2",
+]
+
+[[package]]
+name = "pgvector"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3673cba5b9a124916096a423b806a9f29620972c6c97b08db5f2053e9428b481"
+dependencies = [
+ "sqlx",
 ]
 
 [[package]]

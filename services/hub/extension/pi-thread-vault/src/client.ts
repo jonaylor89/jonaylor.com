@@ -29,6 +29,21 @@ export interface CurrentThreadContext {
   lastSyncedEventId?: string
 }
 
+export interface MemoryMatch {
+  id: string
+  fact: string
+  similarity: number
+  created_at: string
+}
+
+export interface MemoryEntry {
+  id: string
+  user_id: string
+  fact: string
+  created_at: string
+  updated_at: string
+}
+
 export class VaultClient {
   private currentContexts = new Map<string, CurrentThreadContext>()
 
@@ -64,6 +79,40 @@ export class VaultClient {
     } catch (error) {
       this.queue.markFailed(batch.map((event) => event.id), error instanceof Error ? error.message : String(error))
     }
+  }
+
+  async searchMemories(userId: string, query: string): Promise<MemoryMatch[]> {
+    const response = await fetch(new URL("/api/memory/search", this.config.serverUrl), {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${this.config.apiToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ user_id: userId, query }),
+    })
+    if (!response.ok) return []
+    const body = await response.json() as { memories: MemoryMatch[] }
+    return body.memories ?? []
+  }
+
+  async addMemory(userId: string, text: string): Promise<void> {
+    await fetch(new URL("/api/memory", this.config.serverUrl), {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${this.config.apiToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ user_id: userId, text }),
+    })
+  }
+
+  async listMemories(userId: string): Promise<MemoryEntry[]> {
+    const response = await fetch(new URL(`/api/memory/${encodeURIComponent(userId)}`, this.config.serverUrl), {
+      headers: { "Authorization": `Bearer ${this.config.apiToken}` },
+    })
+    if (!response.ok) return []
+    const body = await response.json() as { memories: MemoryEntry[] }
+    return body.memories ?? []
   }
 
   async recordHandoff(input: {

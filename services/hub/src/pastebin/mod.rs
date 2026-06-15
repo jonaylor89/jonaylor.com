@@ -3,6 +3,8 @@ use axum::body::Bytes;
 use axum::extract::{Form, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Redirect, Response};
+
+use crate::authentication::verify_bearer_token;
 use chrono::{DateTime, Local, Utc};
 use rand::Rng;
 use serde::Deserialize;
@@ -259,15 +261,6 @@ fn generate_id() -> String {
             PASTE_ID_ALPHABET[index] as char
         })
         .collect()
-}
-
-fn verify_bearer_token(headers: &HeaderMap, expected_token: &str) -> bool {
-    headers
-        .get(header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.strip_prefix("Bearer "))
-        .map(|token| token == expected_token)
-        .unwrap_or(false)
 }
 
 fn wants_plaintext(headers: &HeaderMap) -> bool {

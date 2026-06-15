@@ -18,6 +18,8 @@ pub struct Settings {
     pub rss_feed: RssFeedSettings,
     #[serde(default)]
     pub vault: VaultSettings,
+    #[serde(default)]
+    pub memory: MemorySettings,
 }
 
 #[derive(serde::Deserialize, Clone)]
@@ -50,6 +52,62 @@ impl Default for VaultSettings {
             data_dir: default_vault_data_dir(),
             default_visibility: default_vault_default_visibility(),
             public_sharing: default_vault_public_sharing(),
+        }
+    }
+}
+
+#[derive(serde::Deserialize, Clone)]
+pub struct MemorySettings {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_memory_api_base_url")]
+    pub api_base_url: String,
+    #[serde(default = "default_memory_api_key")]
+    pub api_key: Secret<String>,
+    #[serde(default = "default_memory_embedding_model")]
+    pub embedding_model: String,
+    #[serde(default = "default_memory_extraction_model")]
+    pub extraction_model: String,
+    #[serde(default = "default_memory_similarity_threshold")]
+    pub similarity_threshold: f64,
+    #[serde(default = "default_memory_search_limit")]
+    pub search_limit: i64,
+}
+
+fn default_memory_api_base_url() -> String {
+    "https://api.openai.com".to_string()
+}
+
+fn default_memory_api_key() -> Secret<String> {
+    Secret::new(String::new())
+}
+
+fn default_memory_embedding_model() -> String {
+    "text-embedding-3-small".to_string()
+}
+
+fn default_memory_extraction_model() -> String {
+    "gpt-4o-mini".to_string()
+}
+
+fn default_memory_similarity_threshold() -> f64 {
+    0.85
+}
+
+fn default_memory_search_limit() -> i64 {
+    10
+}
+
+impl Default for MemorySettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            api_base_url: default_memory_api_base_url(),
+            api_key: default_memory_api_key(),
+            embedding_model: default_memory_embedding_model(),
+            extraction_model: default_memory_extraction_model(),
+            similarity_threshold: default_memory_similarity_threshold(),
+            search_limit: default_memory_search_limit(),
         }
     }
 }
