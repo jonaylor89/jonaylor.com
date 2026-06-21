@@ -5,7 +5,7 @@ use sqlx::ConnectOptions;
 use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgSslMode;
 
-use crate::domain::SubscriberEmail;
+use crate::domain::{SearchLimit, SimilarityThreshold, SubscriberEmail, VaultVisibility};
 use crate::email_client::EmailClient;
 
 #[derive(serde::Deserialize, Clone)]
@@ -27,7 +27,7 @@ pub struct VaultSettings {
     #[serde(default = "default_vault_data_dir")]
     pub data_dir: std::path::PathBuf,
     #[serde(default = "default_vault_default_visibility")]
-    pub default_visibility: String,
+    pub default_visibility: VaultVisibility,
     #[serde(default = "default_vault_public_sharing")]
     pub public_sharing: bool,
 }
@@ -38,8 +38,8 @@ fn default_vault_data_dir() -> std::path::PathBuf {
         .unwrap_or_else(|_| std::path::PathBuf::from(".pi-thread-vault"))
 }
 
-fn default_vault_default_visibility() -> String {
-    "private".to_string()
+fn default_vault_default_visibility() -> VaultVisibility {
+    VaultVisibility::Private
 }
 
 fn default_vault_public_sharing() -> bool {
@@ -96,6 +96,16 @@ fn default_memory_similarity_threshold() -> f64 {
 
 fn default_memory_search_limit() -> i64 {
     10
+}
+
+impl MemorySettings {
+    pub fn similarity_threshold(&self) -> Result<SimilarityThreshold, String> {
+        SimilarityThreshold::parse(self.similarity_threshold)
+    }
+
+    pub fn search_limit(&self) -> Result<SearchLimit, String> {
+        SearchLimit::parse(self.search_limit)
+    }
 }
 
 impl Default for MemorySettings {

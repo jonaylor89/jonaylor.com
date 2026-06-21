@@ -5,6 +5,7 @@ use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
 use crate::configuration::Settings;
+use crate::domain::MemoryExtractionStatus;
 use crate::startup::get_connection_pool;
 
 use super::MemoryEngine;
@@ -58,7 +59,7 @@ async fn worker_loop(pool: &PgPool, engine: &MemoryEngine) -> Result<(), anyhow:
     }
 }
 
-#[tracing::instrument(name = "memory_worker::try_process_next", skip_all)]
+#[tracing::instrument(name = "memory_worker::try_process_next", skip_all, level = "debug")]
 async fn try_process_next(
     pool: &PgPool,
     engine: &MemoryEngine,
@@ -107,8 +108,9 @@ async fn try_process_next(
     }
 
     // Mark as processing so we can release the row lock.
-    sqlx::query("UPDATE memory_extraction_queue SET status = 'processing' WHERE id = $1")
+    sqlx::query("UPDATE memory_extraction_queue SET status = $2 WHERE id = $1")
         .bind(job_id)
+        .bind(MemoryExtractionStatus::Processing.as_str())
         .execute(tx.as_mut())
         .await?;
     tx.commit().await?;
@@ -137,7 +139,7 @@ async fn try_process_next(
                 sqlx::query(
                     r#"
                     UPDATE memory_extraction_queue
-                    SET status = 'dead_letter',
+                    SET status = $5,
                         attempt_count = $2,
                         last_attempted_at = $3,
                         last_error = $4
@@ -148,6 +150,7 @@ async fn try_process_next(
                 .bind(new_count)
                 .bind(Utc::now())
                 .bind(&error_msg)
+                .bind(MemoryExtractionStatus::DeadLetter.as_str())
                 .execute(pool)
                 .await?;
             } else {
@@ -160,7 +163,7 @@ async fn try_process_next(
                 sqlx::query(
                     r#"
                     UPDATE memory_extraction_queue
-                    SET status = 'failed',
+                    SET status = $5,
                         attempt_count = $2,
                         last_attempted_at = $3,
                         last_error = $4
@@ -171,6 +174,7 @@ async fn try_process_next(
                 .bind(new_count)
                 .bind(Utc::now())
                 .bind(&error_msg)
+                .bind(MemoryExtractionStatus::Failed.as_str())
                 .execute(pool)
                 .await?;
             }

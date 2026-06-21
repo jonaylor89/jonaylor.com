@@ -30,7 +30,7 @@ export function loadConfig(extensionConfig: Partial<VaultConfig> = {}): VaultCon
     redaction: { enabled: extensionConfig.redaction?.enabled ?? section("redaction_enabled") !== "false" },
     memory: {
       enabled: extensionConfig.memory?.enabled ?? section("memory_enabled") === "true",
-      userId: extensionConfig.memory?.userId ?? process.env.JONAYLOR_MEMORY_USER_ID ?? section("memory_user_id") ?? os.hostname(),
+      userId: extensionConfig.memory?.userId ?? process.env.JONAYLOR_MEMORY_USER_ID ?? section("memory_user_id") ?? os.userInfo().username,
     },
   }
 }

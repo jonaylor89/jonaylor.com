@@ -5,6 +5,7 @@ use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
 use crate::configuration::MemorySettings;
+use crate::domain::{MemoryConflictAction, MemoryFact};
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -88,12 +89,6 @@ struct ConflictResolution {
 // Internal types
 // ---------------------------------------------------------------------------
 
-enum ConflictAction {
-    Update(String),
-    KeepBoth,
-    KeepExisting,
-}
-
 // ---------------------------------------------------------------------------
 // MemoryEngine implementation
 // ---------------------------------------------------------------------------
@@ -112,8 +107,14 @@ impl MemoryEngine {
             api_key: settings.api_key.clone(),
             embedding_model: settings.embedding_model.clone(),
             extraction_model: settings.extraction_model.clone(),
-            similarity_threshold: settings.similarity_threshold,
-            search_limit: settings.search_limit,
+            similarity_threshold: settings
+                .similarity_threshold()
+                .expect("invalid memory similarity threshold")
+                .get(),
+            search_limit: settings
+                .search_limit()
+                .expect("invalid memory search limit")
+                .get(),
             enabled: settings.enabled,
         }
     }
@@ -136,9 +137,9 @@ impl MemoryEngine {
         let mut ids = Vec::with_capacity(facts.len());
 
         for fact in &facts {
-            let embedding = self.embed(fact).await?;
+            let embedding = self.embed(fact.as_ref()).await?;
             let vector = Vector::from(embedding);
-            if let Some(id) = self.upsert_memory(user_id, fact, &vector).await? {
+            if let Some(id) = self.upsert_memory(user_id, fact.as_ref(), &vector).await? {
                 ids.push(id);
             }
         }
@@ -253,7 +254,7 @@ impl MemoryEngine {
 
     // -- Fact extraction via LLM --------------------------------------------
 
-    async fn extract_facts(&self, text: &str) -> Result<Vec<String>, anyhow::Error> {
+    async fn extract_facts(&self, text: &str) -> Result<Vec<MemoryFact>, anyhow::Error> {
         let system_prompt = concat!(
             "You are a memory extraction assistant. Given user text, extract atomic factual ",
             "statements worth remembering for future conversations.\n\n",
@@ -306,7 +307,11 @@ impl MemoryEngine {
             )
         })?;
 
-        Ok(facts)
+        facts
+            .into_iter()
+            .map(MemoryFact::parse)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(anyhow::Error::msg)
     }
 
     // -- Upsert with conflict resolution ------------------------------------
@@ -353,27 +358,27 @@ impl MemoryEngine {
                             error = %e,
                             "Conflict resolution failed, defaulting to keep_both"
                         );
-                        ConflictAction::KeepBoth
+                        MemoryConflictAction::KeepBoth
                     }
                 };
 
                 match action {
-                    ConflictAction::Update(merged) => {
-                        let new_embedding = self.embed(&merged).await?;
+                    MemoryConflictAction::Update(merged) => {
+                        let new_embedding = self.embed(merged.as_ref()).await?;
                         let new_vector = Vector::from(new_embedding);
                         sqlx::query(
                             "UPDATE memories SET fact = $1, embedding = $2, updated_at = NOW() \
                              WHERE id = $3",
                         )
-                        .bind(&merged)
+                        .bind(merged.as_ref())
                         .bind(&new_vector)
                         .bind(existing_id)
                         .execute(&self.pool)
                         .await?;
                         return Ok(Some(existing_id));
                     }
-                    ConflictAction::KeepExisting => return Ok(None),
-                    ConflictAction::KeepBoth => { /* fall through to insert */ }
+                    MemoryConflictAction::KeepExisting => return Ok(None),
+                    MemoryConflictAction::KeepBoth => { /* fall through to insert */ }
                 }
             }
         }
@@ -405,7 +410,7 @@ impl MemoryEngine {
         &self,
         existing_fact: &str,
         new_fact: &str,
-    ) -> Result<ConflictAction, anyhow::Error> {
+    ) -> Result<MemoryConflictAction, anyhow::Error> {
         let system_prompt = concat!(
             "You are resolving a memory conflict. Given an existing stored fact and a new fact, ",
             "determine the correct action.\n\n",
@@ -464,9 +469,11 @@ impl MemoryEngine {
                 let merged = resolution
                     .merged_fact
                     .ok_or_else(|| anyhow::anyhow!("Update action requires merged_fact field"))?;
-                Ok(ConflictAction::Update(merged))
+                Ok(MemoryConflictAction::Update(
+                    MemoryFact::parse(merged).map_err(anyhow::Error::msg)?,
+                ))
             }
-            "keep_existing" => Ok(ConflictAction::KeepExisting),
+            "keep_existing" => Ok(MemoryConflictAction::KeepExisting),
             other => {
                 if other != "keep_both" {
                     tracing::warn!(
@@ -474,7 +481,7 @@ impl MemoryEngine {
                         "Unknown conflict action, treating as keep_both"
                     );
                 }
-                Ok(ConflictAction::KeepBoth)
+                Ok(MemoryConflictAction::KeepBoth)
             }
         }
     }

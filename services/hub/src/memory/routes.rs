@@ -4,6 +4,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use uuid::Uuid;
 
+use crate::domain::{MemoryQuery, MemoryUserId, RawMemoryText};
 use crate::startup::AppState;
 use crate::vault::auth::require_api_token;
 
@@ -21,24 +22,6 @@ pub struct AddMemoryRequest {
 pub struct SearchMemoryRequest {
     pub user_id: String,
     pub query: String,
-}
-
-// ---------------------------------------------------------------------------
-// Input validation
-// ---------------------------------------------------------------------------
-
-const MAX_USER_ID_LEN: usize = 256;
-const MAX_TEXT_LEN: usize = 102_400; // 100 KB
-const MAX_QUERY_LEN: usize = 10_240; // 10 KB
-
-fn validate_user_id(user_id: &str) -> Result<(), &'static str> {
-    if user_id.is_empty() {
-        return Err("user_id must not be empty");
-    }
-    if user_id.len() > MAX_USER_ID_LEN {
-        return Err("user_id must not exceed 256 characters");
-    }
-    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -68,28 +51,34 @@ pub async fn add_memory_handler(
             .into_response();
     }
 
-    if let Err(msg) = validate_user_id(&body.user_id) {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({"error": msg})),
-        )
-            .into_response();
-    }
-    if body.text.is_empty() || body.text.len() > MAX_TEXT_LEN {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({"error": "text must be between 1 and 100KB"})),
-        )
-            .into_response();
-    }
+    let user_id = match MemoryUserId::parse(body.user_id) {
+        Ok(user_id) => user_id,
+        Err(error) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": error})),
+            )
+                .into_response();
+        }
+    };
+    let text = match RawMemoryText::parse(body.text) {
+        Ok(text) => text,
+        Err(error) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": error})),
+            )
+                .into_response();
+        }
+    };
 
     let job_id = Uuid::new_v4();
     let result = sqlx::query(
         "INSERT INTO memory_extraction_queue (id, user_id, raw_text) VALUES ($1, $2, $3)",
     )
     .bind(job_id)
-    .bind(&body.user_id)
-    .bind(&body.text)
+    .bind(user_id.as_ref())
+    .bind(text.as_ref())
     .execute(&state.db_pool)
     .await;
 
@@ -137,22 +126,32 @@ pub async fn search_memory_handler(
             .into_response();
     }
 
-    if let Err(msg) = validate_user_id(&body.user_id) {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({"error": msg})),
-        )
-            .into_response();
-    }
-    if body.query.is_empty() || body.query.len() > MAX_QUERY_LEN {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({"error": "query must be between 1 and 10KB"})),
-        )
-            .into_response();
-    }
+    let user_id = match MemoryUserId::parse(body.user_id) {
+        Ok(user_id) => user_id,
+        Err(error) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": error})),
+            )
+                .into_response();
+        }
+    };
+    let query = match MemoryQuery::parse(body.query) {
+        Ok(query) => query,
+        Err(error) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": error})),
+            )
+                .into_response();
+        }
+    };
 
-    match state.memory.get_context(&body.user_id, &body.query).await {
+    match state
+        .memory
+        .get_context(user_id.as_ref(), query.as_ref())
+        .await
+    {
         Ok(matches) => (
             StatusCode::OK,
             Json(serde_json::json!({ "memories": matches })),
@@ -192,15 +191,18 @@ pub async fn list_memories_handler(
             .into_response();
     }
 
-    if let Err(msg) = validate_user_id(&user_id) {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({"error": msg})),
-        )
-            .into_response();
-    }
+    let user_id = match MemoryUserId::parse(user_id) {
+        Ok(user_id) => user_id,
+        Err(error) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": error})),
+            )
+                .into_response();
+        }
+    };
 
-    match state.memory.list_memories(&user_id).await {
+    match state.memory.list_memories(user_id.as_ref()).await {
         Ok(memories) => (
             StatusCode::OK,
             Json(serde_json::json!({ "memories": memories })),

@@ -21,6 +21,7 @@ use tower_sessions_redis_store::{
 
 use crate::authentication::AuthenticatedUser;
 use crate::configuration::{DatabaseSettings, Settings};
+use crate::domain::VaultVisibility;
 use crate::email_client::EmailClient;
 use crate::memory::{
     MemoryEngine, add_memory_handler, list_memories_handler, search_memory_handler,
@@ -103,7 +104,7 @@ impl Application {
             vault: VaultState {
                 data_dir: configuration.vault.data_dir.clone(),
                 base_url: configuration.application.base_url.clone(),
-                default_visibility: configuration.vault.default_visibility.clone(),
+                default_visibility: configuration.vault.default_visibility,
                 public_sharing: configuration.vault.public_sharing,
                 hmac_secret: configuration
                     .application
@@ -162,7 +163,7 @@ pub struct AppState {
 pub struct VaultState {
     pub data_dir: std::path::PathBuf,
     pub base_url: String,
-    pub default_visibility: String,
+    pub default_visibility: VaultVisibility,
     pub public_sharing: bool,
     pub hmac_secret: String,
 }

@@ -20,4 +20,4 @@ rss_feed:
 #   APP_MEMORY__EMBEDDING_MODEL=nomic-embed-text
 
 memory:
-  enabled: true
+  enabled: false

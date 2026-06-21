@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     authentication::AuthenticatedUser,
+    domain::NewNewsletterIssue,
     idempotency::{IdempotencyKey, NextAction, save_response, try_processing},
     session_state::TypedSession,
     utils::{e400, e500, see_other},
@@ -52,7 +53,11 @@ pub async fn publish_newsletter(
         }
     };
 
-    let issue_id = insert_newsletter_issue(&mut transaction, &title, &text, &html)
+    let issue = NewNewsletterIssue::parse(title, html, text)
+        .map_err(anyhow::Error::msg)
+        .map_err(e400)?;
+
+    let issue_id = insert_newsletter_issue(&mut transaction, &issue)
         .await
         .context("Failed to store newsletter issue details")
         .map_err(e500)?;
@@ -76,9 +81,7 @@ pub async fn publish_newsletter(
 #[tracing::instrument(skip_all)]
 async fn insert_newsletter_issue(
     transaction: &mut Transaction<'_, Postgres>,
-    title: &str,
-    text: &str,
-    html: &str,
+    issue: &NewNewsletterIssue,
 ) -> Result<Uuid, sqlx::Error> {
     let newsletter_issue_id = Uuid::new_v4();
     sqlx::query!(
@@ -93,9 +96,9 @@ async fn insert_newsletter_issue(
         VALUES ($1, $2, $3, $4, NOW())
         "#,
         newsletter_issue_id,
-        title,
-        text,
-        html,
+        issue.title.as_ref(),
+        issue.text_content.as_ref(),
+        issue.html_content.as_ref(),
     )
     .execute(transaction.as_mut())
     .await?;

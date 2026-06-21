@@ -19,8 +19,6 @@ struct Config {
     #[serde(default)]
     pi_thread_vault_data_dir: Option<String>,
     #[serde(default)]
-    pi_thread_vault_client_id: Option<String>,
-    #[serde(default)]
     pi_thread_vault_default_visibility: Option<String>,
     #[serde(default)]
     pi_thread_vault_redaction_enabled: Option<bool>,
@@ -452,11 +450,10 @@ fn config_for_token(base_url: &str, token: &str) -> Config {
         base_url: normalize_base_url(base_url),
         token: Some(token.to_string()),
         pi_thread_vault_data_dir: None,
-        pi_thread_vault_client_id: Some(default_client_id()),
         pi_thread_vault_default_visibility: Some("private".to_string()),
         pi_thread_vault_redaction_enabled: Some(true),
         pi_thread_vault_memory_enabled: Some(false),
-        pi_thread_vault_memory_user_id: Some(default_client_id()),
+        pi_thread_vault_memory_user_id: None,
     }
 }
 
@@ -546,7 +543,6 @@ fn parse_toml_config(content: &str) -> Config {
         base_url: values.get("base_url").cloned().unwrap_or_default(),
         token: values.get("token").cloned(),
         pi_thread_vault_data_dir: values.get("pi_thread_vault.data_dir").cloned(),
-        pi_thread_vault_client_id: values.get("pi_thread_vault.client_id").cloned(),
         pi_thread_vault_default_visibility: values
             .get("pi_thread_vault.default_visibility")
             .cloned(),
@@ -603,10 +599,6 @@ fn format_config_toml(config: &Config) -> String {
         .pi_thread_vault_data_dir
         .clone()
         .unwrap_or_else(default_pi_thread_vault_data_dir);
-    let client_id = config
-        .pi_thread_vault_client_id
-        .clone()
-        .unwrap_or_else(default_client_id);
     let default_visibility = config
         .pi_thread_vault_default_visibility
         .clone()
@@ -616,14 +608,13 @@ fn format_config_toml(config: &Config) -> String {
     let memory_user_id = config
         .pi_thread_vault_memory_user_id
         .clone()
-        .unwrap_or_else(|| client_id.clone());
+        .unwrap_or_else(default_memory_user_id);
 
     format!(
-        "base_url = \"{}\"\ntoken = \"{}\"\n\n[pi_thread_vault]\ndata_dir = \"{}\"\nclient_id = \"{}\"\ndefault_visibility = \"{}\"\nredaction_enabled = {}\nmemory_enabled = {}\nmemory_user_id = \"{}\"\n",
+        "base_url = \"{}\"\ntoken = \"{}\"\n\n[pi_thread_vault]\ndata_dir = \"{}\"\ndefault_visibility = \"{}\"\nredaction_enabled = {}\nmemory_enabled = {}\nmemory_user_id = \"{}\"\n",
         toml_escape(&config.base_url),
         toml_escape(config.token.as_deref().unwrap_or_default()),
         toml_escape(&data_dir),
-        toml_escape(&client_id),
         toml_escape(&default_visibility),
         redaction_enabled,
         memory_enabled,
@@ -650,15 +641,34 @@ fn default_client_id() -> String {
     std::env::var("HOSTNAME")
         .ok()
         .filter(|value| !value.trim().is_empty())
+        .or_else(|| {
+            let output = Command::new("hostname").output().ok()?;
+            let hostname = String::from_utf8(output.stdout).ok()?;
+            let hostname = hostname.trim();
+            (!hostname.is_empty()).then(|| hostname.to_string())
+        })
         .unwrap_or_else(|| "default".to_string())
+}
+
+fn default_memory_user_id() -> String {
+    std::env::var("USER")
+        .or_else(|_| std::env::var("LOGNAME"))
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| {
+            let output = Command::new("whoami").output().ok()?;
+            let username = String::from_utf8(output.stdout).ok()?;
+            let username = username.trim();
+            (!username.is_empty()).then(|| username.to_string())
+        })
+        .unwrap_or_else(default_client_id)
 }
 
 fn memory_user_id(config: &Config, explicit: Option<String>) -> String {
     explicit
         .or_else(|| std::env::var("JONAYLOR_MEMORY_USER_ID").ok())
         .or_else(|| config.pi_thread_vault_memory_user_id.clone())
-        .or_else(|| config.pi_thread_vault_client_id.clone())
-        .unwrap_or_else(default_client_id)
+        .unwrap_or_else(default_memory_user_id)
 }
 
 fn current_thread_context_path() -> Result<PathBuf> {

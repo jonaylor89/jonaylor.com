@@ -1,16 +1,18 @@
+use crate::domain::{
+    ApiClientId, ApiClientName, ShareKind, ShareToken, VaultShareId, VaultVisibility,
+};
 use crate::session_state::TypedSession;
 use crate::startup::AppState;
 use crate::vault::auth::{sign, verify_signature};
 use crate::vault::search::search_events;
 use crate::vault::templates::*;
-use crate::vault::{new_id, now_rfc3339, token_hash};
+use crate::vault::{now_rfc3339, token_hash};
 use argon2::password_hash::SaltString;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use axum::extract::{Form, OriginalUri, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use chrono::{DateTime, Local, Utc};
-use rand::RngCore;
 use serde::Deserialize;
 use serde_json::Value;
 use sqlx::{PgPool, Row};
@@ -188,26 +190,43 @@ pub async fn create_share(
     Path(thread_id): Path<String>,
     Form(form): Form<ShareForm>,
 ) -> Response {
-    if !state.vault.public_sharing && form.share_kind != "private" {
+    let share_kind = match ShareKind::parse(&form.share_kind) {
+        Ok(share_kind) => share_kind,
+        Err(_) => return (StatusCode::BAD_REQUEST, "unknown share kind").into_response(),
+    };
+    if !state.vault.public_sharing && share_kind != ShareKind::Private {
         return (StatusCode::FORBIDDEN, "public sharing is disabled").into_response();
     }
 
-    match form.share_kind.as_str() {
-        "private" => match set_thread_visibility(&state.db_pool, &thread_id, "private").await {
-            Ok(()) => Redirect::to(&format!("/admin/threads/{}", thread_id)).into_response(),
-            Err(error) => share_error(error),
-        },
-        "public" => match create_public_share(&state.db_pool, &thread_id).await {
-            Ok(()) => Redirect::to(&format!("/admin/threads/{}", thread_id)).into_response(),
-            Err(error) => share_error(error),
-        },
-        "secret-link" => {
-            match create_token_share(&state.db_pool, &thread_id, "secret-link", None).await {
-                Ok(token) => render_share_created(&state, &thread_id, &token),
-                Err(error) => share_error(error),
+    match share_kind {
+        ShareKind::Private => {
+            match set_thread_visibility(&state.db_pool, &thread_id, VaultVisibility::Private).await
+            {
+                Ok(()) => Redirect::to(&format!("/admin/threads/{}", thread_id)).into_response(),
+                Err(error) => {
+                    tracing::error!(?error, "failed to update sharing");
+                    StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                }
             }
         }
-        "password-protected" => {
+        ShareKind::Public => match create_public_share(&state.db_pool, &thread_id).await {
+            Ok(()) => Redirect::to(&format!("/admin/threads/{}", thread_id)).into_response(),
+            Err(error) => {
+                tracing::error!(?error, "failed to update sharing");
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
+            }
+        },
+        ShareKind::SecretLink => {
+            match create_token_share(&state.db_pool, &thread_id, ShareKind::SecretLink, None).await
+            {
+                Ok(token) => render_share_created(&state, &thread_id, &token),
+                Err(error) => {
+                    tracing::error!(?error, "failed to update sharing");
+                    StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                }
+            }
+        }
+        ShareKind::PasswordProtected => {
             let Some(password) = form.password.filter(|p| !p.is_empty()) else {
                 return (StatusCode::BAD_REQUEST, "password is required").into_response();
             };
@@ -218,14 +237,21 @@ pub async fn create_share(
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 }
             };
-            match create_token_share(&state.db_pool, &thread_id, "password-protected", Some(hash))
-                .await
+            match create_token_share(
+                &state.db_pool,
+                &thread_id,
+                ShareKind::PasswordProtected,
+                Some(hash),
+            )
+            .await
             {
                 Ok(token) => render_share_created(&state, &thread_id, &token),
-                Err(error) => share_error(error),
+                Err(error) => {
+                    tracing::error!(?error, "failed to update sharing");
+                    StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                }
             }
         }
-        _ => (StatusCode::BAD_REQUEST, "unknown share kind").into_response(),
     }
 }
 
@@ -235,11 +261,6 @@ fn render_share_created(state: &AppState, thread_id: &str, token: &str) -> Respo
         r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Share created</title></head><body><h1>Share created</h1><p>This secret URL is only shown once because only its hash is stored.</p><p><a href="{url}">{url}</a></p><p><a href="/admin/threads/{thread_id}">Back to thread</a></p></body></html>"#
     ))
     .into_response()
-}
-
-fn share_error(error: anyhow::Error) -> Response {
-    tracing::error!(?error, "failed to update sharing");
-    StatusCode::INTERNAL_SERVER_ERROR.into_response()
 }
 
 pub async fn vault_admin(State(state): State<AppState>) -> Response {
@@ -322,11 +343,10 @@ pub async fn create_api_key(
     State(state): State<AppState>,
     Form(form): Form<NewClientForm>,
 ) -> Response {
-    let name = form.name.trim();
-    if name.is_empty() {
-        return (StatusCode::BAD_REQUEST, "client name is required").into_response();
+    if let Err(error) = ApiClientName::parse(form.name.clone()) {
+        return (StatusCode::BAD_REQUEST, error).into_response();
     }
-    match crate::vault::keys::issue_api_key(&state.db_pool, name).await {
+    match crate::vault::keys::issue_api_key(&state.db_pool, &form.name).await {
         Ok(key) => HtmlTemplate(KeyCreatedTemplate {
             client_id: key.client_id,
             name: key.name,
@@ -345,6 +365,9 @@ pub async fn revoke_api_key(
     State(state): State<AppState>,
     Path(client_id): Path<String>,
 ) -> Response {
+    if ApiClientId::parse(client_id.clone()).is_err() {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
     match crate::vault::keys::revoke_api_key(&state.db_pool, &client_id).await {
         Ok(true) => Redirect::to("/admin/vault").into_response(),
         Ok(false) => StatusCode::NOT_FOUND.into_response(),
@@ -370,7 +393,8 @@ pub async fn revoke_share(State(state): State<AppState>, Path(share_id): Path<St
     };
 
     let thread_id: String = row.get("thread_id");
-    let share_kind: String = row.get("share_kind");
+    let share_kind =
+        ShareKind::parse(&row.get::<String, _>("share_kind")).unwrap_or(ShareKind::SecretLink);
     let now = now_rfc3339();
     let mut transaction = match state.db_pool.begin().await {
         Ok(transaction) => transaction,
@@ -389,7 +413,7 @@ pub async fn revoke_share(State(state): State<AppState>, Path(share_id): Path<St
         tracing::error!(?error, "failed to revoke share");
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
-    if share_kind == "public"
+    if share_kind == ShareKind::Public
         && let Err(error) = sqlx::query(
             "UPDATE vault_threads SET default_visibility = 'private', updated_at = $1 WHERE id = $2",
         )
@@ -431,7 +455,7 @@ pub async fn get_shared_thread(
     if share.revoked_at.is_some() {
         return StatusCode::GONE.into_response();
     }
-    if share.share_kind == "password-protected"
+    if share.share_kind == ShareKind::PasswordProtected
         && !has_share_cookie(&headers, &share.id, &state.vault.hmac_secret)
     {
         return HtmlTemplate(SharePasswordTemplate {
@@ -1019,13 +1043,14 @@ async fn load_shares(
     Ok(rows
         .into_iter()
         .map(|row| {
-            let share_kind: String = row.get("share_kind");
+            let share_kind_raw: String = row.get("share_kind");
+            let share_kind = ShareKind::parse(&share_kind_raw).unwrap_or(ShareKind::SecretLink);
             let revoked_at: Option<String> = row.get("revoked_at");
             let created_at: String = row.get("created_at");
             ShareDetail {
                 id: row.get("id"),
-                share_kind: share_kind.clone(),
-                url: if share_kind == "public" {
+                share_kind: share_kind.to_string(),
+                url: if share_kind == ShareKind::Public {
                     Some(format!(
                         "{}/admin/threads/{}",
                         base_url.trim_end_matches('/'),
@@ -1074,10 +1099,10 @@ async fn load_handoffs(pool: &PgPool, thread_id: &str) -> anyhow::Result<Vec<Han
 async fn set_thread_visibility(
     pool: &PgPool,
     thread_id: &str,
-    visibility: &str,
+    visibility: VaultVisibility,
 ) -> anyhow::Result<()> {
     sqlx::query("UPDATE vault_threads SET default_visibility = $1, updated_at = $2 WHERE id = $3")
-        .bind(visibility)
+        .bind(visibility.as_ref())
         .bind(now_rfc3339())
         .bind(thread_id)
         .execute(pool)
@@ -1086,12 +1111,12 @@ async fn set_thread_visibility(
 }
 
 async fn create_public_share(pool: &PgPool, thread_id: &str) -> anyhow::Result<()> {
-    set_thread_visibility(pool, thread_id, "public").await?;
+    set_thread_visibility(pool, thread_id, VaultVisibility::Public).await?;
     sqlx::query(
         r#"INSERT INTO vault_shares (id, thread_id, share_kind, is_public, created_at)
            VALUES ($1, $2, 'public', TRUE, $3)"#,
     )
-    .bind(new_id("shr"))
+    .bind(VaultShareId::generate().to_string())
     .bind(thread_id)
     .bind(now_rfc3339())
     .execute(pool)
@@ -1102,30 +1127,30 @@ async fn create_public_share(pool: &PgPool, thread_id: &str) -> anyhow::Result<(
 async fn create_token_share(
     pool: &PgPool,
     thread_id: &str,
-    kind: &str,
+    kind: ShareKind,
     password_hash: Option<String>,
 ) -> anyhow::Result<String> {
-    let token = random_token();
+    let token = ShareToken::generate();
     sqlx::query(
         r#"INSERT INTO vault_shares
              (id, thread_id, share_kind, token_hash, password_hash, is_public, created_at)
            VALUES ($1, $2, $3, $4, $5, FALSE, $6)"#,
     )
-    .bind(new_id("shr"))
+    .bind(VaultShareId::generate().to_string())
     .bind(thread_id)
-    .bind(kind)
-    .bind(token_hash(&token))
+    .bind(kind.as_ref())
+    .bind(token_hash(token.as_ref()))
     .bind(password_hash)
     .bind(now_rfc3339())
     .execute(pool)
     .await?;
-    Ok(token)
+    Ok(token.to_string())
 }
 
 struct ShareRecord {
     id: String,
     thread_id: String,
-    share_kind: String,
+    share_kind: ShareKind,
     password_hash: Option<String>,
     revoked_at: Option<String>,
 }
@@ -1138,19 +1163,17 @@ async fn load_share_by_token(pool: &PgPool, token: &str) -> anyhow::Result<Optio
     .bind(token_hash(token))
     .fetch_optional(pool)
     .await?;
-    Ok(row.map(|row| ShareRecord {
-        id: row.get("id"),
-        thread_id: row.get("thread_id"),
-        share_kind: row.get("share_kind"),
-        password_hash: row.get("password_hash"),
-        revoked_at: row.get("revoked_at"),
+    Ok(row.map(|row| {
+        let share_kind =
+            ShareKind::parse(&row.get::<String, _>("share_kind")).unwrap_or(ShareKind::SecretLink);
+        ShareRecord {
+            id: row.get("id"),
+            thread_id: row.get("thread_id"),
+            share_kind,
+            password_hash: row.get("password_hash"),
+            revoked_at: row.get("revoked_at"),
+        }
     }))
-}
-
-fn random_token() -> String {
-    let mut bytes = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut bytes);
-    base64::encode_config(bytes, base64::URL_SAFE_NO_PAD)
 }
 
 fn hash_password(password: &str) -> anyhow::Result<String> {

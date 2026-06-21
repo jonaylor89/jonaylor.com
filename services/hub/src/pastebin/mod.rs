@@ -5,17 +5,13 @@ use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Redirect, Response};
 
 use chrono::{DateTime, Local, Utc};
-use rand::Rng;
 use serde::Deserialize;
 use sqlx::{PgPool, Row};
 
+use crate::domain::{MAX_PASTE_BYTES, PasteContent, PasteContentError, PasteId};
 use crate::startup::AppState;
 use crate::vault::auth::require_api_token;
 use crate::vault::templates::HtmlTemplate;
-
-const MAX_PASTE_BYTES: usize = 256 * 1024;
-const PASTE_ID_LEN: usize = 8;
-const PASTE_ID_ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
 
 #[derive(Debug, Clone)]
 pub struct PasteSummary {
@@ -81,17 +77,19 @@ pub async fn create_paste_from_form(
     State(state): State<AppState>,
     Form(form): Form<CreatePasteForm>,
 ) -> Response {
-    let content = form.content;
-    if content.is_empty() {
-        return (StatusCode::BAD_REQUEST, "paste content is required").into_response();
-    }
-    if content.len() > MAX_PASTE_BYTES {
-        return (
-            StatusCode::PAYLOAD_TOO_LARGE,
-            format!("paste must be at most {} KiB", MAX_PASTE_BYTES / 1024),
-        )
-            .into_response();
-    }
+    let content = match PasteContent::parse(form.content) {
+        Ok(content) => content,
+        Err(PasteContentError::Empty) => {
+            return (StatusCode::BAD_REQUEST, "paste content is required").into_response();
+        }
+        Err(PasteContentError::TooLarge { max_bytes, .. }) => {
+            return (
+                StatusCode::PAYLOAD_TOO_LARGE,
+                format!("paste must be at most {} KiB", max_bytes / 1024),
+            )
+                .into_response();
+        }
+    };
 
     match insert_paste(&state.db_pool, &content).await {
         Ok(id) => Redirect::to(&format!("/p/{id}")).into_response(),
@@ -103,14 +101,18 @@ pub async fn create_paste_from_form(
 }
 
 pub async fn delete_paste(State(state): State<AppState>, Path(paste_id): Path<String>) -> Response {
+    let paste_id = match PasteId::parse(paste_id) {
+        Ok(paste_id) => paste_id,
+        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+    };
     match sqlx::query("DELETE FROM pastes WHERE id = $1")
-        .bind(&paste_id)
+        .bind(paste_id.as_ref())
         .execute(&state.db_pool)
         .await
     {
         Ok(_) => Redirect::to("/admin/pastebin").into_response(),
         Err(error) => {
-            tracing::error!(?error, paste_id, "failed to delete paste");
+            tracing::error!(?error, paste_id = %paste_id, "failed to delete paste");
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
     }
@@ -124,19 +126,20 @@ pub async fn api_create_paste(
     if require_api_token(&headers, &state.db_pool).await.is_err() {
         return (StatusCode::UNAUTHORIZED, "invalid or missing bearer token").into_response();
     }
-    if body.is_empty() {
-        return (StatusCode::BAD_REQUEST, "paste content is required").into_response();
-    }
-    if body.len() > MAX_PASTE_BYTES {
-        return (
-            StatusCode::PAYLOAD_TOO_LARGE,
-            format!("paste must be at most {} KiB", MAX_PASTE_BYTES / 1024),
-        )
-            .into_response();
-    }
-
     let content = match String::from_utf8(body.to_vec()) {
-        Ok(content) => content,
+        Ok(content) => match PasteContent::parse(content) {
+            Ok(content) => content,
+            Err(PasteContentError::Empty) => {
+                return (StatusCode::BAD_REQUEST, "paste content is required").into_response();
+            }
+            Err(PasteContentError::TooLarge { max_bytes, .. }) => {
+                return (
+                    StatusCode::PAYLOAD_TOO_LARGE,
+                    format!("paste must be at most {} KiB", max_bytes / 1024),
+                )
+                    .into_response();
+            }
+        },
         Err(_) => return (StatusCode::BAD_REQUEST, "paste content must be UTF-8").into_response(),
     };
 
@@ -161,11 +164,15 @@ pub async fn show_paste(
     let paste_id = paste_path
         .split_once('.')
         .map_or(paste_path.as_str(), |(id, _)| id);
-    let paste = match load_paste(&state.db_pool, paste_id, &state.vault.base_url).await {
+    let paste_id = match PasteId::parse(paste_id.to_string()) {
+        Ok(paste_id) => paste_id,
+        Err(_) => return StatusCode::NOT_FOUND.into_response(),
+    };
+    let paste = match load_paste(&state.db_pool, paste_id.as_ref(), &state.vault.base_url).await {
         Ok(Some(paste)) => paste,
         Ok(None) => return StatusCode::NOT_FOUND.into_response(),
         Err(error) => {
-            tracing::error!(?error, paste_id, "failed to load paste");
+            tracing::error!(?error, paste_id = %paste_id, "failed to load paste");
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };
@@ -235,32 +242,22 @@ async fn load_paste(
     }))
 }
 
-async fn insert_paste(pool: &PgPool, content: &str) -> anyhow::Result<String> {
+async fn insert_paste(pool: &PgPool, content: &PasteContent) -> anyhow::Result<String> {
     for _ in 0..16 {
-        let id = generate_id();
+        let id = PasteId::generate();
         let inserted = sqlx::query(
             "INSERT INTO pastes (id, content) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING RETURNING id",
         )
-        .bind(&id)
-        .bind(content)
+        .bind(id.as_ref())
+        .bind(content.as_ref())
         .fetch_optional(pool)
         .await?;
         if inserted.is_some() {
-            return Ok(id);
+            return Ok(id.to_string());
         }
     }
 
     anyhow::bail!("failed to allocate a unique paste id")
-}
-
-fn generate_id() -> String {
-    let mut rng = rand::thread_rng();
-    (0..PASTE_ID_LEN)
-        .map(|_| {
-            let index = rng.gen_range(0..PASTE_ID_ALPHABET.len());
-            PASTE_ID_ALPHABET[index] as char
-        })
-        .collect()
 }
 
 fn wants_plaintext(headers: &HeaderMap) -> bool {

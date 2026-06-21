@@ -100,7 +100,7 @@ export class VaultClient {
   }
 
   async addMemory(userId: string, text: string): Promise<void> {
-    await fetch(new URL("/api/memory", this.config.serverUrl), {
+    const response = await fetch(new URL("/api/memory", this.config.serverUrl), {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${this.config.apiToken}`,
@@ -108,6 +108,7 @@ export class VaultClient {
       },
       body: JSON.stringify({ user_id: userId, text }),
     })
+    if (!response.ok) throw new Error(`memory add failed with ${response.status}: ${await response.text()}`)
   }
 
   async listMemories(userId: string): Promise<MemoryEntry[]> {

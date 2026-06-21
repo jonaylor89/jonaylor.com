@@ -1,4 +1,5 @@
-use crate::vault::{now_rfc3339, token_hash};
+use crate::domain::ApiToken;
+use crate::vault::now_rfc3339;
 use axum::http::{HeaderMap, StatusCode, header};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
@@ -10,11 +11,12 @@ type HmacSha256 = Hmac<Sha256>;
 /// Returns the matching client_id and updates its `last_seen_at` on success.
 pub async fn require_api_token(headers: &HeaderMap, pool: &PgPool) -> Result<String, StatusCode> {
     let token = bearer_token(headers).ok_or(StatusCode::UNAUTHORIZED)?;
-    let hash = token_hash(token);
+    let token = ApiToken::parse(token.to_string()).map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let hash = token.hash();
     let client_id: Option<String> = sqlx::query_scalar(
         "SELECT id FROM vault_clients WHERE api_token_hash = $1 AND revoked_at IS NULL",
     )
-    .bind(&hash)
+    .bind(hash.as_ref())
     .fetch_optional(pool)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

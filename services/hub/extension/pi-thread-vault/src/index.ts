@@ -168,7 +168,9 @@ export function activate(pi: PiLikeApi, extensionConfig: Partial<VaultConfig> = 
       const msgs = sessionUserMessages.get(session.external_session_id)
       if (msgs && msgs.length > 0) {
         const combinedText = msgs.join("\n\n")
-        void client.addMemory(config.memory.userId, combinedText).catch(() => {})
+        void client.addMemory(config.memory.userId, combinedText).catch((error) => {
+          pi.logger?.warn?.("pi-thread-vault memory extraction failed", error)
+        })
         sessionUserMessages.delete(session.external_session_id)
       }
     }

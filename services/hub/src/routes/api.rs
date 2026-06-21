@@ -5,7 +5,9 @@ use axum::response::{IntoResponse, Response};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::{NewSubscriber, SubscriberEmail, SubscriberName, SubscriptionToken};
+use crate::domain::{
+    NewNewsletterIssue, NewSubscriber, SubscriberEmail, SubscriberName, SubscriptionToken,
+};
 use crate::email_client::EmailClient;
 use crate::routes::subscriptions::{
     get_subscriber_by_email, insert_subscriber, send_already_subscribed_email,
@@ -35,6 +37,17 @@ pub async fn api_publish_newsletter(
             .into_response();
     }
 
+    let issue = match NewNewsletterIssue::parse(body.title, body.html_content, body.text_content) {
+        Ok(issue) => issue,
+        Err(error) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": error})),
+            )
+                .into_response();
+        }
+    };
+
     let newsletter_issue_id = Uuid::new_v4();
     let mut transaction = match state.db_pool.begin().await {
         Ok(t) => t,
@@ -48,9 +61,9 @@ pub async fn api_publish_newsletter(
         "INSERT INTO newsletter_issues (newsletter_issue_id, title, text_content, html_content, published_at) VALUES ($1, $2, $3, $4, NOW())",
     )
     .bind(newsletter_issue_id)
-    .bind(&body.title)
-    .bind(&body.text_content)
-    .bind(&body.html_content)
+    .bind(issue.title.as_ref())
+    .bind(issue.text_content.as_ref())
+    .bind(issue.html_content.as_ref())
     .execute(transaction.as_mut())
     .await
     {

@@ -1,11 +1,14 @@
+use crate::domain::{
+    EventHash, ExternalEventId, ExternalSessionId, ShareKind, ShareToken, VaultEventId,
+    VaultEventKind, VaultEventRole, VaultHandoffId, VaultShareId, VaultThreadId,
+};
 use crate::startup::AppState;
 use crate::vault::auth::require_api_token;
-use crate::vault::{new_id, now_rfc3339, strip_nuls, strip_nuls_json, token_hash};
+use crate::vault::{now_rfc3339, strip_nuls, strip_nuls_json, token_hash};
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -59,6 +62,10 @@ pub async fn ingest_events(
     let _client_id = require_api_token(&headers, &state.db_pool).await?;
     let now = now_rfc3339();
     sanitize_batch(&mut payload);
+    validate_batch(&payload).map_err(|error| {
+        tracing::warn!(%error, "invalid vault batch payload");
+        StatusCode::BAD_REQUEST
+    })?;
 
     let existing_thread_id: Option<String> =
         sqlx::query_scalar("SELECT id FROM vault_threads WHERE external_session_id = $1")
@@ -66,7 +73,7 @@ pub async fn ingest_events(
             .fetch_optional(&state.db_pool)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let thread_id = existing_thread_id.unwrap_or_else(|| new_id("thr"));
+    let thread_id = existing_thread_id.unwrap_or_else(|| VaultThreadId::generate().to_string());
 
     let title = payload
         .session
@@ -104,7 +111,7 @@ pub async fn ingest_events(
     .bind(&payload.session.repo_remote)
     .bind(&payload.session.repo_branch)
     .bind(&payload.session.repo_head)
-    .bind(&state.vault.default_visibility)
+    .bind(state.vault.default_visibility.as_ref())
     .bind(&thread_created_at)
     .bind(&thread_updated_at)
     .execute(&state.db_pool)
@@ -121,7 +128,7 @@ pub async fn ingest_events(
                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, $9, $10, $11)
                ON CONFLICT (thread_id, event_hash) DO NOTHING"#,
         )
-        .bind(new_id("evt"))
+        .bind(VaultEventId::generate().to_string())
         .bind(&thread_id)
         .bind(&event.external_event_id)
         .bind(&event.parent_external_event_id)
@@ -180,7 +187,7 @@ pub struct HandoffResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct ShareThreadPayload {
-    pub share_kind: Option<String>,
+    pub share_kind: Option<ShareKind>,
 }
 
 #[derive(Debug, Serialize)]
@@ -203,10 +210,11 @@ pub async fn create_thread_share(
     if !state.vault.public_sharing {
         return (StatusCode::FORBIDDEN, "public sharing is disabled").into_response();
     }
-    let share_kind = payload
-        .share_kind
-        .unwrap_or_else(|| "secret-link".to_string());
-    if share_kind != "secret-link" {
+    if VaultThreadId::parse(thread_id.clone()).is_err() {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+    let share_kind = payload.share_kind.unwrap_or(ShareKind::SecretLink);
+    if share_kind != ShareKind::SecretLink {
         return (
             StatusCode::BAD_REQUEST,
             "only secret-link shares are supported by this API",
@@ -230,15 +238,15 @@ pub async fn create_thread_share(
         return StatusCode::NOT_FOUND.into_response();
     }
 
-    let token = random_share_token();
+    let token = ShareToken::generate();
     let result = sqlx::query(
         r#"INSERT INTO vault_shares
              (id, thread_id, share_kind, token_hash, is_public, created_at)
            VALUES ($1, $2, 'secret-link', $3, FALSE, $4)"#,
     )
-    .bind(new_id("shr"))
+    .bind(VaultShareId::generate().to_string())
     .bind(&thread_id)
-    .bind(token_hash(&token))
+    .bind(token_hash(token.as_ref()))
     .bind(now_rfc3339())
     .execute(&state.db_pool)
     .await;
@@ -250,7 +258,7 @@ pub async fn create_thread_share(
 
     Json(ShareThreadResponse {
         thread_id,
-        share_kind,
+        share_kind: share_kind.to_string(),
         share_url: format!("{}/s/{token}", state.vault.base_url.trim_end_matches('/')),
     })
     .into_response()
@@ -264,8 +272,12 @@ pub async fn handoff_record(
 ) -> Result<Json<HandoffResponse>, StatusCode> {
     let _client_id = require_api_token(&headers, &state.db_pool).await?;
     let now = now_rfc3339();
-    let handoff_id = new_id("hnd");
+    let handoff_id = VaultHandoffId::generate().to_string();
     sanitize_handoff(&mut payload);
+    validate_handoff(&payload).map_err(|error| {
+        tracing::warn!(%error, "invalid vault handoff payload");
+        StatusCode::BAD_REQUEST
+    })?;
     let target_thread_id: Option<String> = match &payload.target_external_session_id {
         Some(external_id) => {
             sqlx::query_scalar("SELECT id FROM vault_threads WHERE external_session_id = $1")
@@ -306,6 +318,39 @@ pub async fn handoff_record(
         })?;
 
     Ok(Json(HandoffResponse { handoff_id }))
+}
+
+fn validate_batch(payload: &BatchPayload) -> Result<(), String> {
+    ExternalSessionId::parse(payload.session.external_session_id.clone())?;
+    for event in &payload.events {
+        if let Some(id) = &event.external_event_id {
+            ExternalEventId::parse(id.clone())?;
+        }
+        if let Some(id) = &event.parent_external_event_id {
+            ExternalEventId::parse(id.clone())?;
+        }
+        EventHash::parse(event.event_hash.clone())?;
+        VaultEventRole::parse(event.role.clone())?;
+        VaultEventKind::parse(event.kind.clone())?;
+    }
+    Ok(())
+}
+
+fn validate_handoff(payload: &HandoffPayload) -> Result<(), String> {
+    VaultThreadId::parse(payload.source_thread_id.clone())?;
+    if let Some(target_external_session_id) = &payload.target_external_session_id {
+        ExternalSessionId::parse(target_external_session_id.clone())?;
+    }
+    if payload.goal.trim().is_empty() {
+        return Err("handoff goal must not be empty".to_string());
+    }
+    if payload.generated_prompt.trim().is_empty() {
+        return Err("handoff generated_prompt must not be empty".to_string());
+    }
+    for id in &payload.source_event_ids {
+        ExternalEventId::parse(id.clone())?;
+    }
+    Ok(())
 }
 
 fn derive_thread_title(events: &[EventPayload]) -> Option<String> {
@@ -415,12 +460,6 @@ fn short_hash(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
     hex::encode(hasher.finalize())[..12].to_string()
-}
-
-fn random_share_token() -> String {
-    let mut bytes = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut bytes);
-    base64::encode_config(bytes, base64::URL_SAFE_NO_PAD)
 }
 
 fn sanitize_batch(payload: &mut BatchPayload) {

@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::{
     configuration::Settings,
+    domain::NewNewsletterIssue,
     email_templates::{BlogPostEmailHtml, BlogPostEmailText},
     startup::get_connection_pool,
 };
@@ -180,6 +181,12 @@ async fn create_newsletter_from_post(
         .render()
         .expect("Failed to render blog post text template");
 
+    let issue = NewNewsletterIssue::parse(
+        title.to_string(),
+        html_content.clone(),
+        text_content.clone(),
+    )
+    .map_err(anyhow::Error::msg)?;
     let newsletter_issue_id = Uuid::new_v4();
 
     let mut transaction = pool.begin().await?;
@@ -188,9 +195,9 @@ async fn create_newsletter_from_post(
         "INSERT INTO newsletter_issues (newsletter_issue_id, title, text_content, html_content, published_at) VALUES ($1, $2, $3, $4, NOW())",
     )
     .bind(newsletter_issue_id)
-    .bind(title)
-    .bind(&text_content)
-    .bind(&html_content)
+    .bind(issue.title.as_ref())
+    .bind(issue.text_content.as_ref())
+    .bind(issue.html_content.as_ref())
     .execute(transaction.as_mut())
     .await?;
 
