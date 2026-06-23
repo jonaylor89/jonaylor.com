@@ -52,26 +52,29 @@ const isRelevant = tags.some((tag) => musicAiTags.includes(tag.toLowerCase()));
       Work with me →
     </a>
   </div>
-  <script>
-    const slidein = document.getElementById('consulting-slidein');
-    const slideinDismiss = document.getElementById('consulting-slidein-dismiss');
-    let slideinShown = false;
+)}
 
-    function onScrollSlidein() {
-      const scrollPercent = window.scrollY / (document.documentElement.scrollHeight - window.innerHeight);
-      if (!slideinShown && scrollPercent > 0.6) {
-        slideinShown = true;
-        slidein?.classList.remove('translate-x-[calc(100%+2rem)]');
-        slidein?.classList.add('translate-x-0');
-      }
+<script>
+  const consultingSlidein = document.getElementById("consulting-slidein");
+  const consultingSlideinDismiss = document.getElementById("consulting-slidein-dismiss");
+  let consultingSlideinShown = false;
+
+  function onScrollConsultingSlidein() {
+    const scrollPercent = window.scrollY / (document.documentElement.scrollHeight - window.innerHeight);
+    if (!consultingSlideinShown && scrollPercent > 0.6) {
+      consultingSlideinShown = true;
+      consultingSlidein?.classList.remove("translate-x-[calc(100%+2rem)]");
+      consultingSlidein?.classList.add("translate-x-0");
     }
+  }
 
-    slideinDismiss?.addEventListener('click', () => {
-      slidein?.classList.remove('translate-x-0');
-      slidein?.classList.add('translate-x-[calc(100%+2rem)]');
-      window.removeEventListener('scroll', onScrollSlidein);
+  if (consultingSlidein) {
+    consultingSlideinDismiss?.addEventListener("click", () => {
+      consultingSlidein?.classList.remove("translate-x-0");
+      consultingSlidein?.classList.add("translate-x-[calc(100%+2rem)]");
+      window.removeEventListener("scroll", onScrollConsultingSlidein);
     });
 
-    window.addEventListener('scroll', onScrollSlidein, { passive: true });
-  </script>
-)}
+    window.addEventListener("scroll", onScrollConsultingSlidein, { passive: true });
+  }
+</script>

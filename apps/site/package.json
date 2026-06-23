@@ -14,18 +14,18 @@
 		"format": "biome format --write ."
 	},
 	"dependencies": {
-		"@astrojs/mdx": "5.0.0",
-		"@astrojs/sitemap": "3.7.1",
+		"@astrojs/mdx": "^7.0.0",
+		"@astrojs/sitemap": "^3.7.3",
 		"@jonaylor89/png-db": "^0.1.1",
-		"@tailwindcss/typography": "^0.5.19",
-		"@tailwindcss/vite": "^4.1.18",
-		"astro": "^6.0.1",
+		"@tailwindcss/typography": "^0.5.20",
+		"@tailwindcss/vite": "^4.3.1",
+		"astro": "^7.0.0",
 		"date-fns": "^4.1.0",
 		"highlight.js": "^11.11.1",
 		"rehype-highlight": "^7.0.2",
 		"remark-gfm": "^4.0.1",
 		"rss": "^1.2.2",
-		"tailwindcss": "^4.1.18"
+		"tailwindcss": "^4.3.1"
 	},
 	"devDependencies": {
 		"@playwright/test": "^1.57.0",

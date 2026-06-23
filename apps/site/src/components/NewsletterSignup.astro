@@ -17,7 +17,7 @@ const newsletterApiUrl =
 	import.meta.env.PUBLIC_NEWSLETTER_API_URL || "https://newsletter.jonaylor.com";
 ---
 
-{!newsletterApiUrl ? null : <>
+
 
 {/* ── Default: card/aside variant ──────────────────────────────── */}
 {variant === "default" && (
@@ -166,31 +166,33 @@ const newsletterApiUrl =
     <p data-newsletter-error class="hidden text-danger-text text-sm mt-2"></p>
   </div>
 
-  <script>
-    const slidein = document.getElementById('newsletter-slidein');
-    const slideinDismiss = document.getElementById('newsletter-slidein-dismiss');
-    let slideinShown = false;
-
-    function onScrollNewsletterSlidein() {
-      const scrollPercent = window.scrollY / (document.documentElement.scrollHeight - window.innerHeight);
-      if (!slideinShown && scrollPercent > 0.5) {
-        slideinShown = true;
-        slidein?.classList.remove('translate-x-[calc(100%+2rem)]');
-        slidein?.classList.add('translate-x-0');
-      }
-    }
-
-    slideinDismiss?.addEventListener('click', () => {
-      slidein?.classList.remove('translate-x-0');
-      slidein?.classList.add('translate-x-[calc(100%+2rem)]');
-      window.removeEventListener('scroll', onScrollNewsletterSlidein);
-    });
-
-    window.addEventListener('scroll', onScrollNewsletterSlidein, { passive: true });
-  </script>
 )}
 
-</>}
+<script>
+  const slidein = document.getElementById("newsletter-slidein");
+  const slideinDismiss = document.getElementById("newsletter-slidein-dismiss");
+  let slideinShown = false;
+
+  function onScrollNewsletterSlidein() {
+    const scrollPercent = window.scrollY / (document.documentElement.scrollHeight - window.innerHeight);
+    if (!slideinShown && scrollPercent > 0.5) {
+      slideinShown = true;
+      slidein?.classList.remove("translate-x-[calc(100%+2rem)]");
+      slidein?.classList.add("translate-x-0");
+    }
+  }
+
+  if (slidein) {
+    slideinDismiss?.addEventListener("click", () => {
+      slidein?.classList.remove("translate-x-0");
+      slidein?.classList.add("translate-x-[calc(100%+2rem)]");
+      window.removeEventListener("scroll", onScrollNewsletterSlidein);
+    });
+
+    window.addEventListener("scroll", onScrollNewsletterSlidein, { passive: true });
+  }
+</script>
+
 
 <style>
   @keyframes fade-in {
