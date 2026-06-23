@@ -276,18 +276,46 @@ export function activate(pi: PiLikeApi, extensionConfig: Partial<VaultConfig> = 
 }
 
 function toolsSnapshot(options: Record<string, unknown>): Array<{ name: string; description?: string }> {
-  const selectedTools = asRecord(options.selectedTools)
+  const selectedTools = options.selectedTools
   const toolSnippets = asRecord(options.toolSnippets)
   const out = new Map<string, { name: string; description?: string }>()
 
-  for (const [name, value] of Object.entries(selectedTools)) {
-    if (value === false || value === null || value === undefined) continue
-    out.set(name, { name, description: optionalString(toolSnippets[name]) })
+  if (Array.isArray(selectedTools)) {
+    for (const value of selectedTools) {
+      const name = typeof value === "string" ? value : toolNameFromValue(value)
+      addToolSnapshotEntry(out, name, name ? toolSnippets[name] ?? asRecord(value).description : undefined)
+    }
+  } else {
+    for (const [key, value] of Object.entries(asRecord(selectedTools))) {
+      if (value === false || value === null || value === undefined) continue
+      const name = /^\d+$/.test(key) && typeof value === "string" ? value : key
+      addToolSnapshotEntry(out, name, toolSnippets[name])
+    }
   }
-  for (const [name, description] of Object.entries(toolSnippets)) {
-    if (!out.has(name)) out.set(name, { name, description: optionalString(description) })
+
+  if (Array.isArray(options.toolSnippets)) {
+    for (const value of options.toolSnippets) {
+      const name = toolNameFromValue(value)
+      addToolSnapshotEntry(out, name, asRecord(value).description)
+    }
+  } else {
+    for (const [name, description] of Object.entries(toolSnippets)) {
+      addToolSnapshotEntry(out, name, description)
+    }
   }
+
   return [...out.values()].sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function toolNameFromValue(value: unknown): string | undefined {
+  const record = asRecord(value)
+  return optionalString(record.name ?? record.toolName)
+}
+
+function addToolSnapshotEntry(out: Map<string, { name: string; description?: string }>, name: unknown, description: unknown): void {
+  const trimmedName = optionalString(name)?.trim()
+  if (!trimmedName || /^\d+$/.test(trimmedName)) return
+  if (!out.has(trimmedName)) out.set(trimmedName, { name: trimmedName, description: optionalString(description) })
 }
 
 function normalizeSession(raw: unknown, ctx?: unknown, fallbackId?: string): NormalizedSession {

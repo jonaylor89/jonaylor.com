@@ -269,3 +269,54 @@ async fn thread_page_renders_event_content() {
     assert!(html.contains("websocket reconnection logic"));
     assert!(html.contains("rendering"));
 }
+
+#[tokio::test]
+async fn thread_page_filters_numeric_tool_snapshot_artifacts() {
+    let app = spawn_app().await;
+    let tools_snapshot_content = json!([
+        {"name": "0"},
+        {"name": "1"},
+        {"name": "bash"},
+        {"name": "read"}
+    ])
+    .to_string();
+    let ingest = app
+        .post_vault_events(
+            &json!({
+                "client_id": "default",
+                "session": {
+                    "external_session_id": "sess-tool-snapshot-artifacts",
+                    "title": "tool snapshot artifacts",
+                    "cwd": null,
+                    "repo_remote": null,
+                    "repo_branch": null,
+                    "repo_head": null,
+                },
+                "events": [{
+                    "external_event_id": "tools",
+                    "parent_external_event_id": null,
+                    "event_hash": "h-tool-snapshot-artifacts",
+                    "role": "system",
+                    "kind": "tools_snapshot",
+                    "content": tools_snapshot_content,
+                    "metadata": {},
+                    "created_at": "2026-05-19T12:00:00Z"
+                }],
+            }),
+            Some(&app.vault_api_token),
+        )
+        .await;
+    let body: serde_json::Value = ingest.json().await.unwrap();
+    let thread_id = body["thread_id"].as_str().unwrap().to_string();
+
+    let _ = app.test_user.login(&app).await;
+
+    let response = app.get_thread_page(&thread_id).await;
+    assert_eq!(200, response.status().as_u16());
+    let html = response.text().await.unwrap();
+    assert!(html.contains("<summary class=\"tools-header\">Available tools</summary>"));
+    assert!(html.contains("<span class=\"tool-item-name\">bash</span>"));
+    assert!(html.contains("<span class=\"tool-item-name\">read</span>"));
+    assert!(!html.contains("<span class=\"tool-item-name\">0</span>"));
+    assert!(!html.contains("<span class=\"tool-item-name\">1</span>"));
+}

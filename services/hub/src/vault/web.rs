@@ -16,7 +16,7 @@ use chrono::{DateTime, Local, Utc};
 use serde::Deserialize;
 use serde_json::Value;
 use sqlx::{PgPool, Row};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 // ---------- Browser-assisted CLI login route ----------
 
@@ -603,9 +603,11 @@ fn extract_available_tools(events: &[EventDetail]) -> Vec<ToolSummary> {
 
     let mut counts = BTreeMap::<String, usize>::new();
     for event in events {
-        if let Some(label) = event.tool_label.as_deref()
-            && !label.trim().is_empty()
-        {
+        if let Some(label) = event.tool_label.as_deref() {
+            let label = label.trim();
+            if label.is_empty() || label.chars().all(|c| c.is_ascii_digit()) {
+                continue;
+            }
             *counts.entry(label.to_string()).or_default() += 1;
         }
     }
@@ -618,20 +620,37 @@ fn extract_available_tools(events: &[EventDetail]) -> Vec<ToolSummary> {
 fn parse_tools_snapshot(content: &str) -> Option<Vec<ToolSummary>> {
     let value: Value = serde_json::from_str(content).ok()?;
     let tools = value.as_array()?;
-    let mut out = Vec::new();
+    let mut names = BTreeSet::new();
     for tool in tools {
-        if let Some(name) = tool
-            .get("name")
-            .or_else(|| tool.get("toolName"))
-            .and_then(Value::as_str)
-        {
-            out.push(ToolSummary {
-                name: name.to_string(),
-                count: 0,
-            });
+        if let Some(name) = tool_name_from_snapshot_entry(tool) {
+            insert_tool_name(&mut names, name);
         }
     }
+    let out = names
+        .into_iter()
+        .map(|name| ToolSummary { name, count: 0 })
+        .collect::<Vec<_>>();
     (!out.is_empty()).then_some(out)
+}
+
+fn tool_name_from_snapshot_entry(tool: &Value) -> Option<&str> {
+    match tool {
+        Value::String(name) => Some(name),
+        Value::Array(values) => values.first().and_then(Value::as_str),
+        Value::Object(_) => tool
+            .get("name")
+            .or_else(|| tool.get("toolName"))
+            .and_then(Value::as_str),
+        _ => None,
+    }
+}
+
+fn insert_tool_name(names: &mut BTreeSet<String>, name: &str) {
+    let name = name.trim();
+    if name.is_empty() || name.chars().all(|c| c.is_ascii_digit()) {
+        return;
+    }
+    names.insert(name.to_string());
 }
 
 fn group_thought_events(events: Vec<EventDetail>) -> Vec<EventView> {
@@ -1224,4 +1243,25 @@ fn has_share_cookie(headers: &HeaderMap, share_id: &str, secret: &str) -> bool {
         }
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_tools_snapshot_without_numeric_artifacts() {
+        let tools = parse_tools_snapshot(
+            r#"[
+                {"name":"0"},
+                {"name":"bash"},
+                {"toolName":"read"},
+                "write",
+                ["edit", {"description":"edit files"}]
+            ]"#,
+        )
+        .expect("tools should parse");
+        let names = tools.into_iter().map(|tool| tool.name).collect::<Vec<_>>();
+        assert_eq!(names, vec!["bash", "edit", "read", "write"]);
+    }
 }

@@ -251,19 +251,46 @@ export function activate(pi, extensionConfig = {}) {
     return { client, queue };
 }
 function toolsSnapshot(options) {
-    const selectedTools = asRecord(options.selectedTools);
+    const selectedTools = options.selectedTools;
     const toolSnippets = asRecord(options.toolSnippets);
     const out = new Map();
-    for (const [name, value] of Object.entries(selectedTools)) {
-        if (value === false || value === null || value === undefined)
-            continue;
-        out.set(name, { name, description: optionalString(toolSnippets[name]) });
+    if (Array.isArray(selectedTools)) {
+        for (const value of selectedTools) {
+            const name = typeof value === "string" ? value : toolNameFromValue(value);
+            addToolSnapshotEntry(out, name, name ? toolSnippets[name] ?? asRecord(value).description : undefined);
+        }
     }
-    for (const [name, description] of Object.entries(toolSnippets)) {
-        if (!out.has(name))
-            out.set(name, { name, description: optionalString(description) });
+    else {
+        for (const [key, value] of Object.entries(asRecord(selectedTools))) {
+            if (value === false || value === null || value === undefined)
+                continue;
+            const name = /^\d+$/.test(key) && typeof value === "string" ? value : key;
+            addToolSnapshotEntry(out, name, toolSnippets[name]);
+        }
+    }
+    if (Array.isArray(options.toolSnippets)) {
+        for (const value of options.toolSnippets) {
+            const name = toolNameFromValue(value);
+            addToolSnapshotEntry(out, name, asRecord(value).description);
+        }
+    }
+    else {
+        for (const [name, description] of Object.entries(toolSnippets)) {
+            addToolSnapshotEntry(out, name, description);
+        }
     }
     return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+function toolNameFromValue(value) {
+    const record = asRecord(value);
+    return optionalString(record.name ?? record.toolName);
+}
+function addToolSnapshotEntry(out, name, description) {
+    const trimmedName = optionalString(name)?.trim();
+    if (!trimmedName || /^\d+$/.test(trimmedName))
+        return;
+    if (!out.has(trimmedName))
+        out.set(trimmedName, { name: trimmedName, description: optionalString(description) });
 }
 function normalizeSession(raw, ctx, fallbackId) {
     const value = { ...asRecord(raw), ...asRecord(asRecord(raw).session), ...asRecord(asRecord(ctx).session) };
