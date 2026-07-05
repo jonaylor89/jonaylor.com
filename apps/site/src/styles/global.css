@@ -1,11 +1,8 @@
 @import "tailwindcss";
 @import "./tokens.css";
 @import "highlight.js/styles/github.css";
+@import "highlight.js/styles/github-dark.css" (prefers-color-scheme: dark);
 @plugin "@tailwindcss/typography";
-
-@media (prefers-color-scheme: dark) {
-	@import "highlight.js/styles/github-dark.css";
-}
 
 body {
 	font-family: var(--font-body);
@@ -69,14 +66,28 @@ h6 {
 }
 
 .prose pre {
-	background: var(--site-surface-muted);
-	border: 1px solid var(--site-border);
+	background: var(--site-code-bg);
+	border: 1px solid var(--site-code-border);
+	color: var(--site-text);
 	@apply rounded-md p-4 overflow-x-auto my-6;
 }
 
 .prose pre code {
+	background: transparent !important;
+	color: inherit;
 	font-family: var(--font-mono);
-	@apply bg-transparent p-0 text-sm;
+	@apply p-0 text-sm;
+}
+
+.prose pre code.hljs {
+	background: transparent !important;
+	color: #24292e;
+}
+
+@media (prefers-color-scheme: dark) {
+	.prose pre code.hljs {
+		color: #c9d1d9;
+	}
 }
 
 .prose ul,
@@ -217,9 +228,10 @@ h6 {
 	margin-top: 2rem;
 }
 
-/* Force white text in code blocks in dark mode to fix specificity issues */
-.dark .prose pre,
-.dark .prose pre code,
-.dark .prose pre span {
-	color: #e1e4e8 !important;
+/* Keep plain code blocks legible when syntax highlighting is unavailable. */
+@media (prefers-color-scheme: dark) {
+	.prose pre,
+	.prose pre code:not(.hljs) {
+		color: #e1e4e8;
+	}
 }
