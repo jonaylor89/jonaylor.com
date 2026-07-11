@@ -401,7 +401,8 @@ async fn github(mut args: Vec<String>) -> Result<()> {
             let explicit_url = take_option(&mut args, "--url")?;
             reject_extra(&args)?;
             let share_url = if let Some(url) = explicit_url {
-                url
+                let config = load_config()?;
+                canonical_share_url(&config, &url)
             } else {
                 create_share_for_current_thread_if_needed().await?
             };
@@ -416,21 +417,29 @@ async fn github(mut args: Vec<String>) -> Result<()> {
 }
 
 async fn create_share_for_current_thread_if_needed() -> Result<String> {
-    let context = read_current_thread_context()?;
+    let mut context = read_current_thread_context()?;
     if let Some(url) = context
         .get("shareUrl")
         .or_else(|| context.get("publicUrl"))
         .and_then(Value::as_str)
         .filter(|url| url.contains("/s/"))
     {
-        return Ok(url.to_string());
+        let config = load_config()?;
+        let share_url = canonical_share_url(&config, url);
+        if share_url != url {
+            if let Some(object) = context.as_object_mut() {
+                object.insert("shareUrl".to_string(), Value::String(share_url.clone()));
+                object.insert("publicUrl".to_string(), Value::String(share_url.clone()));
+            }
+            write_current_thread_context(&context)?;
+        }
+        return Ok(share_url);
     }
     let thread_id = context
         .get("threadId")
         .and_then(Value::as_str)
         .context("current thread context does not contain threadId")?;
     let share = create_thread_share(thread_id).await?;
-    let mut context = context;
     if let Some(object) = context.as_object_mut() {
         object.insert(
             "shareUrl".to_string(),
@@ -473,7 +482,32 @@ async fn create_thread_share(thread_id: &str) -> Result<ShareResponse> {
     if !status.is_success() {
         bail!("server returned {status}: {text}");
     }
-    serde_json::from_str(&text).context("failed to parse share response")
+    let mut share: ShareResponse =
+        serde_json::from_str(&text).context("failed to parse share response")?;
+    share.share_url = canonical_share_url(&config, &share.share_url);
+    Ok(share)
+}
+
+fn canonical_share_url(config: &Config, share_url: &str) -> String {
+    let Ok(mut share) = reqwest::Url::parse(share_url) else {
+        return share_url.to_string();
+    };
+    if !share.path().starts_with("/s/") {
+        return share_url.to_string();
+    }
+    let Ok(base) = reqwest::Url::parse(&config.base_url) else {
+        return share_url.to_string();
+    };
+    if share.set_scheme(base.scheme()).is_err() {
+        return share_url.to_string();
+    }
+    if share.set_host(base.host_str()).is_err() {
+        return share_url.to_string();
+    }
+    if share.set_port(base.port()).is_err() {
+        return share_url.to_string();
+    }
+    share.to_string().trim_end_matches('/').to_string()
 }
 
 fn load_config() -> Result<Config> {
@@ -1003,4 +1037,30 @@ Environment fallbacks:
   JONAYLOR_MEMORY_USER_ID overrides the configured memory user.
 "#
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn canonical_share_url_uses_configured_base_url_for_share_links() {
+        let config = config_for_token("https://hub.jonaylor.com", "token");
+
+        let url = canonical_share_url(
+            &config,
+            "http://100.67.54.8:8000/s/abc123?token=review#thread",
+        );
+
+        assert_eq!(url, "https://hub.jonaylor.com/s/abc123?token=review#thread");
+    }
+
+    #[test]
+    fn canonical_share_url_leaves_non_share_links_unchanged() {
+        let config = config_for_token("https://hub.jonaylor.com", "token");
+
+        let url = canonical_share_url(&config, "http://100.67.54.8:8000/admin/threads/abc123");
+
+        assert_eq!(url, "http://100.67.54.8:8000/admin/threads/abc123");
+    }
 }
