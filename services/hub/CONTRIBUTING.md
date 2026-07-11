@@ -37,6 +37,9 @@ sqlx migrate add <migration_name>
 
 ## Testing
 
+Integration tests start PostgreSQL and Redis with Testcontainers, so you do not
+need to start either service manually. Docker must be running.
+
 ```bash
 # Run all tests
 cargo test
@@ -48,7 +51,7 @@ TEST_LOG=1 cargo test
 cargo test test_subscribe
 
 # Run integration tests
-cargo test --test health_check
+cargo test --test api
 ```
 
 ## Checks
@@ -60,7 +63,7 @@ Before submitting a PR:
 cargo fmt
 
 # Run linter
-cargo clippy -- -D warnings
+cargo clippy --all-targets -- -D warnings
 
 # Check compilation
 cargo check --all-targets

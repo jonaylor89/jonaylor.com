@@ -52,7 +52,7 @@ pub struct Application {
 impl Application {
     pub async fn build(configuration: Settings) -> Result<Self, anyhow::Error> {
         let connection_pool = get_connection_pool(&configuration.database);
-        let email_client = configuration.email_client.client();
+        let email_client = configuration.email_client.clone().client();
 
         let redis_config = Config::from_url(configuration.redis_uri.expose_secret().as_str())?;
         // Use a smaller pool size to avoid connection issues
