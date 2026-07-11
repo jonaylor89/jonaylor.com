@@ -2,12 +2,18 @@ use argon2::password_hash::SaltString;
 use argon2::{Algorithm, Argon2, Params, PasswordHasher, Version};
 use hub::email_client::EmailClient;
 use once_cell::sync::Lazy;
+use secrecy::Secret;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
+use testcontainers_modules::{
+    postgres::Postgres,
+    redis::{REDIS_PORT, Redis},
+    testcontainers::{ContainerAsync, ImageExt, runners::AsyncRunner},
+};
 use uuid::Uuid;
 
 use hub::configuration::{DatabaseSettings, get_configuration};
 use hub::issue_delivery_queue::{ExecutionOutcome, try_execute_tasks};
-use hub::startup::{Application, get_connection_pool};
+use hub::startup::Application;
 use hub::telemetry::{get_subscriber, init_subscriber};
 use secrecy::ExposeSecret;
 use wiremock::MockServer;
@@ -67,7 +73,7 @@ impl Drop for TestApp {
 impl TestApp {
     pub async fn post_subscriptions(&self, body: String) -> reqwest::Response {
         self.api_client
-            .post(format!("{}/subscriptions", &self.address))
+            .post(format!("{}/subscriptions", self.address))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .body(body)
             .send()
@@ -105,7 +111,7 @@ impl TestApp {
         Body: serde::Serialize,
     {
         self.api_client
-            .post(format!("{}/admin/newsletters", &self.address))
+            .post(format!("{}/admin/newsletters", self.address))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .form(body)
             .send()
@@ -115,7 +121,7 @@ impl TestApp {
 
     pub async fn get_newsletters_html(&self) -> String {
         self.api_client
-            .get(format!("{}/admin/newsletters", &self.address))
+            .get(format!("{}/admin/newsletters", self.address))
             .send()
             .await
             .expect("Failed to execute request")
@@ -129,7 +135,7 @@ impl TestApp {
         Body: serde::Serialize,
     {
         self.api_client
-            .post(format!("{}/login", &self.address))
+            .post(format!("{}/login", self.address))
             .form(body)
             .send()
             .await
@@ -138,7 +144,7 @@ impl TestApp {
 
     pub async fn get_login_html(&self) -> String {
         self.api_client
-            .get(format!("{}/login", &self.address))
+            .get(format!("{}/login", self.address))
             .send()
             .await
             .expect("Failed to execute request")
@@ -149,7 +155,7 @@ impl TestApp {
 
     pub async fn get_home(&self) -> reqwest::Response {
         self.api_client
-            .get(format!("{}/", &self.address))
+            .get(format!("{}/", self.address))
             .send()
             .await
             .expect("Failed to execute request")
@@ -157,7 +163,7 @@ impl TestApp {
 
     pub async fn get_admin_dashboard(&self) -> reqwest::Response {
         self.api_client
-            .get(format!("{}/admin/dashboard", &self.address))
+            .get(format!("{}/admin/dashboard", self.address))
             .send()
             .await
             .expect("Failed to execute request")
@@ -173,7 +179,7 @@ impl TestApp {
 
     pub async fn get_change_password(&self) -> reqwest::Response {
         self.api_client
-            .get(format!("{}/admin/password", &self.address))
+            .get(format!("{}/admin/password", self.address))
             .send()
             .await
             .expect("Failed to execute request")
@@ -184,7 +190,7 @@ impl TestApp {
         Body: serde::Serialize,
     {
         self.api_client
-            .post(format!("{}/admin/password", &self.address))
+            .post(format!("{}/admin/password", self.address))
             .form(body)
             .send()
             .await
@@ -193,7 +199,7 @@ impl TestApp {
 
     pub async fn post_logout(&self) -> reqwest::Response {
         self.api_client
-            .post(format!("{}/admin/logout", &self.address))
+            .post(format!("{}/admin/logout", self.address))
             .send()
             .await
             .expect("Failed to execute request")
@@ -205,7 +211,7 @@ impl TestApp {
     ) -> reqwest::Response {
         let mut req = self
             .api_client
-            .post(format!("{}/api/v1/events/batch", &self.address))
+            .post(format!("{}/api/v1/events/batch", self.address))
             .json(body);
         if let Some(token) = token {
             req = req.bearer_auth(token);
@@ -220,7 +226,7 @@ impl TestApp {
     ) -> reqwest::Response {
         let mut req = self
             .api_client
-            .post(format!("{}/api/v1/handoffs", &self.address))
+            .post(format!("{}/api/v1/handoffs", self.address))
             .json(body);
         if let Some(token) = token {
             req = req.bearer_auth(token);
@@ -238,7 +244,7 @@ impl TestApp {
             .api_client
             .post(format!(
                 "{}/api/v1/threads/{}/shares",
-                &self.address, thread_id
+                self.address, thread_id
             ))
             .json(body);
         if let Some(token) = token {
@@ -249,7 +255,7 @@ impl TestApp {
 
     pub async fn get_threads_index(&self) -> reqwest::Response {
         self.api_client
-            .get(format!("{}/admin/threads", &self.address))
+            .get(format!("{}/admin/threads", self.address))
             .send()
             .await
             .expect("Failed to execute request")
@@ -257,7 +263,7 @@ impl TestApp {
 
     pub async fn get_thread_page(&self, thread_id: &str) -> reqwest::Response {
         self.api_client
-            .get(format!("{}/admin/threads/{}", &self.address, thread_id))
+            .get(format!("{}/admin/threads/{}", self.address, thread_id))
             .send()
             .await
             .expect("Failed to execute request")
@@ -265,7 +271,7 @@ impl TestApp {
 
     pub async fn get_vault_search(&self, query: &str) -> reqwest::Response {
         self.api_client
-            .get(format!("{}/admin/vault/search", &self.address))
+            .get(format!("{}/admin/vault/search", self.address))
             .query(&[("q", query)])
             .send()
             .await
@@ -274,7 +280,7 @@ impl TestApp {
 
     pub async fn get_vault_admin(&self) -> reqwest::Response {
         self.api_client
-            .get(format!("{}/admin/vault", &self.address))
+            .get(format!("{}/admin/vault", self.address))
             .send()
             .await
             .expect("Failed to execute request")
@@ -287,7 +293,7 @@ impl TestApp {
     ) -> reqwest::Response {
         let mut req = self
             .api_client
-            .post(format!("{}/api/memory", &self.address))
+            .post(format!("{}/api/memory", self.address))
             .json(body);
         if let Some(t) = token {
             req = req.bearer_auth(t);
@@ -302,7 +308,7 @@ impl TestApp {
     ) -> reqwest::Response {
         let mut req = self
             .api_client
-            .post(format!("{}/api/memory/search", &self.address))
+            .post(format!("{}/api/memory/search", self.address))
             .json(body);
         if let Some(t) = token {
             req = req.bearer_auth(t);
@@ -313,7 +319,7 @@ impl TestApp {
     pub async fn get_memory_list(&self, user_id: &str, token: Option<&str>) -> reqwest::Response {
         let mut req = self
             .api_client
-            .get(format!("{}/api/memory/{}", &self.address, user_id));
+            .get(format!("{}/api/memory/{}", self.address, user_id));
         if let Some(t) = token {
             req = req.bearer_auth(t);
         }
@@ -390,7 +396,7 @@ pub async fn spawn_app() -> TestApp {
 
     let email_server = MockServer::start().await;
 
-    let configuration = {
+    let mut configuration = {
         let mut c = get_configuration().expect("Failed to read configuration");
         c.database.database_name = Uuid::new_v4().to_string();
         c.application.port = 0;
@@ -400,14 +406,15 @@ pub async fn spawn_app() -> TestApp {
         c
     };
 
+    let db_pool = configure_database(&mut configuration.database).await;
+    configure_redis(&mut configuration.redis_uri).await;
+
     let application = Application::build(configuration.clone())
         .await
         .expect("Failed to build application");
 
     let application_port = application.port();
     let address = format!("http://localhost:{}", application_port);
-
-    configure_database(&configuration.database).await;
 
     // Create a channel for graceful shutdown
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
@@ -426,7 +433,6 @@ pub async fn spawn_app() -> TestApp {
         .build()
         .unwrap();
 
-    let db_pool = get_connection_pool(&configuration.database);
     let vault_key = hub::vault::keys::issue_api_key(&db_pool, "test-client")
         .await
         .expect("Failed to issue test vault API key");
@@ -459,14 +465,14 @@ pub async fn spawn_queue_worker_app() -> QueueWorkerTestApp {
 
     let email_server = MockServer::start().await;
 
-    let configuration = {
+    let mut configuration = {
         let mut c = get_configuration().expect("Failed to read configuration");
         c.database.database_name = Uuid::new_v4().to_string();
         c.email_client.base_url = email_server.uri();
         c
     };
 
-    let db_pool = configure_database(&configuration.database).await;
+    let db_pool = configure_database(&mut configuration.database).await;
 
     QueueWorkerTestApp {
         db_pool,
@@ -481,7 +487,14 @@ pub async fn spawn_queue_worker_app() -> QueueWorkerTestApp {
     }
 }
 
-async fn configure_database(config: &DatabaseSettings) -> PgPool {
+async fn configure_database(config: &mut DatabaseSettings) -> PgPool {
+    let postgres = test_postgres().await;
+    config.host = postgres.host.clone();
+    config.port = postgres.port;
+    config.username = "postgres".to_string();
+    config.password = Secret::new("postgres".to_string());
+    config.require_ssl = false;
+
     let mut connection = PgConnection::connect_with(&config.without_db())
         .await
         .expect("Failed to connect to Postgres");
@@ -501,6 +514,79 @@ async fn configure_database(config: &DatabaseSettings) -> PgPool {
         .expect("Failed to migrate the database");
 
     connection_pool
+}
+
+struct TestPostgres {
+    host: String,
+    port: u16,
+    _container: ContainerAsync<Postgres>,
+}
+
+struct TestRedis {
+    uri: Secret<String>,
+    _container: ContainerAsync<Redis>,
+}
+
+static TEST_POSTGRES: tokio::sync::OnceCell<TestPostgres> = tokio::sync::OnceCell::const_new();
+static TEST_REDIS: tokio::sync::OnceCell<TestRedis> = tokio::sync::OnceCell::const_new();
+
+async fn test_postgres() -> &'static TestPostgres {
+    TEST_POSTGRES
+        .get_or_init(|| async {
+            let container = Postgres::default()
+                .with_name("public.ecr.aws/docker/library/postgres")
+                .with_tag("16-alpine")
+                .start()
+                .await
+                .expect("Failed to start Postgres test container. Is Docker running?");
+            let host = container
+                .get_host()
+                .await
+                .expect("Failed to get Postgres test container host")
+                .to_string();
+            let port = container
+                .get_host_port_ipv4(5432)
+                .await
+                .expect("Failed to get Postgres test container port");
+
+            TestPostgres {
+                host,
+                port,
+                _container: container,
+            }
+        })
+        .await
+}
+
+async fn configure_redis(redis_uri: &mut Secret<String>) {
+    *redis_uri = test_redis().await.uri.clone();
+}
+
+async fn test_redis() -> &'static TestRedis {
+    TEST_REDIS
+        .get_or_init(|| async {
+            let container = Redis::default()
+                .with_name("public.ecr.aws/docker/library/redis")
+                .with_tag("7-alpine")
+                .start()
+                .await
+                .expect("Failed to start Redis test container. Is Docker running?");
+            let host = container
+                .get_host()
+                .await
+                .expect("Failed to get Redis test container host")
+                .to_string();
+            let port = container
+                .get_host_port_ipv4(REDIS_PORT)
+                .await
+                .expect("Failed to get Redis test container port");
+
+            TestRedis {
+                uri: Secret::new(format!("redis://{host}:{port}")),
+                _container: container,
+            }
+        })
+        .await
 }
 
 pub fn assert_is_redirect_to(response: &reqwest::Response, location: &str) {
