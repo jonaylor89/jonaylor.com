@@ -1,2 +1,1 @@
-
-ALTER TABLE users DROP COLUMN salt;
+-- No-op: schema consolidated into the first migration.

@@ -1,0 +1,74 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!\", external_session_id, title, cwd, repo_remote, repo_branch, repo_head,\n                  default_visibility, created_at, updated_at\n             FROM vault_threads WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "external_session_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "title",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "cwd",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "repo_remote",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "repo_branch",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "repo_head",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "default_visibility",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 9,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6cf71f7b353dbc9e09f122e7ace12902a61406eebacfac43c9a6eac92bce9367"
+}

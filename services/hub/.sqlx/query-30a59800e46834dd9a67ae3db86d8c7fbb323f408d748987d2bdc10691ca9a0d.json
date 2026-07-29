@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT role, kind, content, created_at FROM vault_thread_events\n           WHERE thread_id = ?\n           ORDER BY COALESCE(created_at, inserted_at), inserted_seq",
+  "describe": {
+    "columns": [
+      {
+        "name": "role",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "kind",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "content",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 3,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "30a59800e46834dd9a67ae3db86d8c7fbb323f408d748987d2bdc10691ca9a0d"
+}

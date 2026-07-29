@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE memory_extraction_queue SET status = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "8d8558d40ba71dfb9f2007f48fbaa520c8f9b7d1bc302caf010e8abaf0fd30d3"
+}

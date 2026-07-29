@@ -1,4 +1,5 @@
 use crate::helpers::spawn_app;
+use sqlx::Row;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
@@ -137,14 +138,17 @@ async fn api_subscribe_persists_subscriber() {
         .await
         .expect("Failed to execute request");
 
-    let saved = sqlx::query!("SELECT email, name, status FROM subscriptions")
+    let saved = sqlx::query("SELECT email, name, status FROM subscriptions")
         .fetch_one(&app.db_pool)
         .await
         .expect("Failed to fetch saved subscription");
 
-    assert_eq!(saved.email, "ursula@gmail.com");
-    assert_eq!(saved.name.as_deref(), Some("le guin"));
-    assert_eq!(saved.status, "pending_confirmation");
+    assert_eq!(saved.get::<String, _>("email"), "ursula@gmail.com");
+    assert_eq!(
+        saved.get::<Option<String>, _>("name").as_deref(),
+        Some("le guin")
+    );
+    assert_eq!(saved.get::<String, _>("status"), "pending_confirmation");
 }
 
 #[tokio::test]

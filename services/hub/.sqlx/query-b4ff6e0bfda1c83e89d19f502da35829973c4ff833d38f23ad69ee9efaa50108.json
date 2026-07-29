@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT INTO dead_letter_queue (\n            newsletter_issue_id,\n            subscriber_email,\n            attempt_count,\n            last_error,\n            failed_at\n        )\n        VALUES (?, ?, ?, ?, ?)\n        ON CONFLICT (newsletter_issue_id, subscriber_email)\n        DO UPDATE SET\n            attempt_count = excluded.attempt_count,\n            last_error = excluded.last_error,\n            failed_at = excluded.failed_at\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "b4ff6e0bfda1c83e89d19f502da35829973c4ff833d38f23ad69ee9efaa50108"
+}

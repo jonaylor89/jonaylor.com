@@ -2,42 +2,45 @@ use axum::body::Body;
 use axum::response::Response;
 use http::StatusCode;
 use http_body_util::BodyExt;
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{Sqlite, SqlitePool, Transaction};
 use uuid::Uuid;
 
 use super::IdempotencyKey;
 
 pub enum NextAction {
-    StartProcessing(Transaction<'static, Postgres>),
+    StartProcessing(Transaction<'static, Sqlite>),
     ReturnSavedResponse(Response),
 }
 
-#[derive(Debug, Clone, sqlx::Type)]
-#[sqlx(type_name = "header_pair")]
+/// Serializable header pair for JSON storage.
+/// Values are base64-encoded because they may contain arbitrary bytes.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct HeaderPairRecord {
     name: String,
-    value: Vec<u8>,
+    value: String, // base64-encoded
 }
 
 pub async fn get_saved_response(
-    pool: &PgPool,
+    pool: &SqlitePool,
     idempotency_key: &IdempotencyKey,
     user_id: Uuid,
 ) -> Result<Option<Response>, anyhow::Error> {
+    let user_id_str = user_id.to_string();
+    let key_str = idempotency_key.as_ref();
     let saved_response = sqlx::query!(
         r#"
-        SELECT 
-            response_status_code as "response_status_code!",
-            response_headers AS "response_headers!: Vec<HeaderPairRecord>",
+        SELECT
+            response_status_code AS "response_status_code!",
+            response_headers AS "response_headers!",
             response_body AS "response_body!"
-        FROM idempotency 
+        FROM idempotency
         WHERE
-            user_id = $1
+            user_id = ?
         AND
-            idempotency_key = $2
+            idempotency_key = ?
         "#,
-        user_id,
-        idempotency_key.as_ref(),
+        user_id_str,
+        key_str,
     )
     .fetch_optional(pool)
     .await?;
@@ -45,9 +48,14 @@ pub async fn get_saved_response(
     if let Some(r) = saved_response {
         let status_code = StatusCode::from_u16(r.response_status_code.try_into()?)?;
         let mut builder = http::Response::builder().status(status_code);
-        for HeaderPairRecord { name, value } in r.response_headers {
-            builder = builder.header(name, value);
+
+        let headers: Vec<HeaderPairRecord> =
+            serde_json::from_str(&r.response_headers).unwrap_or_default();
+        for pair in headers {
+            let value_bytes = base64::decode(&pair.value).unwrap_or_default();
+            builder = builder.header(pair.name, value_bytes);
         }
+
         let response = builder
             .body(Body::from(r.response_body))
             .map_err(|e| anyhow::anyhow!(e.to_string()))?;
@@ -58,7 +66,7 @@ pub async fn get_saved_response(
 }
 
 pub async fn save_response(
-    mut transaction: Transaction<'static, Postgres>,
+    mut transaction: Transaction<'static, Sqlite>,
     idempotency_key: &IdempotencyKey,
     user_id: Uuid,
     http_response: Response,
@@ -70,37 +78,41 @@ pub async fn save_response(
         .await
         .map_err(|e| anyhow::anyhow!("{}", e))?
         .to_bytes();
-    let status_code = response_head.status.as_u16() as i16;
+    let status_code = response_head.status.as_u16() as i32;
+    let user_id_str = user_id.to_string();
 
-    let headers = {
-        let mut h = Vec::with_capacity(response_head.headers.len());
-        for (name, value) in response_head.headers.iter() {
-            h.push(HeaderPairRecord {
+    let headers_json = {
+        let pairs: Vec<HeaderPairRecord> = response_head
+            .headers
+            .iter()
+            .map(|(name, value)| HeaderPairRecord {
                 name: name.as_str().to_owned(),
-                value: value.as_bytes().to_owned(),
-            });
-        }
-
-        h
+                value: base64::encode(value.as_bytes()),
+            })
+            .collect();
+        serde_json::to_string(&pairs)?
     };
 
-    sqlx::query_unchecked!(
+    let body_bytes = body.to_vec();
+    let key_str = idempotency_key.as_ref();
+
+    sqlx::query!(
         r#"
-        UPDATE idempotency 
-        SET 
-            response_status_code = $3, 
-            response_headers = $4,
-            response_body = $5
+        UPDATE idempotency
+        SET
+            response_status_code = ?,
+            response_headers = ?,
+            response_body = ?
         WHERE
-            user_id = $1
-        AND 
-            idempotency_key = $2
+            user_id = ?
+        AND
+            idempotency_key = ?
         "#,
-        user_id,
-        idempotency_key.as_ref(),
         status_code,
-        headers,
-        body.as_ref(),
+        headers_json,
+        body_bytes,
+        user_id_str,
+        key_str,
     )
     .execute(transaction.as_mut())
     .await?;
@@ -111,25 +123,29 @@ pub async fn save_response(
 }
 
 pub async fn try_processing(
-    pool: &PgPool,
+    pool: &SqlitePool,
     idempotency_key: &IdempotencyKey,
     user_id: Uuid,
 ) -> Result<NextAction, anyhow::Error> {
     let mut transaction = pool.begin().await?;
-    let n_inserted_rows = sqlx::query_unchecked!(
+    let user_id_str = user_id.to_string();
+    let key_str = idempotency_key.as_ref();
+    let now = chrono::Utc::now().to_rfc3339();
+    let n_inserted_rows = sqlx::query!(
         r#"
         INSERT INTO idempotency (
             user_id,
             idempotency_key,
             created_at
         ) VALUES (
-            $1,
-            $2,
-            now()
+            ?,
+            ?,
+            ?
         ) ON CONFLICT DO NOTHING
         "#,
-        user_id,
-        idempotency_key.as_ref(),
+        user_id_str,
+        key_str,
+        now,
     )
     .execute(transaction.as_mut())
     .await?

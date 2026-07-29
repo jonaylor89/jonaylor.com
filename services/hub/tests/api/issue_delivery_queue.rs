@@ -1,7 +1,7 @@
 use chrono::Utc;
 use hub::issue_delivery_queue::{ExecutionOutcome, try_execute_tasks};
 use hub::routes::generate_unsubscribe_url;
-use sqlx::{PgPool, Row};
+use sqlx::{Row, SqlitePool};
 use uuid::Uuid;
 use wiremock::matchers::{method, path};
 use wiremock::{Match, Mock, Request, ResponseTemplate};
@@ -371,17 +371,23 @@ async fn try_execute_tasks_continues_processing_other_tasks_when_one_delivery_fa
     );
 }
 
-async fn create_issue(pool: &PgPool, title: &str, text_content: &str, html_content: &str) -> Uuid {
+async fn create_issue(
+    pool: &SqlitePool,
+    title: &str,
+    text_content: &str,
+    html_content: &str,
+) -> Uuid {
     let issue_id = Uuid::new_v4();
 
     sqlx::query(
         "INSERT INTO newsletter_issues (newsletter_issue_id, title, text_content, html_content, published_at)
-         VALUES ($1, $2, $3, $4, NOW())",
+         VALUES (?, ?, ?, ?, ?)",
     )
-    .bind(issue_id)
+    .bind(issue_id.to_string())
     .bind(title)
     .bind(text_content)
     .bind(html_content)
+    .bind(Utc::now().to_rfc3339())
     .execute(pool)
     .await
     .unwrap();
@@ -390,7 +396,7 @@ async fn create_issue(pool: &PgPool, title: &str, text_content: &str, html_conte
 }
 
 async fn enqueue_task(
-    pool: &PgPool,
+    pool: &SqlitePool,
     issue_id: Uuid,
     subscriber_email: &str,
     attempt_count: i32,
@@ -405,61 +411,71 @@ async fn enqueue_task(
             last_attempted_at,
             error_message
         )
-        VALUES ($1, $2, $3, $4, $5)",
+        VALUES (?, ?, ?, ?, ?)",
     )
-    .bind(issue_id)
+    .bind(issue_id.to_string())
     .bind(subscriber_email)
     .bind(attempt_count)
-    .bind(last_attempted_at)
+    .bind(last_attempted_at.map(|dt| dt.to_rfc3339()))
     .bind(error_message)
     .execute(pool)
     .await
     .unwrap();
 }
 
-async fn get_queue_entry(pool: &PgPool, issue_id: Uuid, email: &str) -> Option<QueueEntry> {
+async fn get_queue_entry(pool: &SqlitePool, issue_id: Uuid, email: &str) -> Option<QueueEntry> {
     let row = sqlx::query(
         "SELECT attempt_count, last_attempted_at, error_message
          FROM issue_delivery_queue
-         WHERE newsletter_issue_id = $1 AND subscriber_email = $2",
+         WHERE newsletter_issue_id = ? AND subscriber_email = ?",
     )
-    .bind(issue_id)
+    .bind(issue_id.to_string())
     .bind(email)
     .fetch_optional(pool)
     .await
     .unwrap()?;
 
+    let last_attempted_at: Option<String> = row.get("last_attempted_at");
+
     Some(QueueEntry {
         attempt_count: row.get("attempt_count"),
-        last_attempted_at: row.get("last_attempted_at"),
+        last_attempted_at: last_attempted_at.map(|s| {
+            chrono::DateTime::parse_from_rfc3339(&s)
+                .unwrap()
+                .with_timezone(&Utc)
+        }),
         error_message: row.get("error_message"),
     })
 }
 
 async fn get_dead_letter_entry(
-    pool: &PgPool,
+    pool: &SqlitePool,
     issue_id: Uuid,
     email: &str,
 ) -> Option<DeadLetterEntry> {
     let row = sqlx::query(
         "SELECT attempt_count, last_error, failed_at
          FROM dead_letter_queue
-         WHERE newsletter_issue_id = $1 AND subscriber_email = $2",
+         WHERE newsletter_issue_id = ? AND subscriber_email = ?",
     )
-    .bind(issue_id)
+    .bind(issue_id.to_string())
     .bind(email)
     .fetch_optional(pool)
     .await
     .unwrap()?;
 
+    let failed_at: String = row.get("failed_at");
+
     Some(DeadLetterEntry {
         attempt_count: row.get("attempt_count"),
         last_error: row.get("last_error"),
-        failed_at: row.get("failed_at"),
+        failed_at: chrono::DateTime::parse_from_rfc3339(&failed_at)
+            .unwrap()
+            .with_timezone(&Utc),
     })
 }
 
-async fn queue_len(pool: &PgPool) -> i64 {
+async fn queue_len(pool: &SqlitePool) -> i32 {
     sqlx::query("SELECT COUNT(*) AS count FROM issue_delivery_queue")
         .fetch_one(pool)
         .await

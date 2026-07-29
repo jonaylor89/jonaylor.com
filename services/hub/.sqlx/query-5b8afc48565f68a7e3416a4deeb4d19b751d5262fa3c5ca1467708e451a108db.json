@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT newsletter_issue_id, title, text_content, html_content, published_at\n        FROM newsletter_issues\n        WHERE newsletter_issue_id = ?\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "newsletter_issue_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "title",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "text_content",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "html_content",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "published_at",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "5b8afc48565f68a7e3416a4deeb4d19b751d5262fa3c5ca1467708e451a108db"
+}

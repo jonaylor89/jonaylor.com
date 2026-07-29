@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use askama::Template;
 use chrono::{DateTime, Utc};
-use sqlx::PgPool;
+use sqlx::SqlitePool;
 use uuid::Uuid;
 
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
 };
 
 pub async fn run_rss_worker(configuration: Settings) -> Result<(), anyhow::Error> {
-    let pool = get_connection_pool(&configuration.database);
+    let pool = get_connection_pool(&configuration.database).await;
     let rss_config = &configuration.rss_feed;
 
     if !rss_config.enabled {
@@ -55,7 +55,7 @@ pub async fn run_rss_worker(configuration: Settings) -> Result<(), anyhow::Error
 
 #[tracing::instrument(skip_all, fields(feed_url = %feed_url))]
 async fn poll_and_process(
-    pool: &PgPool,
+    pool: &SqlitePool,
     client: &reqwest::Client,
     feed_url: &str,
 ) -> Result<usize, anyhow::Error> {
@@ -116,16 +116,16 @@ async fn poll_and_process(
     Ok(count)
 }
 
-async fn is_table_empty(pool: &PgPool) -> Result<bool, anyhow::Error> {
+async fn is_table_empty(pool: &SqlitePool) -> Result<bool, anyhow::Error> {
     let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM rss_feed_entries")
         .fetch_one(pool)
         .await?;
     Ok(row.0 == 0)
 }
 
-async fn entry_exists(pool: &PgPool, guid: &str) -> Result<bool, anyhow::Error> {
+async fn entry_exists(pool: &SqlitePool, guid: &str) -> Result<bool, anyhow::Error> {
     let row: (bool,) =
-        sqlx::query_as("SELECT EXISTS(SELECT 1 FROM rss_feed_entries WHERE guid = $1)")
+        sqlx::query_as("SELECT EXISTS(SELECT 1 FROM rss_feed_entries WHERE guid = ?)")
             .bind(guid)
             .fetch_one(pool)
             .await?;
@@ -133,32 +133,34 @@ async fn entry_exists(pool: &PgPool, guid: &str) -> Result<bool, anyhow::Error> 
 }
 
 async fn insert_rss_entry(
-    pool: &PgPool,
+    pool: &SqlitePool,
     guid: &str,
     title: &str,
     url: &str,
     published_at: Option<DateTime<Utc>>,
     newsletter_issue_id: Option<Uuid>,
 ) -> Result<(), anyhow::Error> {
-    sqlx::query(
+    let published_str = published_at.map(|dt| dt.to_rfc3339());
+    let issue_id_str = newsletter_issue_id.map(|id| id.to_string());
+    sqlx::query!(
         r#"
         INSERT INTO rss_feed_entries (guid, title, url, published_at, newsletter_issue_id)
-        VALUES ($1, $2, $3, $4, $5)
+        VALUES (?, ?, ?, ?, ?)
         ON CONFLICT (guid) DO NOTHING
         "#,
+        guid,
+        title,
+        url,
+        published_str,
+        issue_id_str,
     )
-    .bind(guid)
-    .bind(title)
-    .bind(url)
-    .bind(published_at)
-    .bind(newsletter_issue_id)
     .execute(pool)
     .await?;
     Ok(())
 }
 
 async fn create_newsletter_from_post(
-    pool: &PgPool,
+    pool: &SqlitePool,
     title: &str,
     description: &str,
     post_url: &str,
@@ -191,20 +193,26 @@ async fn create_newsletter_from_post(
 
     let mut transaction = pool.begin().await?;
 
-    sqlx::query(
-        "INSERT INTO newsletter_issues (newsletter_issue_id, title, text_content, html_content, published_at) VALUES ($1, $2, $3, $4, NOW())",
+    let now = Utc::now().to_rfc3339();
+    let issue_id_str = newsletter_issue_id.to_string();
+    let title_str = issue.title.as_ref().to_string();
+    let text_str = issue.text_content.as_ref().to_string();
+    let html_str = issue.html_content.as_ref().to_string();
+    sqlx::query!(
+        "INSERT INTO newsletter_issues (newsletter_issue_id, title, text_content, html_content, published_at) VALUES (?, ?, ?, ?, ?)",
+        issue_id_str,
+        title_str,
+        text_str,
+        html_str,
+        now,
     )
-    .bind(newsletter_issue_id)
-    .bind(issue.title.as_ref())
-    .bind(issue.text_content.as_ref())
-    .bind(issue.html_content.as_ref())
     .execute(transaction.as_mut())
     .await?;
 
-    sqlx::query(
-        "INSERT INTO issue_delivery_queue (newsletter_issue_id, subscriber_email) SELECT $1, email FROM subscriptions WHERE status = 'confirmed'",
+    sqlx::query!(
+        "INSERT INTO issue_delivery_queue (newsletter_issue_id, subscriber_email) SELECT ?, email FROM subscriptions WHERE status = 'confirmed'",
+        issue_id_str,
     )
-    .bind(newsletter_issue_id)
     .execute(transaction.as_mut())
     .await?;
 

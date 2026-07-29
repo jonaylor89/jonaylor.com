@@ -1,7 +1,8 @@
 use anyhow::Context;
 use axum::extract::{Form, State};
 use axum::response::Response;
-use sqlx::{PgPool, Postgres, Transaction};
+use chrono::Utc;
+use sqlx::{Sqlite, SqlitePool, Transaction};
 use uuid::Uuid;
 
 use crate::{
@@ -27,7 +28,7 @@ pub struct FormData {
 )]
 pub async fn publish_newsletter(
     AuthenticatedUser(user_id): AuthenticatedUser,
-    State(pool): State<PgPool>,
+    State(pool): State<SqlitePool>,
     session: TypedSession,
     Form(form): Form<FormData>,
 ) -> Result<Response, crate::utils::AppError> {
@@ -80,10 +81,15 @@ pub async fn publish_newsletter(
 
 #[tracing::instrument(skip_all)]
 async fn insert_newsletter_issue(
-    transaction: &mut Transaction<'_, Postgres>,
+    transaction: &mut Transaction<'_, Sqlite>,
     issue: &NewNewsletterIssue,
 ) -> Result<Uuid, sqlx::Error> {
     let newsletter_issue_id = Uuid::new_v4();
+    let newsletter_issue_id_str = newsletter_issue_id.to_string();
+    let title_str = issue.title.as_ref().to_string();
+    let text_str = issue.text_content.as_ref().to_string();
+    let html_str = issue.html_content.as_ref().to_string();
+    let now = Utc::now().to_rfc3339();
     sqlx::query!(
         r#"
         INSERT INTO newsletter_issues (
@@ -93,12 +99,13 @@ async fn insert_newsletter_issue(
             html_content,
             published_at
         )
-        VALUES ($1, $2, $3, $4, NOW())
+        VALUES (?, ?, ?, ?, ?)
         "#,
-        newsletter_issue_id,
-        issue.title.as_ref(),
-        issue.text_content.as_ref(),
-        issue.html_content.as_ref(),
+        newsletter_issue_id_str,
+        title_str,
+        text_str,
+        html_str,
+        now,
     )
     .execute(transaction.as_mut())
     .await?;
@@ -108,20 +115,21 @@ async fn insert_newsletter_issue(
 
 #[tracing::instrument(skip_all)]
 async fn enequeue_delivery_tasks(
-    transaction: &mut Transaction<'_, Postgres>,
+    transaction: &mut Transaction<'_, Sqlite>,
     newsletter_issue_id: Uuid,
 ) -> Result<(), sqlx::Error> {
+    let newsletter_issue_id_str = newsletter_issue_id.to_string();
     sqlx::query!(
         r#"
         INSERT INTO issue_delivery_queue (
             newsletter_issue_id,
             subscriber_email
         )
-        SELECT $1, email 
+        SELECT ?, email
         FROM subscriptions
         WHERE status = 'confirmed'
         "#,
-        newsletter_issue_id,
+        newsletter_issue_id_str,
     )
     .execute(transaction.as_mut())
     .await?;

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT COUNT(*) as \"count!\"\n        FROM dead_letter_queue\n        WHERE newsletter_issue_id = ? AND subscriber_email = ?\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "count!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "62583fd4d99eb51a72d014fc0a2e813d0ddb571c42d0233e315ff7a66bf3b6e6"
+}

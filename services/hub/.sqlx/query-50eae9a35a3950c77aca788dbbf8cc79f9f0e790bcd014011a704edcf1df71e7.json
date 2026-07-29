@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!\", thread_id, share_kind, revoked_at, created_at FROM vault_shares ORDER BY created_at DESC LIMIT 100",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "thread_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "share_kind",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "revoked_at",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "50eae9a35a3950c77aca788dbbf8cc79f9f0e790bcd014011a704edcf1df71e7"
+}

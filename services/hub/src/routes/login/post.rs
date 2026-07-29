@@ -1,7 +1,7 @@
 use axum::extract::{Form, State};
 use axum::response::Redirect;
 use secrecy::Secret;
-use sqlx::PgPool;
+use sqlx::SqlitePool;
 
 use crate::authentication::{AuthError, Credentials, validate_credentials};
 use crate::routes::error_chain_fmt;
@@ -37,7 +37,7 @@ pub struct FormData {
     )
 )]
 pub async fn login(
-    State(pool): State<PgPool>,
+    State(pool): State<SqlitePool>,
     session: TypedSession,
     Form(form): Form<FormData>,
 ) -> Result<Redirect, crate::utils::AppError> {

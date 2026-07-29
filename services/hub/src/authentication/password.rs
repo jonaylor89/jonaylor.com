@@ -4,7 +4,7 @@ use argon2::{
     password_hash::SaltString,
 };
 use secrecy::{ExposeSecret, Secret};
-use sqlx::PgPool;
+use sqlx::SqlitePool;
 
 use crate::{domain::Password, telemetry::spawn_blocking_with_tracing};
 
@@ -25,7 +25,7 @@ pub struct Credentials {
 #[tracing::instrument(name = "Validate credentials", skip(credentials, pool))]
 pub async fn validate_credentials(
     credentials: Credentials,
-    pool: &PgPool,
+    pool: &SqlitePool,
 ) -> Result<uuid::Uuid, AuthError> {
     let mut user_id = None;
     let mut expected_password_hash = Secret::new(
@@ -59,20 +59,24 @@ pub async fn validate_credentials(
 #[tracing::instrument(name = "Get stored credentials", skip(username, pool))]
 pub async fn get_stored_credentials(
     username: &str,
-    pool: &PgPool,
+    pool: &SqlitePool,
 ) -> Result<Option<(uuid::Uuid, Secret<String>)>, anyhow::Error> {
     let row = sqlx::query!(
         r#"
         SELECT user_id, password_hash
         FROM users
-        WHERE username = $1
+        WHERE username = ?
         "#,
         username,
     )
     .fetch_optional(pool)
     .await
     .context("Failed to perform a query to retrieve stored credentials.")?
-    .map(|row| (row.user_id, Secret::new(row.password_hash)));
+    .map(|row| {
+        let user_id =
+            uuid::Uuid::parse_str(&row.user_id).expect("Invalid UUID stored in users.user_id");
+        (user_id, Secret::new(row.password_hash))
+    });
     Ok(row)
 }
 
@@ -100,20 +104,22 @@ pub fn verify_password_hash(
 pub async fn change_password(
     user_id: uuid::Uuid,
     password: Password,
-    pool: &PgPool,
+    pool: &SqlitePool,
 ) -> Result<(), anyhow::Error> {
     let password_hash = spawn_blocking_with_tracing(move || compute_password_hash(password))
         .await?
         .context("Failed to hash password")?;
 
+    let password_hash_str = password_hash.expose_secret().clone();
+    let user_id_str = user_id.to_string();
     sqlx::query!(
         r#"
         UPDATE users
-        SET password_hash = $1
-        WHERE user_id = $2
+        SET password_hash = ?
+        WHERE user_id = ?
         "#,
-        password_hash.expose_secret(),
-        user_id,
+        password_hash_str,
+        user_id_str,
     )
     .execute(pool)
     .await

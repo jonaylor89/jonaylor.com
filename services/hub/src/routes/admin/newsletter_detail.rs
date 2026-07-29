@@ -2,7 +2,7 @@ use anyhow::Context;
 use axum::Form;
 use axum::extract::{Path, State};
 use axum::response::{Html, Json};
-use sqlx::PgPool;
+use sqlx::SqlitePool;
 use uuid::Uuid;
 
 use crate::authentication::AuthenticatedUser;
@@ -27,7 +27,7 @@ pub struct NewsletterListResponse {
 #[tracing::instrument(name = "List newsletters", skip_all)]
 pub async fn list_newsletters(
     _user: AuthenticatedUser,
-    State(pool): State<PgPool>,
+    State(pool): State<SqlitePool>,
 ) -> Result<Json<NewsletterListResponse>, crate::utils::AppError> {
     let rows = sqlx::query!(
         r#"
@@ -70,7 +70,8 @@ pub async fn list_newsletters(
         // Since we can't know original, let's show delivered as "not in queue and not in DLQ"
         // which is best-effort.
         newsletters.push(NewsletterSummary {
-            newsletter_issue_id: r.newsletter_issue_id,
+            newsletter_issue_id: Uuid::parse_str(&r.newsletter_issue_id)
+                .expect("Invalid UUID in newsletter_issues.newsletter_issue_id"),
             title: r.title,
             published_at: r.published_at,
             delivered: 0, // We don't have this data; would need a separate tracking table
@@ -94,16 +95,17 @@ pub struct NewsletterDetail {
 #[tracing::instrument(name = "Get newsletter detail", skip(pool))]
 pub async fn get_newsletter(
     _user: AuthenticatedUser,
-    State(pool): State<PgPool>,
+    State(pool): State<SqlitePool>,
     Path(issue_id): Path<Uuid>,
 ) -> Result<Json<NewsletterDetail>, crate::utils::AppError> {
+    let issue_id_str = issue_id.to_string();
     let row = sqlx::query!(
         r#"
         SELECT newsletter_issue_id, title, text_content, html_content, published_at
         FROM newsletter_issues
-        WHERE newsletter_issue_id = $1
+        WHERE newsletter_issue_id = ?
         "#,
-        issue_id,
+        issue_id_str,
     )
     .fetch_optional(&pool)
     .await
@@ -112,7 +114,8 @@ pub async fn get_newsletter(
 
     match row {
         Some(r) => Ok(Json(NewsletterDetail {
-            newsletter_issue_id: r.newsletter_issue_id,
+            newsletter_issue_id: Uuid::parse_str(&r.newsletter_issue_id)
+                .expect("Invalid UUID in newsletter_issues.newsletter_issue_id"),
             title: r.title,
             text_content: r.text_content,
             html_content: r.html_content,

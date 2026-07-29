@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use chrono::Utc;
-use sqlx::{PgPool, Row};
+use sqlx::SqlitePool;
 use uuid::Uuid;
 
 use crate::configuration::Settings;
@@ -25,8 +25,8 @@ pub enum ExecutionOutcome {
 }
 
 pub async fn run_memory_worker_until_stopped(configuration: Settings) -> Result<(), anyhow::Error> {
-    let pool = get_connection_pool(&configuration.database);
-    let engine = MemoryEngine::new(pool.clone(), &configuration.memory);
+    let pool = get_connection_pool(&configuration.database).await;
+    let engine = MemoryEngine::new(&configuration.memory).await;
 
     if !engine.is_enabled() {
         tracing::info!("Memory engine is disabled — extraction worker will not start");
@@ -38,7 +38,7 @@ pub async fn run_memory_worker_until_stopped(configuration: Settings) -> Result<
     worker_loop(&pool, &engine).await
 }
 
-async fn worker_loop(pool: &PgPool, engine: &MemoryEngine) -> Result<(), anyhow::Error> {
+async fn worker_loop(pool: &SqlitePool, engine: &MemoryEngine) -> Result<(), anyhow::Error> {
     loop {
         match try_process_next(pool, engine).await {
             Ok(ExecutionOutcome::EmptyQueue) => {
@@ -61,18 +61,17 @@ async fn worker_loop(pool: &PgPool, engine: &MemoryEngine) -> Result<(), anyhow:
 
 #[tracing::instrument(name = "memory_worker::try_process_next", skip_all, level = "debug")]
 async fn try_process_next(
-    pool: &PgPool,
+    pool: &SqlitePool,
     engine: &MemoryEngine,
 ) -> Result<ExecutionOutcome, anyhow::Error> {
     let mut tx = pool.begin().await?;
 
-    // Dequeue one job, skipping rows locked by concurrent workers.
-    let row = sqlx::query(
+    // Dequeue one job.
+    let row = sqlx::query!(
         r#"
-        SELECT id, user_id, raw_text, attempt_count, last_attempted_at
+        SELECT id, user_id, raw_text, attempt_count, last_attempted_at AS "last_attempted_at?"
         FROM memory_extraction_queue
         WHERE status IN ('pending', 'failed')
-        FOR UPDATE SKIP LOCKED
         LIMIT 1
         "#,
     )
@@ -87,11 +86,13 @@ async fn try_process_next(
         }
     };
 
-    let job_id: Uuid = row.get("id");
-    let user_id: String = row.get("user_id");
-    let raw_text: String = row.get("raw_text");
-    let attempt_count: i32 = row.get("attempt_count");
-    let last_attempted_at: Option<chrono::DateTime<Utc>> = row.get("last_attempted_at");
+    let job_id = Uuid::parse_str(&row.id).expect("invalid UUID in extraction queue");
+    let user_id = row.user_id;
+    let raw_text = row.raw_text;
+    let attempt_count = row.attempt_count as i32;
+    let last_attempted_at = row
+        .last_attempted_at
+        .and_then(|s| s.parse::<chrono::DateTime<Utc>>().ok());
 
     // Exponential backoff: skip if too soon to retry.
     if let Some(last) = last_attempted_at {
@@ -108,11 +109,15 @@ async fn try_process_next(
     }
 
     // Mark as processing so we can release the row lock.
-    sqlx::query("UPDATE memory_extraction_queue SET status = $2 WHERE id = $1")
-        .bind(job_id)
-        .bind(MemoryExtractionStatus::Processing.as_str())
-        .execute(tx.as_mut())
-        .await?;
+    let processing_status = MemoryExtractionStatus::Processing.as_str();
+    let job_id_str = job_id.to_string();
+    sqlx::query!(
+        "UPDATE memory_extraction_queue SET status = ? WHERE id = ?",
+        processing_status,
+        job_id_str,
+    )
+    .execute(tx.as_mut())
+    .await?;
     tx.commit().await?;
 
     // Run the actual extraction (LLM calls + DB inserts) outside the transaction.
@@ -129,6 +134,8 @@ async fn try_process_next(
         Err(e) => {
             let new_count = attempt_count + 1;
             let error_msg = format!("{e:#}");
+            let now = Utc::now().to_rfc3339();
+            let jid = job_id.to_string();
 
             if new_count >= MAX_RETRY_ATTEMPTS {
                 tracing::warn!(
@@ -136,21 +143,22 @@ async fn try_process_next(
                     attempts = new_count,
                     "Max retries reached — marking as dead_letter"
                 );
-                sqlx::query(
+                let status = MemoryExtractionStatus::DeadLetter.as_str();
+                sqlx::query!(
                     r#"
                     UPDATE memory_extraction_queue
-                    SET status = $5,
-                        attempt_count = $2,
-                        last_attempted_at = $3,
-                        last_error = $4
-                    WHERE id = $1
+                    SET status = ?,
+                        attempt_count = ?,
+                        last_attempted_at = ?,
+                        last_error = ?
+                    WHERE id = ?
                     "#,
+                    status,
+                    new_count,
+                    now,
+                    error_msg,
+                    jid,
                 )
-                .bind(job_id)
-                .bind(new_count)
-                .bind(Utc::now())
-                .bind(&error_msg)
-                .bind(MemoryExtractionStatus::DeadLetter.as_str())
                 .execute(pool)
                 .await?;
             } else {
@@ -160,21 +168,22 @@ async fn try_process_next(
                     error = %e,
                     "Extraction failed — will retry"
                 );
-                sqlx::query(
+                let status = MemoryExtractionStatus::Failed.as_str();
+                sqlx::query!(
                     r#"
                     UPDATE memory_extraction_queue
-                    SET status = $5,
-                        attempt_count = $2,
-                        last_attempted_at = $3,
-                        last_error = $4
-                    WHERE id = $1
+                    SET status = ?,
+                        attempt_count = ?,
+                        last_attempted_at = ?,
+                        last_error = ?
+                    WHERE id = ?
                     "#,
+                    status,
+                    new_count,
+                    now,
+                    error_msg,
+                    jid,
                 )
-                .bind(job_id)
-                .bind(new_count)
-                .bind(Utc::now())
-                .bind(&error_msg)
-                .bind(MemoryExtractionStatus::Failed.as_str())
                 .execute(pool)
                 .await?;
             }
@@ -184,9 +193,9 @@ async fn try_process_next(
     Ok(ExecutionOutcome::TaskCompleted)
 }
 
-async fn delete_job(pool: &PgPool, job_id: Uuid) -> Result<(), anyhow::Error> {
-    sqlx::query("DELETE FROM memory_extraction_queue WHERE id = $1")
-        .bind(job_id)
+async fn delete_job(pool: &SqlitePool, job_id: Uuid) -> Result<(), anyhow::Error> {
+    let jid = job_id.to_string();
+    sqlx::query!("DELETE FROM memory_extraction_queue WHERE id = ?", jid)
         .execute(pool)
         .await?;
     Ok(())

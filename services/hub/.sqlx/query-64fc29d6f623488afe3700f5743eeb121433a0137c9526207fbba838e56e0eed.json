@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO vault_handoffs (\n             id, source_thread_id, target_thread_id, target_external_session_id, goal,\n             generated_prompt, source_event_ids_json, created_at\n           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": []
+  },
+  "hash": "64fc29d6f623488afe3700f5743eeb121433a0137c9526207fbba838e56e0eed"
+}

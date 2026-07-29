@@ -67,12 +67,15 @@ pub async fn ingest_events(
         StatusCode::BAD_REQUEST
     })?;
 
-    let existing_thread_id: Option<String> =
-        sqlx::query_scalar("SELECT id FROM vault_threads WHERE external_session_id = $1")
-            .bind(&payload.session.external_session_id)
-            .fetch_optional(&state.db_pool)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let ext_session_id = &payload.session.external_session_id;
+    let existing_thread_id: Option<String> = sqlx::query_scalar!(
+        "SELECT id FROM vault_threads WHERE external_session_id = ?",
+        ext_session_id,
+    )
+    .fetch_optional(&state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .flatten();
     let thread_id = existing_thread_id.unwrap_or_else(|| VaultThreadId::generate().to_string());
 
     let title = payload
@@ -91,11 +94,17 @@ pub async fn ingest_events(
         .clone()
         .unwrap_or_else(|| now.clone());
 
-    sqlx::query(
+    let ext_session_id = &payload.session.external_session_id;
+    let cwd = &payload.session.cwd;
+    let repo_remote = &payload.session.repo_remote;
+    let repo_branch = &payload.session.repo_branch;
+    let repo_head = &payload.session.repo_head;
+    let default_visibility = state.vault.default_visibility.as_ref();
+    sqlx::query!(
         r#"INSERT INTO vault_threads (
              id, external_session_id, title, cwd, repo_remote, repo_branch, repo_head,
              default_visibility, created_at, updated_at
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (external_session_id) DO UPDATE SET
              title       = COALESCE(EXCLUDED.title,       vault_threads.title),
              cwd         = COALESCE(EXCLUDED.cwd,         vault_threads.cwd),
@@ -103,17 +112,17 @@ pub async fn ingest_events(
              repo_branch = COALESCE(EXCLUDED.repo_branch, vault_threads.repo_branch),
              repo_head   = COALESCE(EXCLUDED.repo_head,   vault_threads.repo_head),
              updated_at  = EXCLUDED.updated_at"#,
+        thread_id,
+        ext_session_id,
+        title,
+        cwd,
+        repo_remote,
+        repo_branch,
+        repo_head,
+        default_visibility,
+        thread_created_at,
+        thread_updated_at,
     )
-    .bind(&thread_id)
-    .bind(&payload.session.external_session_id)
-    .bind(&title)
-    .bind(&payload.session.cwd)
-    .bind(&payload.session.repo_remote)
-    .bind(&payload.session.repo_branch)
-    .bind(&payload.session.repo_head)
-    .bind(state.vault.default_visibility.as_ref())
-    .bind(&thread_created_at)
-    .bind(&thread_updated_at)
     .execute(&state.db_pool)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -121,24 +130,27 @@ pub async fn ingest_events(
     let mut accepted = 0;
     let mut duplicates = 0;
     for event in &payload.events {
-        let result = sqlx::query(
+        let event_id = VaultEventId::generate().to_string();
+        let metadata_json = event.metadata.to_string();
+        let result = sqlx::query!(
             r#"INSERT INTO vault_thread_events (
-                 id, thread_id, external_event_id, parent_external_event_id, event_hash, role,
-                 kind, content, redacted, metadata_json, created_at, inserted_at
-               ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, $9, $10, $11)
+                 id, inserted_seq, thread_id, external_event_id, parent_external_event_id,
+                 event_hash, role, kind, content, redacted, metadata_json, created_at, inserted_at
+               ) VALUES (?, (SELECT COALESCE(MAX(inserted_seq), 0) + 1 FROM vault_thread_events),
+                 ?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?, ?)
                ON CONFLICT (thread_id, event_hash) DO NOTHING"#,
+            event_id,
+            thread_id,
+            event.external_event_id,
+            event.parent_external_event_id,
+            event.event_hash,
+            event.role,
+            event.kind,
+            event.content,
+            metadata_json,
+            event.created_at,
+            now,
         )
-        .bind(VaultEventId::generate().to_string())
-        .bind(&thread_id)
-        .bind(&event.external_event_id)
-        .bind(&event.parent_external_event_id)
-        .bind(&event.event_hash)
-        .bind(&event.role)
-        .bind(&event.kind)
-        .bind(&event.content)
-        .bind(event.metadata.to_string())
-        .bind(&event.created_at)
-        .bind(&now)
         .execute(&state.db_pool)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -223,12 +235,11 @@ pub async fn create_thread_share(
     }
 
     let exists: Option<String> =
-        match sqlx::query_scalar("SELECT id FROM vault_threads WHERE id = $1")
-            .bind(&thread_id)
+        match sqlx::query_scalar!("SELECT id FROM vault_threads WHERE id = ?", thread_id)
             .fetch_optional(&state.db_pool)
             .await
         {
-            Ok(exists) => exists,
+            Ok(exists) => exists.flatten(),
             Err(error) => {
                 tracing::error!(?error, "failed to check thread before sharing");
                 return StatusCode::INTERNAL_SERVER_ERROR.into_response();
@@ -239,15 +250,18 @@ pub async fn create_thread_share(
     }
 
     let token = ShareToken::generate();
-    let result = sqlx::query(
+    let share_id = VaultShareId::generate().to_string();
+    let hash = token_hash(token.as_ref());
+    let now = now_rfc3339();
+    let result = sqlx::query!(
         r#"INSERT INTO vault_shares
              (id, thread_id, share_kind, token_hash, is_public, created_at)
-           VALUES ($1, $2, 'secret-link', $3, FALSE, $4)"#,
+           VALUES (?, ?, 'secret-link', ?, FALSE, ?)"#,
+        share_id,
+        thread_id,
+        hash,
+        now,
     )
-    .bind(VaultShareId::generate().to_string())
-    .bind(&thread_id)
-    .bind(token_hash(token.as_ref()))
-    .bind(now_rfc3339())
     .execute(&state.db_pool)
     .await;
 
@@ -279,30 +293,33 @@ pub async fn handoff_record(
         StatusCode::BAD_REQUEST
     })?;
     let target_thread_id: Option<String> = match &payload.target_external_session_id {
-        Some(external_id) => {
-            sqlx::query_scalar("SELECT id FROM vault_threads WHERE external_session_id = $1")
-                .bind(external_id)
-                .fetch_optional(&state.db_pool)
-                .await
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        }
+        Some(external_id) => sqlx::query_scalar!(
+            "SELECT id FROM vault_threads WHERE external_session_id = ?",
+            external_id,
+        )
+        .fetch_optional(&state.db_pool)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .flatten(),
         None => None,
     };
 
-    sqlx::query(
+    let source_event_ids_json =
+        serde_json::to_string(&payload.source_event_ids).unwrap_or_else(|_| "[]".into());
+    sqlx::query!(
         r#"INSERT INTO vault_handoffs (
              id, source_thread_id, target_thread_id, target_external_session_id, goal,
              generated_prompt, source_event_ids_json, created_at
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#,
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"#,
+        handoff_id,
+        payload.source_thread_id,
+        target_thread_id,
+        payload.target_external_session_id,
+        payload.goal,
+        payload.generated_prompt,
+        source_event_ids_json,
+        now,
     )
-    .bind(&handoff_id)
-    .bind(&payload.source_thread_id)
-    .bind(&target_thread_id)
-    .bind(&payload.target_external_session_id)
-    .bind(&payload.goal)
-    .bind(&payload.generated_prompt)
-    .bind(serde_json::to_string(&payload.source_event_ids).unwrap_or_else(|_| "[]".into()))
-    .bind(&now)
     .execute(&state.db_pool)
     .await
     .map_err(|error| {
@@ -419,22 +436,22 @@ async fn persist_batch_blob(
         .data_dir
         .join("blobs/redacted_sessions")
         .join(format!("{}.json", thread_id));
-    let rows = sqlx::query_as::<_, (String, String, Option<String>, Option<String>)>(
+    let rows = sqlx::query!(
         r#"SELECT role, kind, content, created_at FROM vault_thread_events
-           WHERE thread_id = $1
+           WHERE thread_id = ?
            ORDER BY COALESCE(created_at, inserted_at), inserted_seq"#,
+        thread_id,
     )
-    .bind(thread_id)
     .fetch_all(&state.db_pool)
     .await?;
     let events: Vec<Value> = rows
         .into_iter()
-        .map(|(role, kind, content, created_at)| {
+        .map(|row| {
             serde_json::json!({
-                "role": role,
-                "kind": kind,
-                "content": content,
-                "created_at": created_at,
+                "role": row.role,
+                "kind": row.kind,
+                "content": row.content,
+                "created_at": row.created_at,
             })
         })
         .collect();

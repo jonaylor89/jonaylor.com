@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO vault_clients (id, name, api_token_hash, token_prefix, created_at)\n           VALUES (?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "4d26e0fac0538dd82407d57d408f7ac5b5a051ad0064c0d8eaaf102151801e07"
+}

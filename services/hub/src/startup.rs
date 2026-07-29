@@ -2,8 +2,8 @@ use axum::extract::DefaultBodyLimit;
 use axum::routing::{delete, get, post, put};
 use axum::{Router, middleware, serve::Serve};
 use secrecy::ExposeSecret;
-use sqlx::PgPool;
-use sqlx::postgres::PgPoolOptions;
+use sqlx::SqlitePool;
+use sqlx::sqlite::SqlitePoolOptions;
 use time::Duration;
 use tokio::net::TcpListener;
 use tower_http::cors::{AllowOrigin, CorsLayer};
@@ -51,7 +51,10 @@ pub struct Application {
 
 impl Application {
     pub async fn build(configuration: Settings) -> Result<Self, anyhow::Error> {
-        let connection_pool = get_connection_pool(&configuration.database);
+        let connection_pool = get_connection_pool(&configuration.database).await;
+
+        // Run migrations to ensure the schema exists (SQLite DB may be freshly created).
+        sqlx::migrate!("./migrations").run(&connection_pool).await?;
         let email_client = configuration.email_client.clone().client();
 
         let redis_config = Config::from_url(configuration.redis_uri.expose_secret().as_str())?;
@@ -90,7 +93,7 @@ impl Application {
 
         let port = listener.local_addr().unwrap().port();
 
-        let memory_engine = MemoryEngine::new(connection_pool.clone(), &configuration.memory);
+        let memory_engine = MemoryEngine::new(&configuration.memory).await;
 
         let state = AppState {
             db_pool: connection_pool.clone(),
@@ -151,7 +154,7 @@ pub struct ApplicationBaseUrl(pub String);
 
 #[derive(Clone)]
 pub struct AppState {
-    pub db_pool: PgPool,
+    pub db_pool: SqlitePool,
     pub email_client: EmailClient,
     pub base_url: ApplicationBaseUrl,
     pub hmac_secret: String,
@@ -168,7 +171,7 @@ pub struct VaultState {
     pub hmac_secret: String,
 }
 
-impl axum::extract::FromRef<AppState> for PgPool {
+impl axum::extract::FromRef<AppState> for SqlitePool {
     fn from_ref(state: &AppState) -> Self {
         state.db_pool.clone()
     }
@@ -300,8 +303,10 @@ fn run(
     Ok(server)
 }
 
-pub fn get_connection_pool(configuration: &DatabaseSettings) -> PgPool {
-    PgPoolOptions::new()
+pub async fn get_connection_pool(configuration: &DatabaseSettings) -> SqlitePool {
+    SqlitePoolOptions::new()
         .acquire_timeout(std::time::Duration::from_secs(2))
-        .connect_lazy_with(configuration.with_db())
+        .connect(&configuration.connection_string())
+        .await
+        .expect("Failed to create SQLite connection pool")
 }

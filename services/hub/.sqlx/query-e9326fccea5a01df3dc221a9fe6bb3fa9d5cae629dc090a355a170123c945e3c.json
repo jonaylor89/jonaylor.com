@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT INTO rss_feed_entries (guid, title, url, published_at, newsletter_issue_id)\n        VALUES (?, ?, ?, ?, ?)\n        ON CONFLICT (guid) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "e9326fccea5a01df3dc221a9fe6bb3fa9d5cae629dc090a355a170123c945e3c"
+}

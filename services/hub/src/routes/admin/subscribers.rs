@@ -2,7 +2,7 @@ use anyhow::Context;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json};
-use sqlx::PgPool;
+use sqlx::SqlitePool;
 use uuid::Uuid;
 
 use crate::authentication::AuthenticatedUser;
@@ -37,7 +37,7 @@ pub struct ListSubscribersResponse {
 #[tracing::instrument(name = "List subscribers", skip_all)]
 pub async fn list_subscribers(
     _user: AuthenticatedUser,
-    State(pool): State<PgPool>,
+    State(pool): State<SqlitePool>,
     Query(params): Query<ListParams>,
 ) -> Result<Json<ListSubscribersResponse>, crate::utils::AppError> {
     let page = params.page.unwrap_or(1).max(1);
@@ -49,10 +49,13 @@ pub async fn list_subscribers(
         r#"
         SELECT COUNT(*) as "count!"
         FROM subscriptions
-        WHERE ($1::TEXT IS NULL OR status = $1)
-          AND ($2::TEXT IS NULL OR email ILIKE $2 OR name ILIKE $2)
+        WHERE (? IS NULL OR status = ?)
+          AND (? IS NULL OR email LIKE ? OR name LIKE ?)
         "#,
         params.status,
+        params.status,
+        search_pattern,
+        search_pattern,
         search_pattern,
     )
     .fetch_one(&pool)
@@ -64,12 +67,15 @@ pub async fn list_subscribers(
         r#"
         SELECT id, email, name, status as "status!", subscribed_at
         FROM subscriptions
-        WHERE ($1::TEXT IS NULL OR status = $1)
-          AND ($2::TEXT IS NULL OR email ILIKE $2 OR name ILIKE $2)
+        WHERE (? IS NULL OR status = ?)
+          AND (? IS NULL OR email LIKE ? OR name LIKE ?)
         ORDER BY subscribed_at DESC
-        LIMIT $3 OFFSET $4
+        LIMIT ? OFFSET ?
         "#,
         params.status,
+        params.status,
+        search_pattern,
+        search_pattern,
         search_pattern,
         per_page,
         offset,
@@ -82,11 +88,11 @@ pub async fn list_subscribers(
     let subscribers = rows
         .into_iter()
         .map(|r| SubscriberResponse {
-            id: r.id,
+            id: Uuid::parse_str(&r.id).expect("Invalid UUID stored in subscriptions.id"),
             email: r.email,
             name: r.name,
             status: r.status,
-            subscribed_at: r.subscribed_at.to_rfc3339(),
+            subscribed_at: r.subscribed_at,
         })
         .collect();
 
@@ -104,20 +110,21 @@ pub async fn list_subscribers(
 #[tracing::instrument(name = "Delete subscriber", skip(pool))]
 pub async fn delete_subscriber(
     _user: AuthenticatedUser,
-    State(pool): State<PgPool>,
+    State(pool): State<SqlitePool>,
     Path(subscriber_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, crate::utils::AppError> {
     // Delete associated tokens first
+    let subscriber_id_str = subscriber_id.to_string();
     sqlx::query!(
-        "DELETE FROM subscription_tokens WHERE subscriber_id = $1",
-        subscriber_id,
+        "DELETE FROM subscription_tokens WHERE subscriber_id = ?",
+        subscriber_id_str,
     )
     .execute(&pool)
     .await
     .context("Failed to delete subscription tokens")
     .map_err(e500)?;
 
-    let result = sqlx::query!("DELETE FROM subscriptions WHERE id = $1", subscriber_id,)
+    let result = sqlx::query!("DELETE FROM subscriptions WHERE id = ?", subscriber_id_str,)
         .execute(&pool)
         .await
         .context("Failed to delete subscriber")

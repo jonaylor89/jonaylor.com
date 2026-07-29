@@ -1,6 +1,1 @@
-
-CREATE TABLE users(
-    user_id uuid PRIMARY KEY,
-    username TEXT NOT NULL UNIQUE,
-    password TEXT NOT NULL
-);
+-- No-op: schema consolidated into the first migration.

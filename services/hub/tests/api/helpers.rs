@@ -2,13 +2,7 @@ use argon2::password_hash::SaltString;
 use argon2::{Algorithm, Argon2, Params, PasswordHasher, Version};
 use hub::email_client::EmailClient;
 use once_cell::sync::Lazy;
-use secrecy::Secret;
-use sqlx::{Connection, Executor, PgConnection, PgPool};
-use testcontainers_modules::{
-    postgres::Postgres,
-    redis::{REDIS_PORT, Redis},
-    testcontainers::{ContainerAsync, ImageExt, runners::AsyncRunner},
-};
+use sqlx::SqlitePool;
 use uuid::Uuid;
 
 use hub::configuration::{DatabaseSettings, get_configuration};
@@ -39,7 +33,7 @@ pub struct ConfirmationLinks {
 pub struct TestApp {
     pub address: String,
     pub port: u16,
-    pub db_pool: PgPool,
+    pub db_pool: SqlitePool,
     pub email_server: MockServer,
     pub test_user: TestUser,
     pub api_client: reqwest::Client,
@@ -52,7 +46,7 @@ pub struct TestApp {
 }
 
 pub struct QueueWorkerTestApp {
-    pub db_pool: PgPool,
+    pub db_pool: SqlitePool,
     pub email_server: MockServer,
     pub email_client: EmailClient,
     pub hmac_secret: String,
@@ -358,7 +352,7 @@ impl TestUser {
         }
     }
 
-    async fn store(&self, pool: &PgPool) {
+    async fn store(&self, pool: &SqlitePool) {
         let salt = SaltString::generate(&mut rand::thread_rng());
 
         let password_hash = Argon2::new(
@@ -370,13 +364,14 @@ impl TestUser {
         .unwrap()
         .to_string();
 
-        sqlx::query!(
+        let user_id_str = self.user_id.to_string();
+        sqlx::query(
             "INSERT INTO users (user_id, username, password_hash)
-            VALUES ($1, $2, $3)",
-            self.user_id,
-            self.username,
-            password_hash,
+            VALUES (?, ?, ?)",
         )
+        .bind(&user_id_str)
+        .bind(&self.username)
+        .bind(&password_hash)
         .execute(pool)
         .await
         .expect("Failed to create test user");
@@ -396,9 +391,13 @@ pub async fn spawn_app() -> TestApp {
 
     let email_server = MockServer::start().await;
 
-    let mut configuration = {
+    let configuration = {
         let mut c = get_configuration().expect("Failed to read configuration");
-        c.database.database_name = Uuid::new_v4().to_string();
+        // Use a unique temp-file SQLite database per test so the app server
+        // (which opens its own connections) shares the same database.
+        let temp_dir = std::env::temp_dir().join(format!("hub-test-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
+        c.database.path = temp_dir.join("test.db").to_string_lossy().to_string();
         c.application.port = 0;
         c.email_client.base_url = email_server.uri();
         c.memory.enabled = false;
@@ -406,8 +405,7 @@ pub async fn spawn_app() -> TestApp {
         c
     };
 
-    let db_pool = configure_database(&mut configuration.database).await;
-    configure_redis(&mut configuration.redis_uri).await;
+    let db_pool = configure_database(&configuration.database).await;
 
     let application = Application::build(configuration.clone())
         .await
@@ -465,14 +463,16 @@ pub async fn spawn_queue_worker_app() -> QueueWorkerTestApp {
 
     let email_server = MockServer::start().await;
 
-    let mut configuration = {
+    let configuration = {
         let mut c = get_configuration().expect("Failed to read configuration");
-        c.database.database_name = Uuid::new_v4().to_string();
+        let temp_dir = std::env::temp_dir().join(format!("hub-test-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
+        c.database.path = temp_dir.join("test.db").to_string_lossy().to_string();
         c.email_client.base_url = email_server.uri();
         c
     };
 
-    let db_pool = configure_database(&mut configuration.database).await;
+    let db_pool = configure_database(&configuration.database).await;
 
     QueueWorkerTestApp {
         db_pool,
@@ -487,26 +487,10 @@ pub async fn spawn_queue_worker_app() -> QueueWorkerTestApp {
     }
 }
 
-async fn configure_database(config: &mut DatabaseSettings) -> PgPool {
-    let postgres = test_postgres().await;
-    config.host = postgres.host.clone();
-    config.port = postgres.port;
-    config.username = "postgres".to_string();
-    config.password = Secret::new("postgres".to_string());
-    config.require_ssl = false;
-
-    let mut connection = PgConnection::connect_with(&config.without_db())
+async fn configure_database(config: &DatabaseSettings) -> SqlitePool {
+    let connection_pool = SqlitePool::connect(&config.connection_string())
         .await
-        .expect("Failed to connect to Postgres");
-
-    connection
-        .execute(format!(r#"CREATE DATABASE "{}";"#, config.database_name).as_str())
-        .await
-        .expect("Failed to create database");
-
-    let connection_pool = PgPool::connect_with(config.with_db())
-        .await
-        .expect("Failed to connect to Postgres");
+        .expect("Failed to connect to SQLite");
 
     sqlx::migrate!("./migrations")
         .run(&connection_pool)
@@ -516,78 +500,9 @@ async fn configure_database(config: &mut DatabaseSettings) -> PgPool {
     connection_pool
 }
 
-struct TestPostgres {
-    host: String,
-    port: u16,
-    _container: ContainerAsync<Postgres>,
-}
-
-struct TestRedis {
-    uri: Secret<String>,
-    _container: ContainerAsync<Redis>,
-}
-
-static TEST_POSTGRES: tokio::sync::OnceCell<TestPostgres> = tokio::sync::OnceCell::const_new();
-static TEST_REDIS: tokio::sync::OnceCell<TestRedis> = tokio::sync::OnceCell::const_new();
-
-async fn test_postgres() -> &'static TestPostgres {
-    TEST_POSTGRES
-        .get_or_init(|| async {
-            let container = Postgres::default()
-                .with_name("public.ecr.aws/docker/library/postgres")
-                .with_tag("16-alpine")
-                .start()
-                .await
-                .expect("Failed to start Postgres test container. Is Docker running?");
-            let host = container
-                .get_host()
-                .await
-                .expect("Failed to get Postgres test container host")
-                .to_string();
-            let port = container
-                .get_host_port_ipv4(5432)
-                .await
-                .expect("Failed to get Postgres test container port");
-
-            TestPostgres {
-                host,
-                port,
-                _container: container,
-            }
-        })
-        .await
-}
-
-async fn configure_redis(redis_uri: &mut Secret<String>) {
-    *redis_uri = test_redis().await.uri.clone();
-}
-
-async fn test_redis() -> &'static TestRedis {
-    TEST_REDIS
-        .get_or_init(|| async {
-            let container = Redis::default()
-                .with_name("public.ecr.aws/docker/library/redis")
-                .with_tag("7-alpine")
-                .start()
-                .await
-                .expect("Failed to start Redis test container. Is Docker running?");
-            let host = container
-                .get_host()
-                .await
-                .expect("Failed to get Redis test container host")
-                .to_string();
-            let port = container
-                .get_host_port_ipv4(REDIS_PORT)
-                .await
-                .expect("Failed to get Redis test container port");
-
-            TestRedis {
-                uri: Secret::new(format!("redis://{host}:{port}")),
-                _container: container,
-            }
-        })
-        .await
-}
+// Tests use the local Redis instance (start with ./scripts/init_redis.sh).
+// The redis_uri from configuration/local.yaml (redis://127.0.0.1:6379) is
+// used as-is — no testcontainer needed.
 
 pub fn assert_is_redirect_to(response: &reqwest::Response, location: &str) {
     assert_eq!(response.status().as_u16(), 303);

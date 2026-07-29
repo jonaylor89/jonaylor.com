@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT\n                newsletter_issue_id,\n                subscriber_email,\n                attempt_count,\n                last_attempted_at AS \"last_attempted_at?\"\n            FROM issue_delivery_queue\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "newsletter_issue_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "subscriber_email",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "attempt_count",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "last_attempted_at?",
+        "ordinal": 3,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "3c4a589743b4c3e2c949cf077988784436e653a4ef5501e7e18dfda8086c5395"
+}

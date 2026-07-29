@@ -1,2 +1,1 @@
-
-ALTER TABLE users ADD COLUMN salt TEXT NOT NULL;
+-- No-op: schema consolidated into the first migration.

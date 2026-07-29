@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                UPDATE subscriptions\n                SET status = 'confirmed'\n                WHERE id = ?\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "b2766b8ebfbd419b1783d8feb3b514dea246b2e79b76661fbb12f46ce6701483"
+}

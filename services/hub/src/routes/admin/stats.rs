@@ -1,7 +1,7 @@
 use anyhow::Context;
 use axum::extract::State;
 use axum::response::Json;
-use sqlx::PgPool;
+use sqlx::SqlitePool;
 
 use crate::authentication::AuthenticatedUser;
 use crate::utils::e500;
@@ -30,7 +30,7 @@ pub struct DeliveryQueueStats {
 #[tracing::instrument(name = "Get admin stats", skip_all)]
 pub async fn admin_stats(
     _user: AuthenticatedUser,
-    State(pool): State<PgPool>,
+    State(pool): State<SqlitePool>,
 ) -> Result<Json<StatsResponse>, crate::utils::AppError> {
     let total_subscribers =
         sqlx::query_scalar!(r#"SELECT COUNT(*) as "count!" FROM subscriptions"#)

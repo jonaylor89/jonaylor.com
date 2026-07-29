@@ -2,7 +2,7 @@ use anyhow::Context;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json};
-use sqlx::PgPool;
+use sqlx::SqlitePool;
 use uuid::Uuid;
 
 use crate::authentication::AuthenticatedUser;
@@ -27,7 +27,7 @@ pub struct DeadLettersResponse {
 #[tracing::instrument(name = "List dead letters", skip_all)]
 pub async fn list_dead_letters(
     _user: AuthenticatedUser,
-    State(pool): State<PgPool>,
+    State(pool): State<SqlitePool>,
 ) -> Result<Json<DeadLettersResponse>, crate::utils::AppError> {
     let total = sqlx::query_scalar!(r#"SELECT COUNT(*) as "count!" FROM dead_letter_queue"#)
         .fetch_one(&pool)
@@ -57,12 +57,13 @@ pub async fn list_dead_letters(
     let entries = rows
         .into_iter()
         .map(|r| DeadLetterEntry {
-            newsletter_issue_id: r.newsletter_issue_id,
+            newsletter_issue_id: Uuid::parse_str(&r.newsletter_issue_id)
+                .expect("Invalid UUID stored in dead_letter_queue.newsletter_issue_id"),
             newsletter_title: r.newsletter_title,
             subscriber_email: r.subscriber_email,
-            attempt_count: r.attempt_count,
+            attempt_count: r.attempt_count as i32,
             last_error: r.last_error,
-            failed_at: r.failed_at.to_rfc3339(),
+            failed_at: r.failed_at,
         })
         .collect();
 
@@ -72,7 +73,7 @@ pub async fn list_dead_letters(
 #[tracing::instrument(name = "Retry dead letter", skip(pool))]
 pub async fn retry_dead_letter(
     _user: AuthenticatedUser,
-    State(pool): State<PgPool>,
+    State(pool): State<SqlitePool>,
     Path((newsletter_issue_id, subscriber_email)): Path<(Uuid, String)>,
 ) -> Result<impl IntoResponse, crate::utils::AppError> {
     let subscriber_email = urlencoding::decode(&subscriber_email)
@@ -85,13 +86,14 @@ pub async fn retry_dead_letter(
         .into_owned();
 
     // Verify the dead letter exists
+    let newsletter_issue_id_str = newsletter_issue_id.to_string();
     let exists = sqlx::query_scalar!(
         r#"
         SELECT COUNT(*) as "count!"
         FROM dead_letter_queue
-        WHERE newsletter_issue_id = $1 AND subscriber_email = $2
+        WHERE newsletter_issue_id = ? AND subscriber_email = ?
         "#,
-        newsletter_issue_id,
+        newsletter_issue_id_str,
         subscriber_email,
     )
     .fetch_one(&pool)
@@ -115,11 +117,10 @@ pub async fn retry_dead_letter(
     // Re-enqueue into delivery queue with reset attempt count
     sqlx::query!(
         r#"
-        INSERT INTO issue_delivery_queue (newsletter_issue_id, subscriber_email, attempt_count)
-        VALUES ($1, $2, 0)
-        ON CONFLICT (newsletter_issue_id, subscriber_email) DO NOTHING
+        INSERT OR IGNORE INTO issue_delivery_queue (newsletter_issue_id, subscriber_email, attempt_count)
+        VALUES (?, ?, 0)
         "#,
-        newsletter_issue_id,
+        newsletter_issue_id_str,
         subscriber_email,
     )
     .execute(tx.as_mut())
@@ -131,9 +132,9 @@ pub async fn retry_dead_letter(
     sqlx::query!(
         r#"
         DELETE FROM dead_letter_queue
-        WHERE newsletter_issue_id = $1 AND subscriber_email = $2
+        WHERE newsletter_issue_id = ? AND subscriber_email = ?
         "#,
-        newsletter_issue_id,
+        newsletter_issue_id_str,
         subscriber_email,
     )
     .execute(tx.as_mut())

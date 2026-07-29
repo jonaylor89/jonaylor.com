@@ -1,7 +1,7 @@
 use axum::extract::{Form, State};
 use axum::response::Redirect;
 use secrecy::{ExposeSecret, Secret};
-use sqlx::PgPool;
+use sqlx::SqlitePool;
 
 use crate::{
     authentication::{AuthError, AuthenticatedUser, Credentials, validate_credentials},
@@ -20,7 +20,7 @@ pub struct FormData {
 
 pub async fn change_password(
     AuthenticatedUser(user_id): AuthenticatedUser,
-    State(pool): State<PgPool>,
+    State(pool): State<SqlitePool>,
     session: TypedSession,
     Form(form): Form<FormData>,
 ) -> Result<Redirect, crate::utils::AppError> {

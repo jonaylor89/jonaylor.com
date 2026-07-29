@@ -6,7 +6,7 @@ use axum::response::{IntoResponse, Redirect, Response};
 
 use chrono::{DateTime, Local, Utc};
 use serde::Deserialize;
-use sqlx::{PgPool, Row};
+use sqlx::SqlitePool;
 
 use crate::domain::{MAX_PASTE_BYTES, PasteContent, PasteContentError, PasteId};
 use crate::startup::AppState;
@@ -105,8 +105,8 @@ pub async fn delete_paste(State(state): State<AppState>, Path(paste_id): Path<St
         Ok(paste_id) => paste_id,
         Err(_) => return StatusCode::BAD_REQUEST.into_response(),
     };
-    match sqlx::query("DELETE FROM pastes WHERE id = $1")
-        .bind(paste_id.as_ref())
+    let pid = paste_id.as_ref();
+    match sqlx::query!("DELETE FROM pastes WHERE id = ?", pid)
         .execute(&state.db_pool)
         .await
     {
@@ -188,8 +188,8 @@ pub async fn show_paste(
     HtmlTemplate(PasteTemplate { paste }).into_response()
 }
 
-async fn list_pastes(pool: &PgPool, base_url: &str) -> anyhow::Result<Vec<PasteSummary>> {
-    let rows = sqlx::query(
+async fn list_pastes(pool: &SqlitePool, base_url: &str) -> anyhow::Result<Vec<PasteSummary>> {
+    let rows = sqlx::query!(
         "SELECT id, content, created_at FROM pastes ORDER BY created_at DESC LIMIT 100",
     )
     .fetch_all(pool)
@@ -198,58 +198,66 @@ async fn list_pastes(pool: &PgPool, base_url: &str) -> anyhow::Result<Vec<PasteS
     Ok(rows
         .into_iter()
         .map(|row| {
-            let id: String = row.get("id");
-            let content: String = row.get("content");
-            let created_at: DateTime<Utc> = row.get("created_at");
+            let created_at = row
+                .created_at
+                .parse::<DateTime<Utc>>()
+                .unwrap_or_else(|_| Utc::now());
             PasteSummary {
-                public_url: public_url(base_url, &id),
-                id,
+                public_url: public_url(base_url, &row.id),
                 created_at: created_at.to_rfc3339(),
                 created_at_display: display_datetime(created_at),
-                size_bytes: content.len(),
-                line_count: line_count(&content),
-                preview: preview(&content),
+                size_bytes: row.content.len(),
+                line_count: line_count(&row.content),
+                preview: preview(&row.content),
+                id: row.id,
             }
         })
         .collect())
 }
 
 async fn load_paste(
-    pool: &PgPool,
+    pool: &SqlitePool,
     paste_id: &str,
     base_url: &str,
 ) -> anyhow::Result<Option<PasteDetail>> {
-    let Some(row) = sqlx::query("SELECT id, content, created_at FROM pastes WHERE id = $1")
-        .bind(paste_id)
-        .fetch_optional(pool)
-        .await?
+    let Some(row) = sqlx::query!(
+        "SELECT id, content, created_at FROM pastes WHERE id = ?",
+        paste_id,
+    )
+    .fetch_optional(pool)
+    .await?
     else {
         return Ok(None);
     };
 
-    let id: String = row.get("id");
-    let content: String = row.get("content");
-    let created_at: DateTime<Utc> = row.get("created_at");
+    let created_at = row
+        .created_at
+        .parse::<DateTime<Utc>>()
+        .unwrap_or_else(|_| Utc::now());
     Ok(Some(PasteDetail {
-        public_url: public_url(base_url, &id),
-        raw_url: format!("/p/{id}?raw=1"),
-        id,
+        public_url: public_url(base_url, &row.id),
+        raw_url: format!("/p/{}?raw=1", row.id),
         created_at: created_at.to_rfc3339(),
         created_at_display: display_datetime(created_at),
-        size_bytes: content.len(),
-        line_count: line_count(&content),
-        content,
+        size_bytes: row.content.len(),
+        line_count: line_count(&row.content),
+        content: row.content,
+        id: row.id,
     }))
 }
 
-async fn insert_paste(pool: &PgPool, content: &PasteContent) -> anyhow::Result<String> {
+async fn insert_paste(pool: &SqlitePool, content: &PasteContent) -> anyhow::Result<String> {
     for _ in 0..16 {
         let id = PasteId::generate();
-        let inserted = sqlx::query(
-            "INSERT INTO pastes (id, content) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING RETURNING id",
+        let now = chrono::Utc::now().to_rfc3339();
+        let id_str = id.as_ref();
+        let content_str = content.as_ref();
+        let inserted = sqlx::query!(
+            "INSERT INTO pastes (id, content, created_at) VALUES (?, ?, ?) ON CONFLICT (id) DO NOTHING RETURNING id",
+            id_str,
+            content_str,
+            now,
         )
-        .bind(id.as_ref())
-        .bind(content.as_ref())
         .fetch_optional(pool)
         .await?;
         if inserted.is_some() {

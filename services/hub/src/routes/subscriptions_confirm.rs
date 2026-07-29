@@ -1,7 +1,7 @@
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use sqlx::PgPool;
+use sqlx::SqlitePool;
 use uuid::Uuid;
 
 use crate::domain::SubscriptionToken;
@@ -14,7 +14,7 @@ pub struct Parameters {
 #[tracing::instrument(name = "Confirm a pending subscriber", skip(parameters, pool))]
 pub async fn confirm(
     Query(parameters): Query<Parameters>,
-    State(pool): State<PgPool>,
+    State(pool): State<SqlitePool>,
 ) -> impl IntoResponse {
     // Validate token format before querying database
     let token = match SubscriptionToken::parse(parameters.subscription_token.clone()) {
@@ -66,16 +66,17 @@ pub async fn confirm(
 
 #[tracing::instrument(name = "Get subscriber status", skip(subscriber_id, pool))]
 pub async fn get_subscriber_status(
-    pool: &PgPool,
+    pool: &SqlitePool,
     subscriber_id: Uuid,
 ) -> Result<Option<String>, sqlx::Error> {
+    let subscriber_id_str = subscriber_id.to_string();
     let result = sqlx::query!(
         r#"
             SELECT status
             FROM subscriptions
-            WHERE id = $1
+            WHERE id = ?
         "#,
-        subscriber_id,
+        subscriber_id_str,
     )
     .fetch_optional(pool)
     .await
@@ -88,7 +89,7 @@ pub async fn get_subscriber_status(
 }
 
 #[tracing::instrument(name = "Mark subscriber as confirmed", skip(subscriber_id, pool))]
-pub async fn confirm_subscriber(pool: &PgPool, subscriber_id: Uuid) -> Result<(), sqlx::Error> {
+pub async fn confirm_subscriber(pool: &SqlitePool, subscriber_id: Uuid) -> Result<(), sqlx::Error> {
     // Check current status to make operation idempotent
     let current_status = get_subscriber_status(pool, subscriber_id).await?;
 
@@ -100,13 +101,14 @@ pub async fn confirm_subscriber(pool: &PgPool, subscriber_id: Uuid) -> Result<()
         }
         Some(_) => {
             // Pending confirmation - update to confirmed
+            let subscriber_id_str = subscriber_id.to_string();
             sqlx::query!(
                 r#"
                 UPDATE subscriptions
                 SET status = 'confirmed'
-                WHERE id = $1
+                WHERE id = ?
                 "#,
-                subscriber_id,
+                subscriber_id_str,
             )
             .execute(pool)
             .await
@@ -127,14 +129,14 @@ pub async fn confirm_subscriber(pool: &PgPool, subscriber_id: Uuid) -> Result<()
 
 #[tracing::instrument(name = "Get subscriber id from token", skip(subscription_token, pool))]
 pub async fn get_subscriber_id_from_token(
-    pool: &PgPool,
+    pool: &SqlitePool,
     subscription_token: &str,
 ) -> Result<Option<Uuid>, sqlx::Error> {
     let result = sqlx::query!(
         r#"
             SELECT subscriber_id
             FROM subscription_tokens
-            WHERE subscription_token = $1
+            WHERE subscription_token = ?
         "#,
         subscription_token,
     )
@@ -145,5 +147,8 @@ pub async fn get_subscriber_id_from_token(
         e
     })?;
 
-    Ok(result.map(|r| r.subscriber_id))
+    Ok(result.map(|r| {
+        Uuid::parse_str(&r.subscriber_id)
+            .expect("Invalid UUID stored in subscription_tokens.subscriber_id")
+    }))
 }

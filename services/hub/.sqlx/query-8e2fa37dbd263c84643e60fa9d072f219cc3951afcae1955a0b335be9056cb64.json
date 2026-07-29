@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO newsletter_issues (newsletter_issue_id, title, text_content, html_content, published_at) VALUES (?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "8e2fa37dbd263c84643e60fa9d072f219cc3951afcae1955a0b335be9056cb64"
+}

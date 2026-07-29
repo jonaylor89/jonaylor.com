@@ -1,5 +1,5 @@
 use crate::helpers::spawn_app;
-
+use sqlx::Row;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
@@ -34,14 +34,17 @@ async fn subscribe_persists_the_new_subscriber() {
 
     app.post_subscriptions(body.into()).await;
 
-    let saved = sqlx::query!("SELECT email, name, status FROM subscriptions;")
+    let saved = sqlx::query("SELECT email, name, status FROM subscriptions;")
         .fetch_one(&app.db_pool)
         .await
         .expect("Failed to fetch saved subscription");
 
-    assert_eq!(saved.email, "ursula_le_guin@gmail.com");
-    assert_eq!(saved.name.as_deref(), Some("le guin"));
-    assert_eq!(saved.status, "pending_confirmation");
+    assert_eq!(saved.get::<String, _>("email"), "ursula_le_guin@gmail.com");
+    assert_eq!(
+        saved.get::<Option<String>, _>("name").as_deref(),
+        Some("le guin")
+    );
+    assert_eq!(saved.get::<String, _>("status"), "pending_confirmation");
 }
 
 #[tokio::test]
@@ -155,7 +158,9 @@ async fn subscribe_fails_if_there_is_a_fatal_database_error() {
     let app = spawn_app().await;
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
 
-    sqlx::query!("ALTER TABLE subscriptions DROP COLUMN email;")
+    // SQLite can't DROP COLUMN on UNIQUE columns; rename the table instead
+    // to trigger a "no such table" error at runtime.
+    sqlx::query("ALTER TABLE subscriptions RENAME TO subscriptions_broken")
         .execute(&app.db_pool)
         .await
         .unwrap();

@@ -73,12 +73,15 @@ pub async fn add_memory_handler(
     };
 
     let job_id = Uuid::new_v4();
-    let result = sqlx::query(
-        "INSERT INTO memory_extraction_queue (id, user_id, raw_text) VALUES ($1, $2, $3)",
+    let job_id_str = job_id.to_string();
+    let user_id_str = user_id.as_ref().to_string();
+    let text_str = text.as_ref().to_string();
+    let result = sqlx::query!(
+        "INSERT INTO memory_extraction_queue (id, user_id, raw_text) VALUES (?, ?, ?)",
+        job_id_str,
+        user_id_str,
+        text_str,
     )
-    .bind(job_id)
-    .bind(user_id.as_ref())
-    .bind(text.as_ref())
     .execute(&state.db_pool)
     .await;
 

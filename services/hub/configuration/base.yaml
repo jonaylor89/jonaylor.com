@@ -3,11 +3,7 @@ application:
   hmac_secret: "super-long-and-secret-random-key-needed-to-verify-message-integrity"
   api_bearer_token: "dev-api-token"
 database:
-  host: "localhost"
-  port: 5432
-  username: "postgres"
-  password: "password"
-  database_name: "newsletter"
+  path: "./data/hub.db"
 email_client:
   base_url: "localhost"
   sender_email: "test@gmail.com"
@@ -17,3 +13,4 @@ redis_uri: "redis://127.0.0.1:6379"
 
 memory:
   enabled: false
+  data_dir: "./data/memories"

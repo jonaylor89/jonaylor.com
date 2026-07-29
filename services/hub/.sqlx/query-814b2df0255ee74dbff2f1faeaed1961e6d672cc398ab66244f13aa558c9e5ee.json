@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO vault_threads (\n             id, external_session_id, title, cwd, repo_remote, repo_branch, repo_head,\n             default_visibility, created_at, updated_at\n           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n           ON CONFLICT (external_session_id) DO UPDATE SET\n             title       = COALESCE(EXCLUDED.title,       vault_threads.title),\n             cwd         = COALESCE(EXCLUDED.cwd,         vault_threads.cwd),\n             repo_remote = COALESCE(EXCLUDED.repo_remote, vault_threads.repo_remote),\n             repo_branch = COALESCE(EXCLUDED.repo_branch, vault_threads.repo_branch),\n             repo_head   = COALESCE(EXCLUDED.repo_head,   vault_threads.repo_head),\n             updated_at  = EXCLUDED.updated_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 10
+    },
+    "nullable": []
+  },
+  "hash": "814b2df0255ee74dbff2f1faeaed1961e6d672cc398ab66244f13aa558c9e5ee"
+}

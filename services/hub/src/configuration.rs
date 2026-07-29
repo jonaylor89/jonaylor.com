@@ -1,9 +1,5 @@
-use secrecy::ExposeSecret;
 use secrecy::Secret;
 use serde_aux::prelude::deserialize_number_from_string;
-use sqlx::ConnectOptions;
-use sqlx::postgres::PgConnectOptions;
-use sqlx::postgres::PgSslMode;
 
 use crate::domain::{SearchLimit, SimilarityThreshold, SubscriberEmail, VaultVisibility};
 use crate::email_client::EmailClient;
@@ -60,6 +56,8 @@ impl Default for VaultSettings {
 pub struct MemorySettings {
     #[serde(default)]
     pub enabled: bool,
+    #[serde(default = "default_memory_data_dir")]
+    pub data_dir: String,
     #[serde(default = "default_memory_api_base_url")]
     pub api_base_url: String,
     #[serde(default = "default_memory_api_key")]
@@ -72,6 +70,10 @@ pub struct MemorySettings {
     pub similarity_threshold: f64,
     #[serde(default = "default_memory_search_limit")]
     pub search_limit: i64,
+}
+
+fn default_memory_data_dir() -> String {
+    "./data/memories".to_string()
 }
 
 fn default_memory_api_base_url() -> String {
@@ -112,6 +114,7 @@ impl Default for MemorySettings {
     fn default() -> Self {
         Self {
             enabled: false,
+            data_dir: default_memory_data_dir(),
             api_base_url: default_memory_api_base_url(),
             api_key: default_memory_api_key(),
             embedding_model: default_memory_embedding_model(),
@@ -161,37 +164,14 @@ pub struct ApplicationSettings {
 
 #[derive(serde::Deserialize, Clone)]
 pub struct DatabaseSettings {
-    pub username: String,
-    pub password: Secret<String>,
-
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub port: u16,
-
-    pub host: String,
-    pub database_name: String,
-    pub require_ssl: bool,
+    pub path: String,
 }
 
 impl DatabaseSettings {
-    pub fn with_db(&self) -> PgConnectOptions {
-        self.without_db()
-            .database(&self.database_name)
-            .log_statements(tracing::log::LevelFilter::Trace)
-    }
-
-    pub fn without_db(&self) -> PgConnectOptions {
-        let ssl_mode = if self.require_ssl {
-            PgSslMode::Require
-        } else {
-            PgSslMode::Prefer
-        };
-
-        PgConnectOptions::new()
-            .host(&self.host)
-            .username(&self.username)
-            .password(self.password.expose_secret())
-            .port(self.port)
-            .ssl_mode(ssl_mode)
+    /// Returns a SQLite connection string.
+    /// The `mode=rwc` flag creates the database file if it doesn't exist.
+    pub fn connection_string(&self) -> String {
+        format!("sqlite://{}?mode=rwc", self.path)
     }
 }
 

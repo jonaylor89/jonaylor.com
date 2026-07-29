@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use chrono::Utc;
-use sqlx::{PgPool, Postgres, Row, Transaction};
+use sqlx::{Sqlite, SqlitePool, Transaction};
 use tokio::task::JoinSet;
 use tracing::{Span, field::display};
 use uuid::Uuid;
@@ -22,7 +22,7 @@ const MAX_RETRY_ATTEMPTS: i32 = 5;
 // Minimum time between retry attempts (exponential backoff base)
 const RETRY_BACKOFF_MINUTES: i64 = 5;
 
-type PgTransaction = Transaction<'static, Postgres>;
+type SqliteTransaction = Transaction<'static, Sqlite>;
 
 struct NewsletterIssue {
     title: String,
@@ -31,7 +31,7 @@ struct NewsletterIssue {
 }
 
 struct DequeuedTask {
-    transaction: PgTransaction,
+    transaction: SqliteTransaction,
     issue_id: Uuid,
     email: String,
     attempt_count: i32,
@@ -49,7 +49,7 @@ enum TaskExecutionResult {
 }
 
 pub async fn run_worker_until_stopped(configuration: Settings) -> Result<(), anyhow::Error> {
-    let connection_pool = get_connection_pool(&configuration.database);
+    let connection_pool = get_connection_pool(&configuration.database).await;
     let email_client = configuration.email_client.client();
     let base_url = configuration.application.base_url.clone();
     let hmac_secret = configuration
@@ -61,7 +61,7 @@ pub async fn run_worker_until_stopped(configuration: Settings) -> Result<(), any
 }
 
 async fn worker_loop(
-    pool: &PgPool,
+    pool: &SqlitePool,
     email_client: &EmailClient,
     hmac_secret: &str,
     base_url: &str,
@@ -82,7 +82,7 @@ async fn worker_loop(
 
 #[tracing::instrument(skip_all)]
 pub async fn try_execute_tasks(
-    pool: &PgPool,
+    pool: &SqlitePool,
     email_client: &EmailClient,
     hmac_secret: &str,
     base_url: &str,
@@ -164,7 +164,7 @@ pub async fn try_execute_tasks(
     )
 )]
 async fn execute_single_task(
-    pool: PgPool,
+    pool: SqlitePool,
     email_client: EmailClient,
     mut task: DequeuedTask,
     hmac_secret: &str,
@@ -229,7 +229,7 @@ async fn execute_single_task(
                 "Invalid email address - moving to dead letter queue"
             );
             move_to_dead_letter_queue(
-                &pool,
+                &mut task.transaction,
                 task.issue_id,
                 &task.email,
                 task.attempt_count,
@@ -267,7 +267,7 @@ async fn execute_single_task(
                     task.email
                 );
                 move_to_dead_letter_queue(
-                    &pool,
+                    &mut task.transaction,
                     task.issue_id,
                     &task.email,
                     new_attempt_count,
@@ -294,23 +294,24 @@ async fn execute_single_task(
 }
 
 #[tracing::instrument(skip_all)]
-async fn dequeue_tasks(pool: &PgPool, limit: usize) -> Result<Vec<DequeuedTask>, anyhow::Error> {
+async fn dequeue_tasks(
+    pool: &SqlitePool,
+    limit: usize,
+) -> Result<Vec<DequeuedTask>, anyhow::Error> {
     let mut tasks = Vec::new();
 
     // Dequeue tasks one by one to get separate transactions for each
     // This allows parallel processing without holding locks
     for _ in 0..limit {
         let mut transaction = pool.begin().await?;
-        let r = sqlx::query(
+        let r = sqlx::query!(
             r#"
             SELECT
                 newsletter_issue_id,
                 subscriber_email,
                 attempt_count,
-                last_attempted_at
+                last_attempted_at AS "last_attempted_at?"
             FROM issue_delivery_queue
-            FOR UPDATE
-            SKIP LOCKED
             LIMIT 1
             "#,
         )
@@ -320,10 +321,13 @@ async fn dequeue_tasks(pool: &PgPool, limit: usize) -> Result<Vec<DequeuedTask>,
         if let Some(r) = r {
             tasks.push(DequeuedTask {
                 transaction,
-                issue_id: r.get("newsletter_issue_id"),
-                email: r.get("subscriber_email"),
-                attempt_count: r.get("attempt_count"),
-                last_attempted_at: r.get("last_attempted_at"),
+                issue_id: Uuid::parse_str(&r.newsletter_issue_id)
+                    .expect("invalid UUID in delivery queue"),
+                email: r.subscriber_email,
+                attempt_count: r.attempt_count as i32,
+                last_attempted_at: r
+                    .last_attempted_at
+                    .and_then(|s| s.parse::<chrono::DateTime<Utc>>().ok()),
             });
         } else {
             // No more tasks available
@@ -337,19 +341,20 @@ async fn dequeue_tasks(pool: &PgPool, limit: usize) -> Result<Vec<DequeuedTask>,
 
 #[tracing::instrument(skip_all)]
 async fn delete_task(
-    mut transaction: PgTransaction,
+    mut transaction: SqliteTransaction,
     issue_id: Uuid,
     email: &str,
 ) -> Result<(), anyhow::Error> {
+    let issue_id_str = issue_id.to_string();
     sqlx::query!(
         r#"
         DELETE FROM issue_delivery_queue
         WHERE
-            newsletter_issue_id = $1
+            newsletter_issue_id = ?
         AND
-            subscriber_email = $2
+            subscriber_email = ?
         "#,
-        issue_id,
+        issue_id_str,
         email,
     )
     .execute(transaction.as_mut())
@@ -361,44 +366,52 @@ async fn delete_task(
 }
 
 #[tracing::instrument(skip_all)]
-async fn get_issue(pool: &PgPool, issue_id: Uuid) -> Result<NewsletterIssue, anyhow::Error> {
-    let issue: NewsletterIssue = sqlx::query_as!(
-        NewsletterIssue,
+async fn get_issue(pool: &SqlitePool, issue_id: Uuid) -> Result<NewsletterIssue, anyhow::Error> {
+    let issue_id_str = issue_id.to_string();
+    let row = sqlx::query!(
         r#"
         SELECT title, text_content, html_content
         FROM newsletter_issues
         WHERE
-            newsletter_issue_id = $1
+            newsletter_issue_id = ?
         "#,
-        issue_id,
+        issue_id_str,
     )
     .fetch_one(pool)
     .await?;
+
+    let issue = NewsletterIssue {
+        title: row.title,
+        text_content: row.text_content,
+        html_content: row.html_content,
+    };
 
     Ok(issue)
 }
 
 #[tracing::instrument(skip_all)]
 async fn update_retry_tracking(
-    transaction: &mut PgTransaction,
+    transaction: &mut SqliteTransaction,
     issue_id: Uuid,
     email: &str,
     attempt_count: i32,
     error_message: &str,
 ) -> Result<(), anyhow::Error> {
+    let now = Utc::now().to_rfc3339();
+    let issue_id_str = issue_id.to_string();
     sqlx::query!(
         r#"
         UPDATE issue_delivery_queue
-        SET attempt_count = $3,
-            last_attempted_at = $4,
-            error_message = $5
-        WHERE newsletter_issue_id = $1 AND subscriber_email = $2
+        SET attempt_count = ?,
+            last_attempted_at = ?,
+            error_message = ?
+        WHERE newsletter_issue_id = ? AND subscriber_email = ?
         "#,
-        issue_id,
-        email,
         attempt_count,
-        Utc::now(),
+        now,
         error_message,
+        issue_id_str,
+        email,
     )
     .execute(transaction.as_mut())
     .await?;
@@ -408,12 +421,14 @@ async fn update_retry_tracking(
 
 #[tracing::instrument(skip_all)]
 async fn move_to_dead_letter_queue(
-    pool: &PgPool,
+    transaction: &mut SqliteTransaction,
     issue_id: Uuid,
     email: &str,
     attempt_count: i32,
     error_message: &str,
 ) -> Result<(), anyhow::Error> {
+    let now = Utc::now().to_rfc3339();
+    let issue_id_str = issue_id.to_string();
     sqlx::query!(
         r#"
         INSERT INTO dead_letter_queue (
@@ -423,20 +438,20 @@ async fn move_to_dead_letter_queue(
             last_error,
             failed_at
         )
-        VALUES ($1, $2, $3, $4, $5)
+        VALUES (?, ?, ?, ?, ?)
         ON CONFLICT (newsletter_issue_id, subscriber_email)
         DO UPDATE SET
-            attempt_count = $3,
-            last_error = $4,
-            failed_at = $5
+            attempt_count = excluded.attempt_count,
+            last_error = excluded.last_error,
+            failed_at = excluded.failed_at
         "#,
-        issue_id,
+        issue_id_str,
         email,
         attempt_count,
         error_message,
-        Utc::now(),
+        now,
     )
-    .execute(pool)
+    .execute(transaction.as_mut())
     .await?;
 
     Ok(())
