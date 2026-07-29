@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT te.thread_id, t.title AS thread_title, te.role, te.kind, te.content, te.created_at\n                 FROM vault_thread_events te\n                 JOIN vault_threads t ON t.id = te.thread_id\n                WHERE te.content LIKE ? AND te.thread_id = ?\n                ORDER BY COALESCE(te.created_at, te.inserted_at) DESC LIMIT 100",
+  "describe": {
+    "columns": [
+      {
+        "name": "thread_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "thread_title",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "role",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "kind",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "content",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 5,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "794a24d1032d7af6d0592f12d9144d437ea9c102ccd5495eba3dad28bac43e7f"
+}

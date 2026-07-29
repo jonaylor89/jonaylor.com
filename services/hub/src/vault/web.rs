@@ -15,7 +15,7 @@ use axum::response::{Html, IntoResponse, Redirect, Response};
 use chrono::{DateTime, Local, Utc};
 use serde::Deserialize;
 use serde_json::Value;
-use sqlx::{PgPool, Row};
+use sqlx::SqlitePool;
 use std::collections::{BTreeMap, BTreeSet};
 
 // ---------- Browser-assisted CLI login route ----------
@@ -271,8 +271,8 @@ pub async fn vault_admin(State(state): State<AppState>) -> Response {
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };
-    let shares = match sqlx::query(
-        "SELECT id, thread_id, share_kind, revoked_at, created_at FROM vault_shares ORDER BY created_at DESC LIMIT 100",
+    let shares = match sqlx::query!(
+        r#"SELECT id AS "id!", thread_id, share_kind, revoked_at, created_at FROM vault_shares ORDER BY created_at DESC LIMIT 100"#,
     )
     .fetch_all(&state.db_pool)
     .await
@@ -280,12 +280,12 @@ pub async fn vault_admin(State(state): State<AppState>) -> Response {
         Ok(rows) => rows
             .into_iter()
             .map(|row| {
-                let created_at: String = row.get("created_at");
-                let revoked_at: Option<String> = row.get("revoked_at");
+                let created_at = row.created_at;
+                let revoked_at = row.revoked_at;
                 AdminShareDetail {
-                    id: row.get("id"),
-                    thread_id: row.get("thread_id"),
-                    share_kind: row.get("share_kind"),
+                    id: row.id,
+                    thread_id: row.thread_id,
+                    share_kind: row.share_kind,
                     revoked_at_display: revoked_at.as_deref().map(display_datetime),
                     revoked_at,
                     created_at_display: display_datetime(&created_at),
@@ -306,23 +306,23 @@ pub async fn vault_admin(State(state): State<AppState>) -> Response {
     .into_response()
 }
 
-async fn load_clients(pool: &PgPool) -> anyhow::Result<Vec<ClientDetail>> {
-    let rows = sqlx::query(
-        "SELECT id, name, token_prefix, created_at, last_seen_at, revoked_at \
-           FROM vault_clients ORDER BY created_at DESC",
+async fn load_clients(pool: &SqlitePool) -> anyhow::Result<Vec<ClientDetail>> {
+    let rows = sqlx::query!(
+        r#"SELECT id AS "id!", name, token_prefix, created_at, last_seen_at, revoked_at
+           FROM vault_clients ORDER BY created_at DESC"#,
     )
     .fetch_all(pool)
     .await?;
     Ok(rows
         .into_iter()
         .map(|row| {
-            let created_at: String = row.get("created_at");
-            let last_seen_at: Option<String> = row.get("last_seen_at");
-            let revoked_at: Option<String> = row.get("revoked_at");
+            let created_at = row.created_at;
+            let last_seen_at = row.last_seen_at;
+            let revoked_at = row.revoked_at;
             ClientDetail {
-                id: row.get("id"),
-                name: row.get("name"),
-                token_prefix: row.get("token_prefix"),
+                id: row.id,
+                name: row.name,
+                token_prefix: row.token_prefix,
                 created_at_display: display_datetime(&created_at),
                 created_at,
                 last_seen_at_display: last_seen_at.as_deref().map(display_datetime),
@@ -379,10 +379,12 @@ pub async fn revoke_api_key(
 }
 
 pub async fn revoke_share(State(state): State<AppState>, Path(share_id): Path<String>) -> Response {
-    let row = match sqlx::query("SELECT thread_id, share_kind FROM vault_shares WHERE id = $1")
-        .bind(&share_id)
-        .fetch_optional(&state.db_pool)
-        .await
+    let row = match sqlx::query!(
+        "SELECT thread_id, share_kind FROM vault_shares WHERE id = ?",
+        share_id,
+    )
+    .fetch_optional(&state.db_pool)
+    .await
     {
         Ok(Some(row)) => row,
         Ok(None) => return StatusCode::NOT_FOUND.into_response(),
@@ -392,9 +394,8 @@ pub async fn revoke_share(State(state): State<AppState>, Path(share_id): Path<St
         }
     };
 
-    let thread_id: String = row.get("thread_id");
-    let share_kind =
-        ShareKind::parse(&row.get::<String, _>("share_kind")).unwrap_or(ShareKind::SecretLink);
+    let thread_id = row.thread_id;
+    let share_kind = ShareKind::parse(&row.share_kind).unwrap_or(ShareKind::SecretLink);
     let now = now_rfc3339();
     let mut transaction = match state.db_pool.begin().await {
         Ok(transaction) => transaction,
@@ -404,21 +405,23 @@ pub async fn revoke_share(State(state): State<AppState>, Path(share_id): Path<St
         }
     };
 
-    if let Err(error) = sqlx::query("UPDATE vault_shares SET revoked_at = $1 WHERE id = $2")
-        .bind(&now)
-        .bind(&share_id)
-        .execute(&mut *transaction)
-        .await
+    if let Err(error) = sqlx::query!(
+        "UPDATE vault_shares SET revoked_at = ? WHERE id = ?",
+        now,
+        share_id,
+    )
+    .execute(&mut *transaction)
+    .await
     {
         tracing::error!(?error, "failed to revoke share");
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
     if share_kind == ShareKind::Public
-        && let Err(error) = sqlx::query(
-            "UPDATE vault_threads SET default_visibility = 'private', updated_at = $1 WHERE id = $2",
+        && let Err(error) = sqlx::query!(
+            "UPDATE vault_threads SET default_visibility = 'private', updated_at = ? WHERE id = ?",
+            now,
+            thread_id,
         )
-        .bind(&now)
-        .bind(&thread_id)
         .execute(&mut *transaction)
         .await
     {
@@ -940,11 +943,11 @@ fn format_duration(seconds: i64) -> String {
 
 // ---------- Database loaders ----------
 
-async fn list_threads(pool: &PgPool) -> anyhow::Result<Vec<ThreadSummary>> {
-    let rows = sqlx::query(
-        r#"SELECT t.id, t.title, t.repo_remote, t.repo_branch, t.repo_head,
+async fn list_threads(pool: &SqlitePool) -> anyhow::Result<Vec<ThreadSummary>> {
+    let rows = sqlx::query!(
+        r#"SELECT t.id AS "id!", t.title, t.repo_remote, t.repo_branch, t.repo_head,
                   t.default_visibility, t.updated_at,
-                  COUNT(te.id) AS event_count
+                  COUNT(te.id) AS "event_count!"
              FROM vault_threads t
              LEFT JOIN vault_thread_events te ON te.thread_id = t.id
             GROUP BY t.id
@@ -955,43 +958,43 @@ async fn list_threads(pool: &PgPool) -> anyhow::Result<Vec<ThreadSummary>> {
     Ok(rows
         .into_iter()
         .map(|row| {
-            let updated_at: String = row.get("updated_at");
+            let updated_at = row.updated_at;
             ThreadSummary {
-                id: row.get("id"),
-                title: row.get("title"),
-                repo_remote: row.get("repo_remote"),
-                repo_branch: row.get("repo_branch"),
-                repo_head: row.get("repo_head"),
-                default_visibility: row.get("default_visibility"),
+                id: row.id,
+                title: row.title,
+                repo_remote: row.repo_remote,
+                repo_branch: row.repo_branch,
+                repo_head: row.repo_head,
+                default_visibility: row.default_visibility,
                 updated_at_display: display_datetime(&updated_at),
                 updated_at,
-                event_count: row.get("event_count"),
+                event_count: row.event_count,
             }
         })
         .collect())
 }
 
-async fn load_thread(pool: &PgPool, thread_id: &str) -> anyhow::Result<Option<ThreadDetail>> {
-    let row = sqlx::query(
-        r#"SELECT id, external_session_id, title, cwd, repo_remote, repo_branch, repo_head,
+async fn load_thread(pool: &SqlitePool, thread_id: &str) -> anyhow::Result<Option<ThreadDetail>> {
+    let row = sqlx::query!(
+        r#"SELECT id AS "id!", external_session_id, title, cwd, repo_remote, repo_branch, repo_head,
                   default_visibility, created_at, updated_at
-             FROM vault_threads WHERE id = $1"#,
+             FROM vault_threads WHERE id = ?"#,
+        thread_id,
     )
-    .bind(thread_id)
     .fetch_optional(pool)
     .await?;
     Ok(row.map(|row| {
-        let created_at: String = row.get("created_at");
-        let updated_at: String = row.get("updated_at");
+        let created_at = row.created_at;
+        let updated_at = row.updated_at;
         ThreadDetail {
-            id: row.get("id"),
-            external_session_id: row.get("external_session_id"),
-            title: row.get("title"),
-            cwd: row.get("cwd"),
-            repo_remote: row.get("repo_remote"),
-            repo_branch: row.get("repo_branch"),
-            repo_head: row.get("repo_head"),
-            default_visibility: row.get("default_visibility"),
+            id: row.id,
+            external_session_id: row.external_session_id,
+            title: row.title,
+            cwd: row.cwd,
+            repo_remote: row.repo_remote,
+            repo_branch: row.repo_branch,
+            repo_head: row.repo_head,
+            default_visibility: row.default_visibility,
             created_at_display: display_datetime(&created_at),
             created_at,
             updated_at_display: display_datetime(&updated_at),
@@ -1000,36 +1003,36 @@ async fn load_thread(pool: &PgPool, thread_id: &str) -> anyhow::Result<Option<Th
     }))
 }
 
-async fn load_events(pool: &PgPool, thread_id: &str) -> anyhow::Result<Vec<EventDetail>> {
-    let rows = sqlx::query(
-        r#"SELECT id, external_event_id, parent_external_event_id, role, kind, content,
+async fn load_events(pool: &SqlitePool, thread_id: &str) -> anyhow::Result<Vec<EventDetail>> {
+    let rows = sqlx::query!(
+        r#"SELECT id AS "id!", external_event_id, parent_external_event_id, role, kind, content,
                   metadata_json, created_at, inserted_at
              FROM vault_thread_events
-            WHERE thread_id = $1
+            WHERE thread_id = ?
             ORDER BY COALESCE(created_at, inserted_at), inserted_seq"#,
+        thread_id,
     )
-    .bind(thread_id)
     .fetch_all(pool)
     .await?;
     Ok(rows
         .into_iter()
         .map(|row| {
-            let role: String = row.get("role");
-            let kind: String = row.get("kind");
-            let content: Option<String> = row.get("content");
-            let metadata_json: String = row.get("metadata_json");
+            let role = row.role;
+            let kind = row.kind;
+            let content = row.content;
+            let metadata_json = row.metadata_json;
             let display_content = display_content(&role, &kind, content.as_deref());
             let tool_label = tool_label(&kind, content.as_deref(), &metadata_json);
-            let created_at: Option<String> = row.get("created_at");
-            let inserted_at: String = row.get("inserted_at");
+            let created_at = row.created_at;
+            let inserted_at = row.inserted_at;
             let timestamp_display = created_at
                 .as_deref()
                 .map(display_datetime)
                 .unwrap_or_else(|| display_datetime(&inserted_at));
             EventDetail {
-                id: row.get("id"),
-                external_event_id: row.get("external_event_id"),
-                parent_external_event_id: row.get("parent_external_event_id"),
+                id: row.id,
+                external_event_id: row.external_event_id,
+                parent_external_event_id: row.parent_external_event_id,
                 role,
                 kind,
                 content,
@@ -1048,26 +1051,26 @@ async fn load_events(pool: &PgPool, thread_id: &str) -> anyhow::Result<Vec<Event
 }
 
 async fn load_shares(
-    pool: &PgPool,
+    pool: &SqlitePool,
     thread_id: &str,
     base_url: &str,
 ) -> anyhow::Result<Vec<ShareDetail>> {
-    let rows = sqlx::query(
-        r#"SELECT id, share_kind, token_hash, revoked_at, created_at
-             FROM vault_shares WHERE thread_id = $1 ORDER BY created_at DESC"#,
+    let rows = sqlx::query!(
+        r#"SELECT id AS "id!", share_kind, token_hash, revoked_at, created_at
+             FROM vault_shares WHERE thread_id = ? ORDER BY created_at DESC"#,
+        thread_id,
     )
-    .bind(thread_id)
     .fetch_all(pool)
     .await?;
     Ok(rows
         .into_iter()
         .map(|row| {
-            let share_kind_raw: String = row.get("share_kind");
+            let share_kind_raw = row.share_kind;
             let share_kind = ShareKind::parse(&share_kind_raw).unwrap_or(ShareKind::SecretLink);
-            let revoked_at: Option<String> = row.get("revoked_at");
-            let created_at: String = row.get("created_at");
+            let revoked_at = row.revoked_at;
+            let created_at = row.created_at;
             ShareDetail {
-                id: row.get("id"),
+                id: row.id,
                 share_kind: share_kind.to_string(),
                 url: if share_kind == ShareKind::Public {
                     Some(format!(
@@ -1087,27 +1090,28 @@ async fn load_shares(
         .collect())
 }
 
-async fn load_handoffs(pool: &PgPool, thread_id: &str) -> anyhow::Result<Vec<HandoffDetail>> {
-    let rows = sqlx::query(
-        r#"SELECT id, source_thread_id, target_thread_id, target_external_session_id,
+async fn load_handoffs(pool: &SqlitePool, thread_id: &str) -> anyhow::Result<Vec<HandoffDetail>> {
+    let rows = sqlx::query!(
+        r#"SELECT id AS "id!", source_thread_id, target_thread_id, target_external_session_id,
                   goal, created_at
              FROM vault_handoffs
-            WHERE source_thread_id = $1 OR target_thread_id = $1
+            WHERE source_thread_id = ? OR target_thread_id = ?
             ORDER BY created_at DESC"#,
+        thread_id,
+        thread_id,
     )
-    .bind(thread_id)
     .fetch_all(pool)
     .await?;
     Ok(rows
         .into_iter()
         .map(|row| {
-            let created_at: String = row.get("created_at");
+            let created_at = row.created_at;
             HandoffDetail {
-                id: row.get("id"),
-                source_thread_id: row.get("source_thread_id"),
-                target_thread_id: row.get("target_thread_id"),
-                target_external_session_id: row.get("target_external_session_id"),
-                goal: row.get("goal"),
+                id: row.id,
+                source_thread_id: row.source_thread_id,
+                target_thread_id: row.target_thread_id,
+                target_external_session_id: row.target_external_session_id,
+                goal: row.goal,
                 created_at_display: display_datetime(&created_at),
                 created_at,
             }
@@ -1116,51 +1120,61 @@ async fn load_handoffs(pool: &PgPool, thread_id: &str) -> anyhow::Result<Vec<Han
 }
 
 async fn set_thread_visibility(
-    pool: &PgPool,
+    pool: &SqlitePool,
     thread_id: &str,
     visibility: VaultVisibility,
 ) -> anyhow::Result<()> {
-    sqlx::query("UPDATE vault_threads SET default_visibility = $1, updated_at = $2 WHERE id = $3")
-        .bind(visibility.as_ref())
-        .bind(now_rfc3339())
-        .bind(thread_id)
-        .execute(pool)
-        .await?;
+    let visibility_str = visibility.as_ref();
+    let now = now_rfc3339();
+    sqlx::query!(
+        "UPDATE vault_threads SET default_visibility = ?, updated_at = ? WHERE id = ?",
+        visibility_str,
+        now,
+        thread_id,
+    )
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
-async fn create_public_share(pool: &PgPool, thread_id: &str) -> anyhow::Result<()> {
+async fn create_public_share(pool: &SqlitePool, thread_id: &str) -> anyhow::Result<()> {
     set_thread_visibility(pool, thread_id, VaultVisibility::Public).await?;
-    sqlx::query(
+    let share_id = VaultShareId::generate().to_string();
+    let now = now_rfc3339();
+    sqlx::query!(
         r#"INSERT INTO vault_shares (id, thread_id, share_kind, is_public, created_at)
-           VALUES ($1, $2, 'public', TRUE, $3)"#,
+           VALUES (?, ?, 'public', TRUE, ?)"#,
+        share_id,
+        thread_id,
+        now,
     )
-    .bind(VaultShareId::generate().to_string())
-    .bind(thread_id)
-    .bind(now_rfc3339())
     .execute(pool)
     .await?;
     Ok(())
 }
 
 async fn create_token_share(
-    pool: &PgPool,
+    pool: &SqlitePool,
     thread_id: &str,
     kind: ShareKind,
     password_hash: Option<String>,
 ) -> anyhow::Result<String> {
     let token = ShareToken::generate();
-    sqlx::query(
+    let share_id = VaultShareId::generate().to_string();
+    let kind_str = kind.as_ref();
+    let hash = token_hash(token.as_ref());
+    let now = now_rfc3339();
+    sqlx::query!(
         r#"INSERT INTO vault_shares
              (id, thread_id, share_kind, token_hash, password_hash, is_public, created_at)
-           VALUES ($1, $2, $3, $4, $5, FALSE, $6)"#,
+           VALUES (?, ?, ?, ?, ?, FALSE, ?)"#,
+        share_id,
+        thread_id,
+        kind_str,
+        hash,
+        password_hash,
+        now,
     )
-    .bind(VaultShareId::generate().to_string())
-    .bind(thread_id)
-    .bind(kind.as_ref())
-    .bind(token_hash(token.as_ref()))
-    .bind(password_hash)
-    .bind(now_rfc3339())
     .execute(pool)
     .await?;
     Ok(token.to_string())
@@ -1174,23 +1188,26 @@ struct ShareRecord {
     revoked_at: Option<String>,
 }
 
-async fn load_share_by_token(pool: &PgPool, token: &str) -> anyhow::Result<Option<ShareRecord>> {
-    let row = sqlx::query(
-        r#"SELECT id, thread_id, share_kind, password_hash, revoked_at
-             FROM vault_shares WHERE token_hash = $1"#,
+async fn load_share_by_token(
+    pool: &SqlitePool,
+    token: &str,
+) -> anyhow::Result<Option<ShareRecord>> {
+    let hash = token_hash(token);
+    let row = sqlx::query!(
+        r#"SELECT id AS "id!", thread_id, share_kind, password_hash, revoked_at
+             FROM vault_shares WHERE token_hash = ?"#,
+        hash,
     )
-    .bind(token_hash(token))
     .fetch_optional(pool)
     .await?;
     Ok(row.map(|row| {
-        let share_kind =
-            ShareKind::parse(&row.get::<String, _>("share_kind")).unwrap_or(ShareKind::SecretLink);
+        let share_kind = ShareKind::parse(&row.share_kind).unwrap_or(ShareKind::SecretLink);
         ShareRecord {
-            id: row.get("id"),
-            thread_id: row.get("thread_id"),
+            id: row.id,
+            thread_id: row.thread_id,
             share_kind,
-            password_hash: row.get("password_hash"),
-            revoked_at: row.get("revoked_at"),
+            password_hash: row.password_hash,
+            revoked_at: row.revoked_at,
         }
     }))
 }

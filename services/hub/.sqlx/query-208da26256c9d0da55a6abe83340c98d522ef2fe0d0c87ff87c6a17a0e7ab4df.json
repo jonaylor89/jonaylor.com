@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT thread_id, share_kind FROM vault_shares WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "thread_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "share_kind",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "208da26256c9d0da55a6abe83340c98d522ef2fe0d0c87ff87c6a17a0e7ab4df"
+}

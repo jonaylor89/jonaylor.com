@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT status\n            FROM subscriptions\n            WHERE id = ?\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "status",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "001fab6a087e25f5a30072aeaace02356054e4c7878edfee07ccbad15298e5c9"
+}

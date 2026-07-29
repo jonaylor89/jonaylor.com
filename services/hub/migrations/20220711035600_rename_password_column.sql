@@ -1,2 +1,1 @@
-
-ALTER TABLE users RENAME password TO password_hash;
+-- No-op: schema consolidated into the first migration.

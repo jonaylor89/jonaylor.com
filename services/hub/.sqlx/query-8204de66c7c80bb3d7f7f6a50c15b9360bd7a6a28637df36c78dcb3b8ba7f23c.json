@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO vault_shares\n             (id, thread_id, share_kind, token_hash, is_public, created_at)\n           VALUES (?, ?, 'secret-link', ?, FALSE, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "8204de66c7c80bb3d7f7f6a50c15b9360bd7a6a28637df36c78dcb3b8ba7f23c"
+}

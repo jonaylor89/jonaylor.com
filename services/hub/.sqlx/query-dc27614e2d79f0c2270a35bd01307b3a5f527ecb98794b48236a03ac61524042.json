@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO memory_extraction_queue (id, user_id, raw_text) VALUES (?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "dc27614e2d79f0c2270a35bd01307b3a5f527ecb98794b48236a03ac61524042"
+}

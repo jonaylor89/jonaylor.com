@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO issue_delivery_queue (newsletter_issue_id, subscriber_email) SELECT ?, email FROM subscriptions WHERE status = 'confirmed'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "c360b43fb9809a2973c44da46d01e66ba28ea4a6a7996a5202ae753602b7fe3b"
+}

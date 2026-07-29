@@ -4,7 +4,7 @@ use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Response};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
-use sqlx::PgPool;
+use sqlx::SqlitePool;
 
 use crate::startup::AppState;
 use crate::web_templates::UnsubscribeTemplate;
@@ -60,7 +60,7 @@ pub async fn unsubscribe_post(
 }
 
 async fn process_unsubscribe(
-    pool: &PgPool,
+    pool: &SqlitePool,
     hmac_secret: &str,
     params: &UnsubscribeParams,
 ) -> Response {
@@ -99,11 +99,11 @@ async fn process_unsubscribe(
 }
 
 #[tracing::instrument(skip(pool))]
-async fn mark_as_unsubscribed(pool: &PgPool, email: &str) -> Result<bool, sqlx::Error> {
-    let result = sqlx::query(
-        "UPDATE subscriptions SET status = 'unsubscribed' WHERE email = $1 AND status = 'confirmed'",
+async fn mark_as_unsubscribed(pool: &SqlitePool, email: &str) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query!(
+        "UPDATE subscriptions SET status = 'unsubscribed' WHERE email = ? AND status = 'confirmed'",
+        email,
     )
-    .bind(email)
     .execute(pool)
     .await?;
 

@@ -1,5 +1,5 @@
 use serde::Serialize;
-use sqlx::{PgPool, Row};
+use sqlx::SqlitePool;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct SearchResult {
@@ -11,10 +11,10 @@ pub struct SearchResult {
     pub created_at: Option<String>,
 }
 
-/// Full-text search across vault thread events using Postgres `tsvector`.
+/// Full-text search across vault thread events using SQLite FTS5.
 /// Empty queries return an empty result set rather than every row.
 pub async fn search_events(
-    pool: &PgPool,
+    pool: &SqlitePool,
     query: &str,
     thread_id: Option<&str>,
 ) -> Result<Vec<SearchResult>, sqlx::Error> {
@@ -22,92 +22,121 @@ pub async fn search_events(
         return Ok(vec![]);
     }
 
-    match search_tsvector(pool, query, thread_id).await {
+    match search_fts(pool, query, thread_id).await {
         Ok(results) => Ok(results),
         Err(error) => {
-            tracing::warn!(?error, "tsvector search failed; falling back to ILIKE");
-            search_ilike(pool, query, thread_id).await
+            tracing::warn!(?error, "FTS5 search failed; falling back to LIKE");
+            search_like(pool, query, thread_id).await
         }
     }
 }
 
-async fn search_tsvector(
-    pool: &PgPool,
+async fn search_fts(
+    pool: &SqlitePool,
     query: &str,
     thread_id: Option<&str>,
 ) -> Result<Vec<SearchResult>, sqlx::Error> {
-    let rows = if let Some(thread_id) = thread_id {
-        sqlx::query(
-            r#"SELECT te.thread_id, t.title AS thread_title, te.role, te.kind, te.content, te.created_at,
-                      ts_rank(te.content_tsv, websearch_to_tsquery('english', $1)) AS rank
-                 FROM vault_thread_events te
+    if let Some(thread_id) = thread_id {
+        let rows = sqlx::query!(
+            r#"SELECT te.thread_id, t.title AS thread_title, te.role, te.kind, te.content, te.created_at
+                 FROM vault_thread_events_fts fts
+                 JOIN vault_thread_events te ON te.id = fts.rowid
                  JOIN vault_threads t ON t.id = te.thread_id
-                WHERE te.content_tsv @@ websearch_to_tsquery('english', $1)
-                  AND te.thread_id = $2
-                ORDER BY rank DESC LIMIT 100"#,
+                WHERE fts.content MATCH ?
+                  AND te.thread_id = ?
+                ORDER BY fts.rank LIMIT 100"#,
+            query,
+            thread_id,
         )
-        .bind(query)
-        .bind(thread_id)
         .fetch_all(pool)
-        .await?
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| SearchResult {
+                thread_id: row.thread_id,
+                thread_title: row.thread_title,
+                role: row.role,
+                kind: row.kind,
+                content: row.content,
+                created_at: row.created_at,
+            })
+            .collect())
     } else {
-        sqlx::query(
-            r#"SELECT te.thread_id, t.title AS thread_title, te.role, te.kind, te.content, te.created_at,
-                      ts_rank(te.content_tsv, websearch_to_tsquery('english', $1)) AS rank
-                 FROM vault_thread_events te
+        let rows = sqlx::query!(
+            r#"SELECT te.thread_id, t.title AS thread_title, te.role, te.kind, te.content, te.created_at
+                 FROM vault_thread_events_fts fts
+                 JOIN vault_thread_events te ON te.id = fts.rowid
                  JOIN vault_threads t ON t.id = te.thread_id
-                WHERE te.content_tsv @@ websearch_to_tsquery('english', $1)
-                ORDER BY rank DESC LIMIT 100"#,
+                WHERE fts.content MATCH ?
+                ORDER BY fts.rank LIMIT 100"#,
+            query,
         )
-        .bind(query)
         .fetch_all(pool)
-        .await?
-    };
-    Ok(map_rows(rows))
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| SearchResult {
+                thread_id: row.thread_id,
+                thread_title: row.thread_title,
+                role: row.role,
+                kind: row.kind,
+                content: row.content,
+                created_at: row.created_at,
+            })
+            .collect())
+    }
 }
 
-async fn search_ilike(
-    pool: &PgPool,
+async fn search_like(
+    pool: &SqlitePool,
     query: &str,
     thread_id: Option<&str>,
 ) -> Result<Vec<SearchResult>, sqlx::Error> {
     let needle = format!("%{}%", query);
-    let rows = if let Some(thread_id) = thread_id {
-        sqlx::query(
+    if let Some(thread_id) = thread_id {
+        let rows = sqlx::query!(
             r#"SELECT te.thread_id, t.title AS thread_title, te.role, te.kind, te.content, te.created_at
                  FROM vault_thread_events te
                  JOIN vault_threads t ON t.id = te.thread_id
-                WHERE te.content ILIKE $1 AND te.thread_id = $2
+                WHERE te.content LIKE ? AND te.thread_id = ?
                 ORDER BY COALESCE(te.created_at, te.inserted_at) DESC LIMIT 100"#,
+            needle,
+            thread_id,
         )
-        .bind(needle)
-        .bind(thread_id)
         .fetch_all(pool)
-        .await?
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| SearchResult {
+                thread_id: row.thread_id,
+                thread_title: row.thread_title,
+                role: row.role,
+                kind: row.kind,
+                content: row.content,
+                created_at: row.created_at,
+            })
+            .collect())
     } else {
-        sqlx::query(
+        let rows = sqlx::query!(
             r#"SELECT te.thread_id, t.title AS thread_title, te.role, te.kind, te.content, te.created_at
                  FROM vault_thread_events te
                  JOIN vault_threads t ON t.id = te.thread_id
-                WHERE te.content ILIKE $1
+                WHERE te.content LIKE ?
                 ORDER BY COALESCE(te.created_at, te.inserted_at) DESC LIMIT 100"#,
+            needle,
         )
-        .bind(needle)
         .fetch_all(pool)
-        .await?
-    };
-    Ok(map_rows(rows))
-}
-
-fn map_rows(rows: Vec<sqlx::postgres::PgRow>) -> Vec<SearchResult> {
-    rows.into_iter()
-        .map(|row| SearchResult {
-            thread_id: row.get("thread_id"),
-            thread_title: row.get("thread_title"),
-            role: row.get("role"),
-            kind: row.get("kind"),
-            content: row.get("content"),
-            created_at: row.get("created_at"),
-        })
-        .collect()
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| SearchResult {
+                thread_id: row.thread_id,
+                thread_title: row.thread_title,
+                role: row.role,
+                kind: row.kind,
+                content: row.content,
+                created_at: row.created_at,
+            })
+            .collect())
+    }
 }

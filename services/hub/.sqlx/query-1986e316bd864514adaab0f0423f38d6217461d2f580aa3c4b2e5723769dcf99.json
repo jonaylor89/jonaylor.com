@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE vault_threads SET default_visibility = 'private', updated_at = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "1986e316bd864514adaab0f0423f38d6217461d2f580aa3c4b2e5723769dcf99"
+}

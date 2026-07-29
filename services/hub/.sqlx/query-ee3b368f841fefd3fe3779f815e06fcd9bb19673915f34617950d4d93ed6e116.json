@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT id, user_id, raw_text, attempt_count, last_attempted_at AS \"last_attempted_at?\"\n        FROM memory_extraction_queue\n        WHERE status IN ('pending', 'failed')\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "user_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "raw_text",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "attempt_count",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "last_attempted_at?",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "ee3b368f841fefd3fe3779f815e06fcd9bb19673915f34617950d4d93ed6e116"
+}

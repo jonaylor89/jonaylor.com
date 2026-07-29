@@ -1,19 +1,19 @@
 {
-  "db_name": "PostgreSQL",
+  "db_name": "SQLite",
   "query": "SELECT COUNT(*) as \"count!\" FROM subscriptions WHERE status = 'pending_confirmation'",
   "describe": {
     "columns": [
       {
-        "ordinal": 0,
         "name": "count!",
-        "type_info": "Int8"
+        "ordinal": 0,
+        "type_info": "Integer"
       }
     ],
     "parameters": {
-      "Left": []
+      "Right": 0
     },
     "nullable": [
-      null
+      false
     ]
   },
   "hash": "57dcf8277383d5ba14ed1d2fdb740a09afe1eacec0c37af1bce901f0e8c6abd7"

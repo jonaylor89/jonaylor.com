@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        UPDATE issue_delivery_queue\n        SET attempt_count = ?,\n            last_attempted_at = ?,\n            error_message = ?\n        WHERE newsletter_issue_id = ? AND subscriber_email = ?\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "8878cd8b7db2eb8c5e13199f7255eac300637146514bb08e4be6444fa4c5e582"
+}

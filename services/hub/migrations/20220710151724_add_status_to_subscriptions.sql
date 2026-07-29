@@ -1,2 +1,1 @@
-
-ALTER TABLE subscriptions ADD COLUMN status TEXT NULL;
+-- No-op: schema consolidated into the first migration.

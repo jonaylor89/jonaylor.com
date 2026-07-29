@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO vault_thread_events (\n                 id, inserted_seq, thread_id, external_event_id, parent_external_event_id,\n                 event_hash, role, kind, content, redacted, metadata_json, created_at, inserted_at\n               ) VALUES (?, (SELECT COALESCE(MAX(inserted_seq), 0) + 1 FROM vault_thread_events),\n                 ?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?, ?)\n               ON CONFLICT (thread_id, event_hash) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 11
+    },
+    "nullable": []
+  },
+  "hash": "1115d9c3b8eb36ce08ecddaaaa02113db9f70c37259c49de88724c3cbf69f117"
+}

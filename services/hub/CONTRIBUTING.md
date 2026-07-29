@@ -1,6 +1,6 @@
 # Contributing
 
-Contributions welcome! `hub` is a Rust + Axum + PostgreSQL service hosting the email newsletter, the pi-thread-vault, and the unified admin portal.
+Contributions welcome! `hub` is a Rust + Axum service hosting the email newsletter, the pi-thread-vault, the memory layer, and the unified admin portal. Data is stored in **SQLite** (relational) and **LanceDB** (vector embeddings). Sessions use **Redis**.
 
 ## Development Setup
 
@@ -9,36 +9,35 @@ Contributions welcome! `hub` is a Rust + Axum + PostgreSQL service hosting the e
 git clone <repo-url>
 cd services/hub
 
-# Start PostgreSQL and Redis
-./scripts/init_db.sh
+# Start Redis (sessions)
 ./scripts/init_redis.sh
 
 # Build the project
 cargo build
 
-# Run migrations
-sqlx migrate run --database-url=postgres://postgres:password@localhost:5432/newsletter
-
-# Run the application
+# Run the application (SQLite DB + LanceDB directory created automatically)
 cargo run
 ```
+
+No database server needed — SQLite and LanceDB are embedded. The SQLite database is created at `./data/hub.db` and LanceDB stores memory embeddings in `./data/memories/`. Both are configured in `configuration/base.yaml`.
 
 ## Database Changes
 
 If you modify database queries:
 
 ```bash
-# Generate SQLx metadata for offline compilation
-cargo sqlx prepare --database-url=postgres://postgres:password@localhost:5432/newsletter
+# Regenerate SQLx metadata for offline compilation against the dev SQLite DB
+DATABASE_URL="sqlite://data/dev.db?mode=rwc" cargo sqlx prepare
 
-# Create a new migration
+# Create a new migration (add SQLite-compatible DDL)
 sqlx migrate add <migration_name>
 ```
 
+All migrations are consolidated in the first migration file. New migrations should use SQLite DDL syntax (`TEXT` for UUIDs/timestamps, `INTEGER` for booleans, `?` parameter placeholders).
+
 ## Testing
 
-Integration tests start PostgreSQL and Redis with Testcontainers, so you do not
-need to start either service manually. Docker must be running.
+Integration tests use a temp-file SQLite database and a Redis Testcontainer. Docker must be running for Redis.
 
 ```bash
 # Run all tests
@@ -81,26 +80,38 @@ src/
 │   ├── subscriptions_confirm.rs # Email confirmation
 │   └── admin/                 # Admin routes (newsletters, dashboard)
 ├── domain/              # Domain types with validation
-│   ├── subscriber_email.rs
-│   ├── subscriber_name.rs
-│   ├── subscription_token.rs
-│   └── password.rs
 ├── authentication/      # Auth middleware and password hashing
-├── idempotency/        # Idempotency key handling
+├── idempotency/        # Idempotency key handling (JSON headers in SQLite)
+├── memory/             # LanceDB-backed fact extraction and vector search
+│   ├── engine.rs             # LanceDB connection, embedding, upsert, search
+│   ├── routes.rs             # HTTP handlers for memory API
+│   └── worker.rs             # Background extraction queue processor
+├── vault/              # Pi-thread-vault (FTS5 full-text search)
+├── pastebin/           # Simple paste service
 ├── email_client.rs     # Postmark email integration
 ├── email_templates.rs  # Askama templates
 ├── issue_delivery_queue.rs # Background email worker
 ├── idempotency_cleanup.rs  # Background cleanup worker
+├── rss_worker.rs       # Blog RSS feed → newsletter bridge
 ├── configuration.rs    # Settings management
 └── startup.rs          # Application initialization
 ```
 
 ## Architecture
 
-The application runs three concurrent workers:
-- **API Server**: HTTP endpoints for subscriptions and newsletter publishing
+The application runs four concurrent workers:
+- **API Server**: HTTP endpoints for subscriptions, newsletter publishing, vault, memory, and pastebin
 - **Email Delivery Worker**: Processes newsletter delivery queue with retry logic
 - **Idempotency Cleanup Worker**: Daily cleanup of expired idempotency keys
+- **Memory Extraction Worker**: Processes queued text through LLM fact extraction into LanceDB
+
+### Storage
+
+| Store | Purpose | Location |
+|---|---|---|
+| SQLite | All relational data (subscriptions, users, vault, idempotency, queues) | `./data/hub.db` |
+| LanceDB | Memory embeddings + vector search | `./data/memories/` |
+| Redis | HTTP sessions (30-day expiry) | External service |
 
 ## Email Templates
 
@@ -112,14 +123,22 @@ After modifying templates, rebuild to recompile them.
 
 ## Database Schema
 
-Key tables:
+SQLite tables (see `migrations/20220707150811_create_subscriptions_table.sql`):
 - `subscriptions` - Subscriber emails and confirmation status
 - `subscription_tokens` - Email confirmation tokens
 - `users` - Admin users with Argon2 hashed passwords
 - `newsletter_issues` - Newsletter content
 - `issue_delivery_queue` - Delivery tasks with retry tracking
 - `dead_letter_queue` - Permanently failed deliveries
-- `idempotency` - Request deduplication (30-day retention)
+- `idempotency` - Request deduplication (30-day retention, JSON headers)
+- `vault_threads`, `vault_thread_events`, `vault_shares`, `vault_handoffs`, `vault_clients` - Thread vault
+- `vault_thread_events_fts` - FTS5 virtual table for full-text search (synced via triggers)
+- `pastes` - Pastebin entries
+- `memory_extraction_queue` - Async memory extraction jobs
+- `rss_feed_entries` - Tracked RSS feed items
+
+LanceDB table:
+- `memories` - Fact embeddings (id, user_id, fact, embedding[1536], is_active, timestamps)
 
 ## Commit Messages
 

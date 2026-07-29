@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        UPDATE idempotency\n        SET\n            response_status_code = ?,\n            response_headers = ?,\n            response_body = ?\n        WHERE\n            user_id = ?\n        AND\n            idempotency_key = ?\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "d9f677134222ceb357dc56741a115fcab081d435900f899950f71a0f05a09dce"
+}

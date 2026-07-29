@@ -2,7 +2,7 @@ use axum::Json;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use sqlx::PgPool;
+use sqlx::SqlitePool;
 use uuid::Uuid;
 
 use crate::domain::{
@@ -57,13 +57,19 @@ pub async fn api_publish_newsletter(
         }
     };
 
-    if let Err(e) = sqlx::query(
-        "INSERT INTO newsletter_issues (newsletter_issue_id, title, text_content, html_content, published_at) VALUES ($1, $2, $3, $4, NOW())",
+    let now = chrono::Utc::now().to_rfc3339();
+    let issue_id_str = newsletter_issue_id.to_string();
+    let title = issue.title.as_ref().to_string();
+    let text = issue.text_content.as_ref().to_string();
+    let html = issue.html_content.as_ref().to_string();
+    if let Err(e) = sqlx::query!(
+        "INSERT INTO newsletter_issues (newsletter_issue_id, title, text_content, html_content, published_at) VALUES (?, ?, ?, ?, ?)",
+        issue_id_str,
+        title,
+        text,
+        html,
+        now,
     )
-    .bind(newsletter_issue_id)
-    .bind(issue.title.as_ref())
-    .bind(issue.text_content.as_ref())
-    .bind(issue.html_content.as_ref())
     .execute(transaction.as_mut())
     .await
     {
@@ -71,10 +77,10 @@ pub async fn api_publish_newsletter(
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
-    if let Err(e) = sqlx::query(
-        "INSERT INTO issue_delivery_queue (newsletter_issue_id, subscriber_email) SELECT $1, email FROM subscriptions WHERE status = 'confirmed'",
+    if let Err(e) = sqlx::query!(
+        "INSERT INTO issue_delivery_queue (newsletter_issue_id, subscriber_email) SELECT ?, email FROM subscriptions WHERE status = 'confirmed'",
+        issue_id_str,
     )
-    .bind(newsletter_issue_id)
     .execute(transaction.as_mut())
     .await
     {
@@ -117,7 +123,7 @@ pub struct ApiSubscribeRequest {
     )
 )]
 pub async fn api_subscribe(
-    State(pool): State<PgPool>,
+    State(pool): State<SqlitePool>,
     State(email_client): State<EmailClient>,
     State(base_url): State<ApplicationBaseUrl>,
     Json(body): Json<ApiSubscribeRequest>,

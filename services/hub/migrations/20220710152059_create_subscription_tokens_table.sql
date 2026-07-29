@@ -1,7 +1,1 @@
-
-CREATE TABLE subscription_tokens(
-    subscription_token TEXT NOT NULL,
-    subscriber_id UUID NOT NULL
-        REFERENCES subscriptions (id),
-    PRIMARY KEY (subscription_token)
-)
+-- No-op: schema consolidated into the first migration.

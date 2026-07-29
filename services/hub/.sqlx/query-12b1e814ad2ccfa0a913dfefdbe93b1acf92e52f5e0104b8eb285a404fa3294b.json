@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE subscriptions SET status = 'unsubscribed' WHERE email = ? AND status = 'confirmed'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "12b1e814ad2ccfa0a913dfefdbe93b1acf92e52f5e0104b8eb285a404fa3294b"
+}

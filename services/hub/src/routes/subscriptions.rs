@@ -5,7 +5,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use chrono::Utc;
 
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{Sqlite, SqlitePool, Transaction};
 use uuid::Uuid;
 
 use crate::{
@@ -85,7 +85,7 @@ impl IntoResponse for SubscribeError {
     )
 )]
 pub async fn subscribe(
-    State(pool): State<PgPool>,
+    State(pool): State<SqlitePool>,
     State(email_client): State<EmailClient>,
     State(base_url): State<ApplicationBaseUrl>,
     Form(form): Form<FormData>,
@@ -95,7 +95,7 @@ pub async fn subscribe(
     let mut transaction = pool
         .begin()
         .await
-        .context("Failed to acquire a Postgres connection from the pool")?;
+        .context("Failed to acquire a database connection from the pool")?;
 
     // Check if subscriber already exists
     let existing_subscriber = get_subscriber_by_email(&mut transaction, &new_subscriber.email)
@@ -173,16 +173,17 @@ pub async fn subscribe(
 
 #[tracing::instrument(name = "Check if subscriber exists by email", skip(transaction, email))]
 pub async fn get_subscriber_by_email(
-    transaction: &mut Transaction<'_, Postgres>,
+    transaction: &mut Transaction<'_, Sqlite>,
     email: &SubscriberEmail,
 ) -> Result<Option<(Uuid, String)>, sqlx::Error> {
+    let email_str = email.as_ref();
     let result = sqlx::query!(
         r#"
         SELECT id, status
         FROM subscriptions
-        WHERE email = $1
+        WHERE email = ?
         "#,
-        email.as_ref(),
+        email_str,
     )
     .fetch_optional(transaction.as_mut())
     .await
@@ -191,7 +192,10 @@ pub async fn get_subscriber_by_email(
         e
     })?;
 
-    Ok(result.map(|row| (row.id, row.status)))
+    Ok(result.map(|row| {
+        let id = Uuid::parse_str(&row.id).expect("Invalid UUID stored in subscriptions.id");
+        (id, row.status)
+    }))
 }
 
 #[tracing::instrument(
@@ -199,20 +203,24 @@ pub async fn get_subscriber_by_email(
     skip(new_subscriber, transaction)
 )]
 pub async fn insert_subscriber(
-    transaction: &mut Transaction<'_, Postgres>,
+    transaction: &mut Transaction<'_, Sqlite>,
     new_subscriber: &NewSubscriber,
 ) -> Result<Uuid, sqlx::Error> {
     let subscriber_id = Uuid::new_v4();
+    let subscriber_id_str = subscriber_id.to_string();
+    let email_str = new_subscriber.email.as_ref().to_string();
+    let name_str = new_subscriber.name.as_ref().map(|n| n.as_ref().to_string());
 
+    let now = Utc::now().to_rfc3339();
     sqlx::query!(
         r#"
         INSERT INTO subscriptions (id, email, name, subscribed_at, status)
-        VALUES ($1, $2, $3, $4, 'pending_confirmation')
+        VALUES (?, ?, ?, ?, 'pending_confirmation')
         "#,
-        subscriber_id,
-        new_subscriber.email.as_ref(),
-        new_subscriber.name.as_ref().map(|n| n.as_ref()),
-        Utc::now(),
+        subscriber_id_str,
+        email_str,
+        name_str,
+        now,
     )
     .execute(transaction.as_mut())
     .await
@@ -229,17 +237,18 @@ pub async fn insert_subscriber(
     skip(subscription_token, transaction)
 )]
 pub async fn store_token(
-    transaction: &mut Transaction<'_, Postgres>,
+    transaction: &mut Transaction<'_, Sqlite>,
     subscriber_id: Uuid,
     subscription_token: &str,
 ) -> Result<(), sqlx::Error> {
+    let subscriber_id_str = subscriber_id.to_string();
     sqlx::query!(
         r#"
             INSERT INTO subscription_tokens (subscription_token, subscriber_id)
-            VALUES ($1, $2)
+            VALUES (?, ?)
             "#,
         subscription_token,
-        subscriber_id,
+        subscriber_id_str,
     )
     .execute(transaction.as_mut())
     .await

@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use chrono::Utc;
-use sqlx::PgPool;
+use sqlx::SqlitePool;
 
 use crate::{configuration::Settings, startup::get_connection_pool};
 
@@ -12,11 +12,11 @@ const RETENTION_DAYS: i64 = 30;
 const CLEANUP_INTERVAL_HOURS: u64 = 24;
 
 pub async fn run_cleanup_worker(configuration: Settings) -> Result<(), anyhow::Error> {
-    let connection_pool = get_connection_pool(&configuration.database);
+    let connection_pool = get_connection_pool(&configuration.database).await;
     cleanup_loop(&connection_pool).await
 }
 
-async fn cleanup_loop(pool: &PgPool) -> Result<(), anyhow::Error> {
+async fn cleanup_loop(pool: &SqlitePool) -> Result<(), anyhow::Error> {
     loop {
         match delete_stale_idempotency_keys(pool).await {
             Ok(deleted_count) => {
@@ -37,13 +37,13 @@ async fn cleanup_loop(pool: &PgPool) -> Result<(), anyhow::Error> {
 }
 
 #[tracing::instrument(skip_all)]
-async fn delete_stale_idempotency_keys(pool: &PgPool) -> Result<u64, anyhow::Error> {
-    let cutoff_date = Utc::now() - chrono::Duration::days(RETENTION_DAYS);
+async fn delete_stale_idempotency_keys(pool: &SqlitePool) -> Result<u64, anyhow::Error> {
+    let cutoff_date = (Utc::now() - chrono::Duration::days(RETENTION_DAYS)).to_rfc3339();
 
     let result = sqlx::query!(
         r#"
         DELETE FROM idempotency
-        WHERE created_at < $1
+        WHERE created_at < ?
         "#,
         cutoff_date,
     )

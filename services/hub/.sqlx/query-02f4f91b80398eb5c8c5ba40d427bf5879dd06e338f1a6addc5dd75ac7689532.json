@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        DELETE FROM issue_delivery_queue\n        WHERE\n            newsletter_issue_id = ?\n        AND\n            subscriber_email = ?\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "02f4f91b80398eb5c8c5ba40d427bf5879dd06e338f1a6addc5dd75ac7689532"
+}

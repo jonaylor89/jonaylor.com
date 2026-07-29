@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                    UPDATE memory_extraction_queue\n                    SET status = ?,\n                        attempt_count = ?,\n                        last_attempted_at = ?,\n                        last_error = ?\n                    WHERE id = ?\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "9379ff24e8759d8a230c393f010a977169f0905df8bf5ad0cd71a88fd9d3ad18"
+}

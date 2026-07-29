@@ -848,12 +848,12 @@ async fn issue_token(name: &str) -> Result<()> {
     }
 
     let configuration = get_configuration().context("Failed to load configuration")?;
-    let pool = get_connection_pool(&configuration.database);
+    let pool = get_connection_pool(&configuration.database).await;
 
-    sqlx::query("SELECT 1")
-        .execute(&pool)
+    sqlx::query!("SELECT 1 AS one")
+        .fetch_one(&pool)
         .await
-        .context("Failed to connect to Postgres — make sure migrations have run")?;
+        .context("Failed to connect to SQLite — make sure migrations have run")?;
 
     let key = issue_api_key(&pool, name)
         .await
