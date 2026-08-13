@@ -65,6 +65,11 @@ h6 {
 	@apply px-1 py-0.5 rounded text-sm;
 }
 
+.prose code::before,
+.prose code::after {
+	content: none;
+}
+
 .prose pre {
 	background: var(--site-code-bg);
 	border: 1px solid var(--site-code-border);
