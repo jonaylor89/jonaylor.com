@@ -1,5 +1,38 @@
 ---
+import Seo from "../components/Seo.astro";
 import "../styles/global.css";
+
+const description =
+  "Paper Clock is a private, offline Android alarm clock for building mornings around meaningful goals.";
+const siteUrl = Astro.site?.toString();
+const structuredData = siteUrl
+  ? {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          name: "Paper Clock",
+          url: siteUrl,
+        },
+        {
+          "@type": "SoftwareApplication",
+          name: "Paper Clock",
+          applicationCategory: "ProductivityApplication",
+          applicationSubCategory: "Alarm clock",
+          operatingSystem: "Android",
+          description,
+          url: siteUrl,
+          image: new URL("/social-card.png", siteUrl).toString(),
+          downloadUrl: "https://github.com/jonaylor89/PaperClock/releases",
+          author: {
+            "@type": "Person",
+            name: "Johannes Naylor",
+            url: "https://jonaylor.com",
+          },
+        },
+      ],
+    }
+  : undefined;
 
 const features = [
   {
@@ -36,11 +69,9 @@ const features = [
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#0b0b0c" />
     <link rel="icon" href="/brand-mark.png" type="image/png" />
-    <meta
-      name="description"
-      content="Paper Clock is a private, offline Android alarm clock for building mornings around meaningful goals."
-    />
-    <title>Paper Clock — Build mornings around what matters</title>
+    <Seo title="Paper Clock | Private Offline Android Alarm Clock" description={description} />
+    <title>Paper Clock | Private Offline Android Alarm Clock</title>
+    {structuredData && <script is:inline type="application/ld+json" set:html={JSON.stringify(structuredData)} />}
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

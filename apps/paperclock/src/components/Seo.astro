@@ -1,0 +1,49 @@
+---
+interface Props {
+  title: string;
+  description: string;
+  image?: string;
+  imageAlt?: string;
+  noindex?: boolean;
+}
+
+const {
+  title,
+  description,
+  image = "/social-card.png",
+  imageAlt = "Paper Clock: Your morning has a reason.",
+  noindex = false,
+} = Astro.props;
+
+const canonicalUrl = Astro.site ? new URL(Astro.url.pathname, Astro.site).toString() : undefined;
+const imageUrl = Astro.site ? new URL(image, Astro.site).toString() : image;
+const robots = noindex
+  ? "noindex, nofollow"
+  : "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1";
+---
+
+<meta name="generator" content={Astro.generator} />
+<meta name="description" content={description} />
+<meta name="robots" content={robots} />
+<meta name="author" content="Johannes Naylor" />
+{canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
+{Astro.site && <link rel="sitemap" type="application/xml" href={new URL("/sitemap.xml", Astro.site)} />}
+
+<meta property="og:type" content="website" />
+<meta property="og:locale" content="en_US" />
+<meta property="og:site_name" content="Paper Clock" />
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+{canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
+<meta property="og:image" content={imageUrl} />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:alt" content={imageAlt} />
+
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:creator" content="@jonaylor89" />
+<meta name="twitter:title" content={title} />
+<meta name="twitter:description" content={description} />
+<meta name="twitter:image" content={imageUrl} />
+<meta name="twitter:image:alt" content={imageAlt} />
