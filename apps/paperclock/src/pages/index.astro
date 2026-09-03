@@ -1,0 +1,232 @@
+---
+import "../styles/global.css";
+
+const features = [
+  {
+    number: "01",
+    eyebrow: "A reason to rise",
+    title: "Goals, not just alarms.",
+    body: "Give tomorrow a target. Paper Clock keeps that target close to the moment you need it most.",
+    image: "/screenshots/goals-progress.png",
+    alt: "Paper Clock goal with a 30-day countdown and linked alarm",
+  },
+  {
+    number: "02",
+    eyebrow: "Set the rhythm",
+    title: "Make the alarm yours.",
+    body: "Choose a time, repeat schedule, label, linked goal, wake-up sound, and vibration in one focused screen.",
+    image: "/screenshots/alarm-editor.png",
+    alt: "Paper Clock alarm editor showing scheduling and wake method controls",
+  },
+  {
+    number: "03",
+    eyebrow: "Wake up moving",
+    title: "Sound with intention.",
+    body: "Preview the bundled wake-up sounds, then pick the one that gets you out from under the covers.",
+    image: "/screenshots/wake-up-sounds.png",
+    alt: "Paper Clock wake-up sound picker",
+  },
+];
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0b0b0c" />
+    <link rel="icon" href="/brand-mark.png" type="image/png" />
+    <meta
+      name="description"
+      content="Paper Clock is a private, offline Android alarm clock for building mornings around meaningful goals."
+    />
+    <title>Paper Clock — Build mornings around what matters</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;0,800;0,900;1,700&family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <main>
+      <section class="hero" id="top">
+        <div class="grain" aria-hidden="true"></div>
+        <nav class="nav shell" aria-label="Primary navigation">
+          <a class="brand" href="#top" aria-label="Paper Clock home">
+            <span class="brand-mark"><img src="/brand-mark.png" alt="" /></span>
+            <span><b>PAPER</b><strong>CLOCK</strong></span>
+          </a>
+          <div class="nav-links">
+            <a href="#how-it-works">How it works</a>
+            <a href="#private">Why offline</a>
+          </div>
+          <a
+            class="nav-cta"
+            href="https://github.com/jonaylor89/PaperClock/releases"
+            target="_blank"
+            rel="noreferrer"
+          >Get the app <span aria-hidden="true">↗</span></a>
+        </nav>
+
+        <div class="hero-grid shell">
+          <div class="hero-copy">
+            <p class="kicker"><span></span> A private alarm clock for the work ahead</p>
+            <h1>YOUR MORNING<br />HAS <em>A REASON.</em></h1>
+            <p class="lede">
+              Paper Clock turns an alarm into a promise you can see. Set the time. Name the target.
+              Start with the next honest move.
+            </p>
+            <div class="hero-actions">
+              <a
+                class="button button-primary"
+                href="https://github.com/jonaylor89/PaperClock/releases"
+                target="_blank"
+                rel="noreferrer"
+              >GET THE APP <span>→</span></a>
+              <a class="text-link" href="#how-it-works">SEE THE FLOW <span>↓</span></a>
+            </div>
+            <dl class="proof-points" aria-label="Paper Clock principles">
+              <div><dt>PRIVATE</dt><dd>No account. No cloud.</dd></div>
+              <div><dt>OFFLINE</dt><dd>Your data stays yours.</dd></div>
+              <div><dt>ANDROID</dt><dd>Built to ring on time.</dd></div>
+            </dl>
+          </div>
+
+          <div class="hero-visual" aria-label="Paper Clock alarm interface">
+            <div class="orbit orbit-large"></div>
+            <div class="orbit orbit-small"></div>
+            <div class="hero-stamp">EST.<br />2026</div>
+            <div class="phone phone-hero">
+              <img
+                src="/screenshots/home-next-alarm.png"
+                alt="Paper Clock home screen with the next alarm set for 6 AM"
+                width="1080"
+                height="2424"
+                fetchpriority="high"
+              />
+            </div>
+            <p class="visual-caption"><span>06:00</span> THE NEXT HONEST MOVE</p>
+          </div>
+        </div>
+
+        <a class="scroll-cue" href="#why-paper-clock" aria-label="Scroll to learn more">
+          <span>SCROLL TO START</span><i></i>
+        </a>
+      </section>
+
+      <section class="manifesto" id="why-paper-clock">
+        <div class="shell manifesto-grid">
+          <p class="section-label">THE PREMISE <span>01</span></p>
+          <div>
+            <p class="large-statement">
+              The alarm is not the point.<br />
+              <span>The life you get up for is.</span>
+            </p>
+            <p class="manifesto-copy">
+              Most clocks tell you when. Paper Clock asks why—then keeps the answer in view when
+              tomorrow starts asking for your attention.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="routine" id="how-it-works">
+        <div class="shell">
+          <div class="section-heading">
+            <div>
+              <p class="section-label">THE ROUTINE <span>02</span></p>
+              <h2>MAKE THE<br /><em>FIRST MOVE.</em></h2>
+            </div>
+            <p>Four quiet decisions. One more deliberate morning.</p>
+          </div>
+
+          <ol class="steps">
+            <li><span>01</span><strong>NAME<br />THE TARGET</strong><p>Put a meaningful goal in words.</p></li>
+            <li><span>02</span><strong>CHOOSE<br />THE DATE</strong><p>Give the work a horizon.</p></li>
+            <li><span>03</span><strong>SET<br />THE ALARM</strong><p>Decide when you will show up.</p></li>
+            <li><span>04</span><strong>PICK<br />THE SOUND</strong><p>Choose your way into the day.</p></li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="feature-run" aria-label="Paper Clock features">
+        {features.map((feature, index) => (
+          <article class:list={["feature", { "feature-reverse": index % 2 === 1 }]}>
+            <div class="feature-content shell">
+              <div class="feature-copy">
+                <p class="feature-number">{feature.number}</p>
+                <p class="section-label">{feature.eyebrow}</p>
+                <h2>{feature.title}</h2>
+                <p>{feature.body}</p>
+                <div class="rule"></div>
+                <p class="micro-copy">BUILT FOR THE MOMENT BEFORE THE DAY BEGINS.</p>
+              </div>
+              <div class="feature-visual">
+                <div class="feature-orbit" aria-hidden="true"></div>
+                <div class="phone phone-feature">
+                  <img src={feature.image} alt={feature.alt} width="1080" height="2424" loading="lazy" />
+                </div>
+              </div>
+            </div>
+          </article>
+        ))}
+      </section>
+
+      <section class="privacy" id="private">
+        <div class="grain" aria-hidden="true"></div>
+        <div class="shell privacy-grid">
+          <div>
+            <p class="section-label">YOUR MORNING IS YOURS <span>03</span></p>
+            <h2>PRIVATE.<br /><em>ON PURPOSE.</em></h2>
+          </div>
+          <div class="privacy-copy">
+            <p>
+              Paper Clock stores your alarms, goals, and preferences on your device. No accounts,
+              tracking, or cloud sync stand between you and a good morning.
+            </p>
+            <ul>
+              <li><span>✓</span> Works without an internet connection</li>
+              <li><span>✓</span> Bundled wake-up sounds, ready from install</li>
+              <li><span>✓</span> Exact Android alarm scheduling and restart recovery</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="closing" id="get-the-app">
+        <div class="closing-ring ring-one" aria-hidden="true"></div>
+        <div class="closing-ring ring-two" aria-hidden="true"></div>
+        <div class="shell closing-inner">
+          <p class="section-label">START TOMORROW DIFFERENTLY</p>
+          <h2>GET UP FOR<br /><em>SOMETHING.</em></h2>
+          <p>Paper Clock is an offline Android alarm clock for meaningful mornings.</p>
+          <a
+            class="button button-primary"
+            href="https://github.com/jonaylor89/PaperClock/releases"
+            target="_blank"
+            rel="noreferrer"
+          >GET THE LATEST RELEASE <span>→</span></a>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="shell footer-inner">
+        <a class="brand" href="#top" aria-label="Back to the top of Paper Clock">
+          <span class="brand-mark"><img src="/brand-mark.png" alt="" /></span>
+          <span><b>PAPER</b><strong>CLOCK</strong></span>
+        </a>
+        <nav class="footer-links" aria-label="Footer links">
+          <a href="https://github.com/jonaylor89/PaperClock/releases" target="_blank" rel="noreferrer">Releases</a>
+          <a href="/privacy">Privacy</a>
+          <a href="/terms">Terms</a>
+          <a href="https://jonaylor.com" target="_blank" rel="noreferrer">More by Me</a>
+        </nav>
+        <div class="footer-meta">
+          <p>© {new Date().getFullYear()} PAPER CLOCK</p>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

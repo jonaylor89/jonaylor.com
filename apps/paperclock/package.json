@@ -1,0 +1,16 @@
+{
+  "name": "paper-clock-site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "deploy": "wrangler deploy --name paperclock --assets ./dist --compatibility-date 2025-03-15",
+    "preview": "astro preview",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "astro": "^7.3.1"
+  }
+}
