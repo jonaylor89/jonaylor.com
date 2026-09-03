@@ -61,6 +61,24 @@ npx tsx scripts/generate-redirects.ts netlify    # or cloudflare, nginx
 
 Run the generator script and configure domain aliases in your provider's dashboard.
 
+## jnay.me short links
+
+`jnay.me` is served by the same Cloudflare Worker as this site. Its short-link registry is [`src/shortlinks.ts`](src/shortlinks.ts): add a path and its absolute destination URL, then deploy.
+
+```ts
+"/cv": "https://jonaylor.com/resume",
+```
+
+- `https://jnay.me/cv` sends a 302 redirect, so destinations can be changed later.
+- Incoming query parameters are retained (for example, UTM campaign parameters).
+- `www.jnay.me` permanently redirects to `jnay.me`; unknown short links return 404.
+
+The `jnay.me` zone must be active in the same Cloudflare account before deploying. Deploy from the repository root with:
+
+```bash
+pnpm --filter site deploy
+```
+
 ## Stack
 
 - [Astro](https://astro.build) - Static site generator
