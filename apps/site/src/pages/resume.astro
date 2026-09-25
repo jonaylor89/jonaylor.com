@@ -74,6 +74,19 @@ const resume = {
 			tech: ["Nextjs", "Supabase", "Golang", "k8s", "GCP", "LLMs", "Mixpanel", "React Native"],
 		},
 		{
+			location: "New York City, NY",
+			company: "BeatStars",
+			url: "https://www.beatstars.com/claude",
+			period: "Spring 2026 - Fall 2026",
+			title: "Engineering Manager (Contract)",
+			bullets: [
+				"Led legacy PHP rewrites to Go",
+				"Created the BeatStars MCP / Claude Connector",
+				"Simplified CI/CD by migrating frontend and backend teams from Jenkins to GitHub Actions",
+			],
+			tech: ["PHP", "Go", "MCP", "Claude", "Jenkins", "GitHub Actions"],
+		},
+		{
 			location: "San Francisco, CA",
 			company: "Audius",
 			period: "Spring 2022 - Spring 2023",
@@ -487,7 +500,11 @@ const resume = {
           <div class="subsection">
             <div class="subsection-header">
               <span class="location">{job.location}</span>
-              <span class="company">{job.company}</span>
+              {job.url ? (
+                <a class="company" href={job.url} target="_blank" rel="noopener">{job.company}</a>
+              ) : (
+                <span class="company">{job.company}</span>
+              )}
               <span class="period">{job.period}</span>
             </div>
             <ul>
