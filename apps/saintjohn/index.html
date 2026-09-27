@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saint John - Your Android Launcher, Reimagined</title>
+    <meta name="description" content="The first multi-AI agentic launcher for Android. AI that lives on your home screen and can actually control your device—launch apps, search the web, create notes, and more.">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://saintjohn.jonaylor.com/">
+    <meta property="og:title" content="Saint John - Multi-AI Agentic Android Launcher">
+    <meta property="og:description" content="The first multi-AI agentic launcher for Android. AI that lives on your home screen and can actually control your device—launch apps, search the web, create notes, and more.">
+    <meta property="og:image" content="https://saintjohn.jonaylor.com/assets/og.jpg">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://saintjohn.jonaylor.com/">
+    <meta property="twitter:title" content="Saint John - Multi-AI Agentic Android Launcher">
+    <meta property="twitter:description" content="The first multi-AI agentic launcher for Android. AI that lives on your home screen and can actually control your device—launch apps, search the web, create notes, and more.">
+    <meta property="twitter:image" content="https://saintjohn.jonaylor.com/assets/og.jpg">
+
+    <!-- Favicons -->
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <meta name="theme-color" content="#FFFFFF">
+
+    <link rel="stylesheet" href="style.css">
+    <!-- Privacy-friendly analytics by Plausible -->
+    <script async src="https://plausible.io/js/pa-5GWeDiEsEjip5b2JeKHRv.js"></script>
+    <script>
+      window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+      plausible.init()
+    </script>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="container">
+            <div class="logo">Saint John</div>
+            <nav>
+                <button id="salvation-toggle" class="salvation-button" aria-label="Toggle Salvation Mode">
+                    ✝ Enter Salvation
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Early Access Banner -->
+    <div class="early-access-banner">
+        <div class="container">
+            <span class="banner-badge">EARLY ACCESS</span>
+            <p class="banner-text">Saint John is currently in early access. <a href="https://forms.gle/Q5y5ajdsArda5yZZ9" target="_blank" class="banner-link">Join the waitlist</a> to be notified when it's available!</p>
+        </div>
+    </div>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <h1>Your Android Home Screen, Reimagined</h1>
+            <p class="subtitle">The first multi-AI agentic launcher for Android. Say goodbye to context switching—your AI assistant lives on your home screen and can actually control your device.</p>
+            <button class="primary-button disabled" disabled>Download on Google Play (Coming Soon)</button>
+
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="container">
+            <!-- Feature 1: AI Agent -->
+            <div class="feature">
+                <div class="feature-content">
+                    <h2>Multi-AI Agent System</h2>
+                    <p>Not just chat—an AI that takes action. Saint John integrates OpenAI, Anthropic Claude, and Google Gemini with native device control capabilities. Your AI can launch apps, create notes, check weather, search the web, and access your calendar—all without leaving the conversation.</p>
+                    <ul>
+                        <li><strong>Agentic Skills</strong> — AI can launch apps by name, create notes, access device data</li>
+                        <li><strong>Web Search</strong> — Real-time information via integrated search (Tavily API)</li>
+                        <li><strong>Extended Thinking</strong> — See the AI's reasoning process in real-time</li>
+                        <li><strong>Rich Content</strong> — Markdown rendering, code syntax highlighting, image support</li>
+                        <li><strong>Multiple Models</strong> — Switch between OpenAI, Claude, and Gemini models dynamically</li>
+                        <li><strong>Tool Calling</strong> — Full function calling support across all providers</li>
+                        <li><strong>Streaming Responses</strong> — Real-time generation with ability to cancel mid-stream</li>
+                    </ul>
+                </div>
+                <div class="feature-visual">
+                    <img src="assets/chat_page_screenshot.jpg" alt="Chat interface with agentic AI capabilities" class="feature-screenshot">
+                </div>
+            </div>
+
+            <!-- Feature 2: Essential Widgets -->
+            <div class="feature reverse">
+                <div class="feature-content">
+                    <h2>Essential Widgets</h2>
+                    <p>Everything you need at a glance. Weather, calendar, and notes—beautifully designed and always accessible.</p>
+                    <ul>
+                        <li>Live weather with location-based updates</li>
+                        <li>Calendar events (tap to open in calendar)</li>
+                        <li>Quick notes with markdown support</li>
+                        <li>Material 3 design language</li>
+                    </ul>
+                </div>
+                <div class="feature-visual">
+                    <img src="assets/root_page_screenshot.jpg" alt="Widget cards showing weather, calendar, and notes" class="feature-screenshot">
+                </div>
+            </div>
+
+            <!-- Feature 3: Organized App Drawer -->
+            <div class="feature">
+                <div class="feature-content">
+                    <h2>Organized App Drawer</h2>
+                    <p>Keep your apps tidy with collapsible folders. Pull down to expand or collapse all—a gesture that feels natural.</p>
+                    <ul>
+                        <li>Collapsible folders for clean organization</li>
+                        <li>Pull-to-expand/collapse gesture</li>
+                        <li>Haptic feedback for interactions</li>
+                        <li>Alphabetically sorted</li>
+                    </ul>
+                </div>
+                <div class="feature-visual">
+                    <img src="assets/drawer_page_screenshot.jpg" alt="App drawer with organized, collapsible folders" class="feature-screenshot">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Product Showcase (Blloc-inspired) -->
+    <section class="showcase">
+        <div class="container">
+            <h2>Three Screens. Everything You Need.</h2>
+            <div class="showcase-grid">
+                <div class="showcase-item">
+                    <img src="assets/root_page_screenshot.jpg" alt="Home screen with widgets" class="showcase-screenshot">
+                    <h3>Home</h3>
+                    <p>Widgets, weather, calendar, notes</p>
+                </div>
+                <div class="showcase-item">
+                    <img src="assets/chat_page_screenshot.jpg" alt="Chat screen with AI conversation" class="showcase-screenshot">
+                    <h3>AI Agent</h3>
+                    <p>Multi-model AI with device control</p>
+                </div>
+                <div class="showcase-item">
+                    <img src="assets/drawer_page_screenshot.jpg" alt="App drawer with organized folders" class="showcase-screenshot">
+                    <h3>Apps</h3>
+                    <p>Organized, accessible, clean</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Philosophy Section -->
+    <section class="philosophy">
+        <div class="container">
+            <h2>Less Distraction, More Focus</h2>
+            <p>Saint John is built on the belief that your phone should serve you, not distract you. Every feature is intentional. Every interaction is purposeful. No bloat, no clutter—just the tools you need, beautifully designed.</p>
+        </div>
+    </section>
+
+    <!-- Requirements Section -->
+    <section class="philosophy" style="background-color: #f5f5f5;">
+        <div class="container">
+            <h2>What You Need to Know</h2>
+            <p><strong>Saint John is free and open-source</strong>, but AI features require your own API keys from OpenAI, Anthropic, or Google. Your conversations and data stay on your device—we never see your API keys or chat history.</p>
+            <p style="margin-top: 1rem;"><strong>Web search</strong> requires a Tavily API key (free tier available). All other features work completely offline.</p>
+        </div>
+    </section>
+
+    <!-- Download Section -->
+    <section id="download" class="download">
+        <div class="container">
+            <h2>Get Saint John</h2>
+            <p>Coming soon to Android devices running 8.0 (Oreo) or higher</p>
+            <button class="primary-button disabled" disabled>Download on Google Play (Coming Soon)</button>
+            <p class="version-info">Join the <a href="https://forms.gle/Q5y5ajdsArda5yZZ9" target="_blank" style="color: inherit; text-decoration: underline;">early access waitlist</a> to be notified at launch</p>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-left">
+                    <p>&copy; <span id="copyright-year"></span> Saint John</p>
+                    <p>Made by <a href="https://jonaylor.com" target="_blank">Johannes Naylor</a></p>
+                </div>
+                <div class="footer-right">
+                    <a href="/privacy.html">Privacy Policy</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -44,11 +44,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build blog
-        run: pnpm --filter blog build
-
-      - name: Build linktree
-        run: pnpm --filter linktree build
+      - name: Build workspace apps
+        run: pnpm build
 
   test:
     name: Run Tests
@@ -84,10 +81,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers
-        run: pnpm --filter blog playwright install --with-deps
+        run: pnpm --filter site playwright install --with-deps
 
-      - name: Run blog tests
-        run: pnpm --filter blog test || echo "Blog tests not configured"
-
-      - name: Run linktree tests
-        run: pnpm --filter linktree test || echo "Linktree tests not configured"
+      - name: Run site tests
+        run: pnpm --filter site test

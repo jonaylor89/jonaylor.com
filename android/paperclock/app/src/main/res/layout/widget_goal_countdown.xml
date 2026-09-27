@@ -1,0 +1,79 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_goal_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_goal_background"
+    android:clickable="true"
+    android:paddingStart="18dp"
+    android:paddingTop="15dp"
+    android:paddingEnd="18dp"
+    android:paddingBottom="13dp">
+
+    <TextView
+        android:id="@+id/widget_goal_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/widget_goal_countdown"
+        android:textAllCaps="true"
+        android:textColor="#FFC20A"
+        android:textSize="10sp"
+        android:fontFamily="sans-serif-condensed"
+        android:letterSpacing="0.13" />
+
+    <TextView
+        android:id="@+id/widget_goal_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/widget_goal_label"
+        android:layout_marginTop="3dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="#F5F1E9"
+        android:textSize="17sp"
+        android:textStyle="bold"
+        android:fontFamily="sans-serif-condensed" />
+
+    <TextView
+        android:id="@+id/widget_goal_days"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/widget_goal_title"
+        android:layout_marginTop="6dp"
+        android:textColor="#FFC20A"
+        android:textSize="13sp"
+        android:fontFamily="sans-serif-condensed" />
+
+    <TextView
+        android:id="@+id/widget_goal_target"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignBaseline="@id/widget_goal_days"
+        android:layout_toEndOf="@id/widget_goal_days"
+        android:layout_marginStart="8dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="#9E9A95"
+        android:textSize="10sp"
+        android:fontFamily="sans-serif-condensed" />
+
+    <ProgressBar
+        android:id="@+id/widget_goal_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="4dp"
+        android:layout_below="@id/widget_goal_days"
+        android:layout_marginTop="10dp"
+        android:indeterminate="false"
+        android:max="100"
+        android:progressDrawable="@drawable/widget_progress" />
+
+    <TextView
+        android:id="@+id/widget_goal_linked"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:textColor="#C2BFBA"
+        android:textSize="10sp"
+        android:fontFamily="sans-serif-condensed"
+        android:letterSpacing="0.06" />
+</RelativeLayout>

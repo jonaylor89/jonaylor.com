@@ -1,0 +1,21 @@
+{
+  "name": "saint-john-website",
+  "type": "module",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro check && astro build",
+    "preview": "astro preview",
+    "preview:workers": "npm run build && wrangler dev",
+    "deploy": "npm run build && wrangler deploy",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "astro": "^5.16.11"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.6",
+    "typescript": "^5.6.3",
+    "wrangler": "^4.7.1"
+  }
+}

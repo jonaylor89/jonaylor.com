@@ -2,7 +2,7 @@
 
 Personal websites, experiments, and self-hosted services maintained by [Johannes Naylor](https://jonaylor.com).
 
-JavaScript apps live in [`apps`](apps); self-contained Rust services live in [`services`](services).
+JavaScript apps live in [`apps`](apps), native Android apps in [`android`](android), and self-contained Rust services in [`services`](services).
 
 ## Getting started
 
@@ -36,6 +36,17 @@ pnpm build
 ```
 
 Deployment commands use Wrangler and require Cloudflare credentials configured locally.
+
+### Android
+
+The Android apps are independent Gradle projects and are not pnpm workspaces. They require the Android SDK and the JDK version specified by each project.
+
+```bash
+pnpm android:paperclock:build
+pnpm android:saintjohn:build
+```
+
+Their GitHub Actions workflows build and publish app-specific releases with `paperclock-v*` and `saintjohn-v*` tags.
 
 ## Quality checks
 

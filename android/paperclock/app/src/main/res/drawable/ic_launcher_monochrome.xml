@@ -1,0 +1,12 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- A simplified origami bull, designed for Android's themed-icon mask. -->
+    <path android:fillColor="#FF000000" android:pathData="M48,37 L29,32 L17,14 L17,48 L35,60 L45,55 Z" />
+    <path android:fillColor="#FF000000" android:pathData="M60,37 L79,32 L91,14 L91,48 L73,60 L63,55 Z" />
+    <path android:fillColor="#FF000000" android:pathData="M54,27 L75,43 L69,72 L54,94 L39,72 L33,43 Z" />
+    <path android:fillColor="#FF000000" android:pathData="M34,45 L46,51 L41,62 L27,58 Z" />
+    <path android:fillColor="#FF000000" android:pathData="M74,45 L62,51 L67,62 L81,58 Z" />
+</vector>

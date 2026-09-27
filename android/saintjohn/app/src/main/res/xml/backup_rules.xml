@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+   Backup rules for devices API 31+
+   See https://developer.android.com/guide/topics/data/autobackup
+-->
+<full-backup-content>
+    <!-- Include DataStore preferences (API keys, settings) -->
+    <include domain="file" path="datastore/launcher_preferences.preferences_pb"/>
+
+    <!-- Include Room database (conversations, messages) -->
+    <include domain="database" path="."/>
+</full-backup-content>
