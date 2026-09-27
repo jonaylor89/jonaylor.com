@@ -1,0 +1,8 @@
+/target
+/data
+.env
+configuration/secrets.yaml
+*.pem
+!tests/api/dkim_test_key.pem
+/dns-records.csv
+/cloudflare-dns-import.zone

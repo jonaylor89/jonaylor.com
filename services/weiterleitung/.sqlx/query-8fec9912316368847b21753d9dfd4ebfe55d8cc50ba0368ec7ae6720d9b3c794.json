@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT INTO webhook_deliveries (\n            delivery_id, alias_id, url, payload, status, attempts, next_attempt_at, created_at\n        )\n        VALUES (?, ?, ?, ?, 'pending', 0, ?, ?)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "8fec9912316368847b21753d9dfd4ebfe55d8cc50ba0368ec7ae6720d9b3c794"
+}

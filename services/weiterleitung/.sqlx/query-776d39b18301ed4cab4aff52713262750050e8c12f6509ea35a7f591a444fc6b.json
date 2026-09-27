@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT\n            delivery_id, alias_id, url, payload, status, attempts, last_error, created_at\n        FROM webhook_deliveries\n        WHERE status = 'pending' AND next_attempt_at <= ?\n        ORDER BY next_attempt_at ASC\n        LIMIT ?\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "delivery_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "alias_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "url",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "payload",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "attempts",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "last_error",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 7,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "776d39b18301ed4cab4aff52713262750050e8c12f6509ea35a7f591a444fc6b"
+}

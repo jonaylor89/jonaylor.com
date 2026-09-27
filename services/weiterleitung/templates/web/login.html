@@ -1,0 +1,27 @@
+{%- import "web/components/feedback.html" as feedback -%}
+{%- import "web/components/form.html" as form -%}
+{%- import "web/components/button.html" as button -%}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>log in &middot; weiterleitung</title>
+    <link rel="stylesheet" href="/static/app.css" />
+  </head>
+  <body>
+    <main class="centered">
+      <div class="card auth-card">
+        <form class="card__body stack" action="/login" method="post">
+          <h1 class="auth-card__title">weiterleitung</h1>
+          {% for message in flash_messages %}
+            {% call feedback::alert(message, message.is_error()) %}
+          {% endfor %}
+          {% call form::auth_field("username", "username", "text", "username", true) %}
+          {% call form::auth_field("password", "password", "password", "current-password", false) %}
+          {% call button::button("log in", "primary", "submit") %}
+        </form>
+      </div>
+    </main>
+  </body>
+</html>

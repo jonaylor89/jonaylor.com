@@ -1,0 +1,36 @@
+{%- import "web/components/feedback.html" as feedback -%}
+{%- import "web/components/button.html" as button -%}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}weiterleitung{% endblock %}</title>
+    <link rel="stylesheet" href="/static/app.css" />
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <div class="topbar__inner">
+          <a class="topbar__brand" href="/admin/dashboard">weiterleitung</a>
+          <nav class="topbar__nav" aria-label="Main">
+            <a class="topbar__link" href="/admin/dashboard" {% block nav_aliases %}{% endblock %}>aliases</a>
+            <a class="topbar__link" href="/admin/mailboxes" {% block nav_mailboxes %}{% endblock %}>mailboxes</a>
+          </nav>
+          {% call button::post_button("/admin/logout", "log out", "neutral") %}
+        </div>
+      </header>
+      <main class="page">
+        {% if !flash_messages.is_empty() %}
+          <div class="stack" aria-live="polite">
+            {% for message in flash_messages %}
+              {% call feedback::alert(message, message.is_error()) %}
+            {% endfor %}
+          </div>
+        {% endif %}
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </body>
+</html>

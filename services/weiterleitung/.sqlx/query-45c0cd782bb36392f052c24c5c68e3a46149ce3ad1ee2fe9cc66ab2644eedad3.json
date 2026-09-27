@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM aliases WHERE expires_at IS NOT NULL AND expires_at <= ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "45c0cd782bb36392f052c24c5c68e3a46149ce3ad1ee2fe9cc66ab2644eedad3"
+}

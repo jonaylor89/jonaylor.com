@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT INTO aliases (alias_id, address, mailbox_id, note, enabled, created_at, expires_at, webhook_url)\n        VALUES (?, ?, ?, ?, 1, ?, ?, ?)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "5bad03f6b8970c04de72442cb4eff7c1fc2fa26f245a8f52fffeca8629d03d6d"
+}
