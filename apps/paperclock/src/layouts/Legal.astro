@@ -8,6 +8,8 @@ interface Props {
 }
 
 const { title, description } = Astro.props;
+const releasesUrl = "https://github.com/jonaylor89/jonaylor.com/releases";
+const sourceUrl = "https://github.com/jonaylor89/jonaylor.com/tree/main/android/paperclock";
 ---
 
 <!doctype html>
@@ -35,7 +37,7 @@ const { title, description } = Astro.props;
         </a>
         <a
           class="nav-cta"
-          href="https://github.com/jonaylor89/PaperClock/releases"
+          href={releasesUrl}
           target="_blank"
           rel="noreferrer"
         >Get the app <span aria-hidden="true">↗</span></a>
@@ -51,7 +53,8 @@ const { title, description } = Astro.props;
           <span><b>PAPER</b><strong>CLOCK</strong></span>
         </a>
         <nav class="footer-links" aria-label="Paper Clock links">
-          <a href="https://github.com/jonaylor89/PaperClock/releases" target="_blank" rel="noreferrer">Releases</a>
+          <a href={releasesUrl} target="_blank" rel="noreferrer">Releases</a>
+          <a href={sourceUrl} target="_blank" rel="noreferrer">Source code</a>
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>
           <a href="https://jonaylor.com" target="_blank" rel="noreferrer">Johannes Naylor</a>
