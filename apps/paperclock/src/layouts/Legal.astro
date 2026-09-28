@@ -8,6 +8,7 @@ interface Props {
 }
 
 const { title, description } = Astro.props;
+const downloadUrl = "https://downloads.jonaylor.com/paperclock.apk";
 const releasesUrl = "https://github.com/jonaylor89/jonaylor.com/releases";
 const sourceUrl = "https://github.com/jonaylor89/jonaylor.com/tree/main/android/paperclock";
 ---
@@ -37,7 +38,7 @@ const sourceUrl = "https://github.com/jonaylor89/jonaylor.com/tree/main/android/
         </a>
         <a
           class="nav-cta"
-          href={releasesUrl}
+          href={downloadUrl}
           target="_blank"
           rel="noreferrer"
         >Get the app <span aria-hidden="true">↗</span></a>

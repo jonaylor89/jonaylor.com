@@ -56,7 +56,11 @@ importers:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@24.12.0)(lightningcss@1.32.0)
 
-  apps/redirects: {}
+  apps/redirects:
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^5.20260928.1
+        version: 5.20260928.1
 
   apps/rvamusiccalendar:
     dependencies:
@@ -699,6 +703,9 @@ packages:
     engines: {node: '>=16'}
     cpu: [x64]
     os: [win32]
+
+  '@cloudflare/workers-types@5.20260928.1':
+    resolution: {integrity: sha512-B/El15v5HqZyuyfR7Z0W443iA6Ml4nZjaR8rgHyW612r8reO+1JaDKtNbP3CPdzVIM2egp98by3NlpMm5pKbcg==}
 
   '@cspotcode/source-map-support@0.8.1':
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
@@ -4555,6 +4562,8 @@ snapshots:
 
   '@cloudflare/workerd-windows-64@1.20260312.1':
     optional: true
+
+  '@cloudflare/workers-types@5.20260928.1': {}
 
   '@cspotcode/source-map-support@0.8.1':
     dependencies:

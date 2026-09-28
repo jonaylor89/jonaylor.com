@@ -5,6 +5,7 @@ import "../styles/global.css";
 const description =
   "Paper Clock is a private, offline Android alarm clock for building mornings around meaningful goals.";
 const siteUrl = Astro.site?.toString();
+const downloadUrl = "https://downloads.jonaylor.com/paperclock.apk";
 const releasesUrl = "https://github.com/jonaylor89/jonaylor.com/releases";
 const sourceUrl = "https://github.com/jonaylor89/jonaylor.com/tree/main/android/paperclock";
 const structuredData = siteUrl
@@ -25,7 +26,7 @@ const structuredData = siteUrl
           description,
           url: siteUrl,
           image: new URL("/social-card.png", siteUrl).toString(),
-          downloadUrl: releasesUrl,
+          downloadUrl,
           author: {
             "@type": "Person",
             name: "Johannes Naylor",
@@ -96,7 +97,7 @@ const features = [
           </div>
           <a
             class="nav-cta"
-            href={releasesUrl}
+            href={downloadUrl}
             target="_blank"
             rel="noreferrer"
           >Get the app <span aria-hidden="true">↗</span></a>
@@ -113,7 +114,7 @@ const features = [
             <div class="hero-actions">
               <a
                 class="button button-primary"
-                href={releasesUrl}
+                href={downloadUrl}
                 target="_blank"
                 rel="noreferrer"
               >GET THE APP <span>→</span></a>
@@ -236,7 +237,7 @@ const features = [
           <p>Paper Clock is an offline Android alarm clock for meaningful mornings.</p>
           <a
             class="button button-primary"
-            href={releasesUrl}
+            href={downloadUrl}
             target="_blank"
             rel="noreferrer"
           >GET THE LATEST RELEASE <span>→</span></a>

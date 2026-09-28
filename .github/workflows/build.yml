@@ -81,7 +81,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers
-        run: pnpm --filter site playwright install --with-deps
+        run: pnpm --filter site exec playwright install --with-deps
 
       - name: Run site tests
         run: pnpm --filter site test

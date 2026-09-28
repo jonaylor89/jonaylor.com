@@ -4,6 +4,7 @@ const currentPath = Astro.url.pathname;
 const navLinks = [
 	{ href: "/", label: "Home" },
 	{ href: "/projects", label: "Projects" },
+	{ href: "/apps", label: "Apps" },
 	{ href: "/blog", label: "Blog" },
 ];
 
@@ -18,7 +19,7 @@ function isActive(href: string) {
     <img src="/logo-dark-256.png" alt="Johannes Naylor" class="w-10 h-10 rounded-full dark:hidden" />
     <img src="/logo-light-256.png" alt="Johannes Naylor" class="w-10 h-10 rounded-full hidden dark:block" />
   </a>
-  <div class="flex items-center gap-6">
+  <div class="flex items-center gap-4 md:gap-6">
     {navLinks.map((link) => (
       <a
         href={link.href}

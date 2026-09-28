@@ -27,3 +27,7 @@ custom_domain = true
 [[routes]]
 pattern = "www.jonaylor.xyz"
 custom_domain = true
+
+[[routes]]
+pattern = "downloads.jonaylor.com"
+custom_domain = true
