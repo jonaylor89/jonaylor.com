@@ -21,6 +21,10 @@ pattern = "resume.jonaylor.com"
 custom_domain = true
 
 [[routes]]
+pattern = "linktree.jonaylor.com"
+custom_domain = true
+
+[[routes]]
 pattern = "jonaylor.xyz"
 custom_domain = true
 

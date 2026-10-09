@@ -3,6 +3,7 @@ const REDIRECTS: Record<string, string> = {
 	"bio.jonaylor.com": "https://jonaylor.com/links",
 	"gm.jonaylor.com": "https://jonaylor.com/gm",
 	"resume.jonaylor.com": "https://jonaylor.com/resume",
+	"linktree.jonaylor.com": "https://jonaylor.com/links",
 	"jonaylor.xyz": "https://jonaylor.com",
 	"www.jonaylor.xyz": "https://jonaylor.com",
 };
