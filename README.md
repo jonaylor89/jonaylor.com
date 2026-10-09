@@ -44,9 +44,10 @@ The Android apps are independent Gradle projects and are not pnpm workspaces. Th
 ```bash
 pnpm android:paperclock:build
 pnpm android:saintjohn:build
+pnpm android:parlo:build
 ```
 
-Their GitHub Actions workflows build and publish app-specific releases with `paperclock-v*` and `saintjohn-v*` tags.
+Their GitHub Actions workflows build and publish app-specific releases with `paperclock-v*`, `saintjohn-v*`, and `parlo-v*` tags. Paper Clock and Parlo share the reusable [`android-apk.yml`](.github/workflows/android-apk.yml) workflow, which builds a debug APK on pull requests and publishes it as a GitHub Release on `main`.
 
 ## Quality checks
 

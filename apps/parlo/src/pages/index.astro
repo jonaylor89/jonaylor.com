@@ -2,7 +2,8 @@
 import Base from '../layouts/Base.astro';
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const shot = (name: string) => `${base}/screenshots/${name}.png`;
-const repo = 'https://github.com/jonaylor89/Parlo';
+const repo = 'https://github.com/jonaylor89/jonaylor.com/tree/main/android/parlo';
+const downloadUrl = 'https://downloads.jonaylor.com/parlo.apk';
 
 const steps = [
   { n: '01', title: 'Pop in your earbuds', body: 'Bluetooth or wired, it doesn’t matter. Parlo routes audio to whatever you’re wearing and follows you when it changes.' },
@@ -59,8 +60,8 @@ const icons: Record<string, string> = {
       "operatingSystem": "Android",
       "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
       "url": "https://parlo.jonaylor.com",
-      "downloadUrl": "https://github.com/jonaylor89/Parlo#getting-started",
-      "codeRepository": "https://github.com/jonaylor89/Parlo",
+      "downloadUrl": "https://downloads.jonaylor.com/parlo.apk",
+      "codeRepository": "https://github.com/jonaylor89/jonaylor.com/tree/main/android/parlo",
       "creator": { "@type": "Person", "url": "https://github.com/jonaylor89" },
       "featureList": [
         "Real-time bidirectional voice conversation",
@@ -105,9 +106,9 @@ const icons: Record<string, string> = {
           conversation with a patient native speaker — in any of 137 languages and 850+ regional accents.
         </p>
         <div class="cta">
-          <a class="btn filled" href={`${repo}#getting-started`}>
+          <a class="btn filled" href={downloadUrl}>
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 9.48l1.84-3.18c.16-.31.04-.69-.26-.85a.637.637 0 0 0-.83.22l-1.88 3.24a11.43 11.43 0 0 0-8.94 0L5.65 5.67a.643.643 0 0 0-.87-.2c-.28.18-.37.54-.22.83L6.4 9.48A10.78 10.78 0 0 0 1 18h22a10.78 10.78 0 0 0-5.4-8.52ZM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Z"/></svg>
-            Build the APK
+            Download the APK
           </a>
           <a class="btn outlined" href="#how">See how it works</a>
         </div>
@@ -275,11 +276,12 @@ const icons: Record<string, string> = {
   <section class="section cta-band">
     <div class="wrap cta-inner">
       <h2 class="h2">Go for a walk. Come back bilingual-er.</h2>
-      <p class="lede">Parlo is a personal project, built in the open. Clone it, build it, and put it on your phone in a few minutes.</p>
-      <pre><code>git clone {repo}.git
-cd Parlo && ./gradlew installDebug</code></pre>
+      <p class="lede">Parlo is a personal project, built in the open. Grab the latest APK, or clone it and build it yourself in a few minutes.</p>
+      <pre><code>git clone https://github.com/jonaylor89/jonaylor.com.git
+cd jonaylor.com/android/parlo && ./gradlew installDebug</code></pre>
       <div class="cta">
-        <a class="btn filled" href={repo}>View on GitHub</a>
+        <a class="btn filled" href={downloadUrl}>Download the APK</a>
+        <a class="btn outlined" href={repo}>View on GitHub</a>
         <a class="btn outlined" href="https://aistudio.google.com/apikey">Get a free Gemini key</a>
       </div>
     </div>
@@ -289,7 +291,7 @@ cd Parlo && ./gradlew installDebug</code></pre>
     <div class="wrap foot-inner">
       <span><img src={`${base}/icon.png`} alt="" width="22" height="22" /> Parlo</span>
       <span>Kotlin · Jetpack Compose · Material 3 · Gemini Live</span>
-      <a href={repo}>github.com/jonaylor89/Parlo</a>
+      <a href={repo}>Source on GitHub</a>
     </div>
   </footer>
 </Base>

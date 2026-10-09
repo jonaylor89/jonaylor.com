@@ -44,6 +44,8 @@ Native Kotlin + Jetpack Compose (Material 3), Gemini Live API over WebSockets. S
 
 ## Build & install
 
+Run these from `android/parlo` in the [jonaylor.com monorepo](https://github.com/jonaylor89/jonaylor.com) (or `pnpm android:parlo:build` from the root).
+
 ```bash
 # point Gradle at your SDK (or set ANDROID_HOME)
 echo "sdk.dir=$HOME/Android/Sdk" > local.properties
@@ -127,12 +129,18 @@ app/src/main/java/com/parlo/app/
 - Setup enables `AUDIO` response modality, input/output transcription, session resumption, sliding-window context compression, and the `save_vocab` / `note_vocab` / `switch_language` tools.
 - Post-session vocab mining is the only non-Live call: one `POST /v1beta/models/{model}:generateContent` with `responseMimeType: application/json` (tries `gemini-2.5-flash`, then `gemini-2.0-flash`, then `gemini-flash-latest`).
 
+## Releases
+
+[`android-parlo.yml`](../../.github/workflows/android-parlo.yml) runs the unit tests and lint and builds a debug APK for every pull request touching `android/parlo`. Pushes to `main` also publish a GitHub Release tagged `parlo-v<versionName>-build.<runNumber>`; https://downloads.jonaylor.com/parlo.apk always points at the newest one. The APK uses the standard debug signing key.
+
 ## Website
 
-`site/` is the Astro landing page at https://parlo.jonaylor.com (static output in `site/dist` via `npm run build`).
+[`apps/parlo`](../../apps/parlo) is the Astro landing page at https://parlo.jonaylor.com. From the repository root:
 
 ```bash
-cd site && npm install && npm run dev
+pnpm install
+pnpm --filter parlo-site dev
+pnpm --filter parlo-site build
 ```
 
 ## Privacy

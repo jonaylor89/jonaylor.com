@@ -20,6 +20,10 @@ const INSTALLS = {
 		name: "Saint John",
 		tagPrefix: "saintjohn-v",
 	},
+	"/parlo.apk": {
+		name: "Parlo",
+		tagPrefix: "parlo-v",
+	},
 } as const;
 
 type Install = (typeof INSTALLS)[keyof typeof INSTALLS];
@@ -75,7 +79,7 @@ async function getLatestApk(install: Install): Promise<ReleaseAsset | null> {
 
 function downloadHelp(): Response {
 	return new Response(
-		"Use /paperclock.apk or /saintjohn.apk to download the latest Android release.",
+		"Use /paperclock.apk, /saintjohn.apk, or /parlo.apk to download the latest Android release.",
 		{
 			headers: { "Content-Type": "text/plain; charset=utf-8" },
 		},

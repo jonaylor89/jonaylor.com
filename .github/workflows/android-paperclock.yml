@@ -6,87 +6,28 @@ on:
     paths:
       - "android/paperclock/**"
       - ".github/workflows/android-paperclock.yml"
+      - ".github/workflows/android-apk.yml"
   pull_request:
     branches: [main]
     paths:
       - "android/paperclock/**"
       - ".github/workflows/android-paperclock.yml"
+      - ".github/workflows/android-apk.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  build:
-    name: Build debug APK
-    runs-on: ubuntu-latest
-    outputs:
-      version_name: ${{ steps.version.outputs.name }}
-    defaults:
-      run:
-        working-directory: android/paperclock
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: platform-tools
-          log-accepted-android-sdk-licenses: "false"
-
-      - name: Install Android platform 36
-        run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Read app version
-        id: version
-        run: |
-          VERSION_NAME="$(grep -oE 'versionName = "[^"]+"' app/build.gradle.kts | head -1 | cut -d'"' -f2)"
-          test -n "$VERSION_NAME"
-          echo "name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
-
-      - name: Assemble installable APK
-        run: ./gradlew assembleDebug --no-daemon
-
-      - name: Upload APK workflow artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: paper-clock-debug-apk
-          path: android/paperclock/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 14
-
-  release:
-    name: Publish GitHub release
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+  apk:
     permissions:
       contents: write
-    steps:
-      - name: Download APK
-        uses: actions/download-artifact@v4
-        with:
-          name: paper-clock-debug-apk
-          path: release
-
-      - name: Name release asset
-        run: mv release/app-debug.apk "release/PaperClock-v${{ needs.build.outputs.version_name }}-build.${{ github.run_number }}.apk"
-
-      - name: Create GitHub release and tag
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: paperclock-v${{ needs.build.outputs.version_name }}-build.${{ github.run_number }}
-          name: Paper Clock v${{ needs.build.outputs.version_name }} · build ${{ github.run_number }}
-          generate_release_notes: true
-          make_latest: true
-          files: release/*.apk
+    uses: ./.github/workflows/android-apk.yml
+    with:
+      app: paperclock
+      display-name: Paper Clock
+      asset-name: PaperClock
+      tag-prefix: paperclock-v
+      java-version: "21"
+      android-platform: "36"
+      build-tools: 36.0.0
