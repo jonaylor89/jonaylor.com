@@ -1,0 +1,118 @@
+name: Android APK (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      app:
+        description: Gradle project directory under android/
+        required: true
+        type: string
+      display-name:
+        description: Human-readable app name used in the release title
+        required: true
+        type: string
+      asset-name:
+        description: Release asset file name prefix, e.g. PaperClock
+        required: true
+        type: string
+      tag-prefix:
+        description: Release tag prefix, e.g. paperclock-v
+        required: true
+        type: string
+      java-version:
+        required: true
+        type: string
+      android-platform:
+        description: Android SDK platform level to install
+        required: true
+        type: string
+      build-tools:
+        required: true
+        type: string
+      checks:
+        description: Extra Gradle tasks to run before assembling, e.g. testDebugUnitTest lintDebug
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build debug APK
+    runs-on: ubuntu-latest
+    outputs:
+      version_name: ${{ steps.version.outputs.name }}
+    defaults:
+      run:
+        working-directory: android/${{ inputs.app }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ inputs.java-version }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java-version }}
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: "false"
+
+      - name: Install Android platform ${{ inputs.android-platform }}
+        run: sdkmanager --install "platforms;android-${{ inputs.android-platform }}" "build-tools;${{ inputs.build-tools }}"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Read app version
+        id: version
+        run: |
+          VERSION_NAME="$(grep -oE 'versionName = "[^"]+"' app/build.gradle.kts | head -1 | cut -d'"' -f2)"
+          test -n "$VERSION_NAME"
+          echo "name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Run checks
+        if: inputs.checks != ''
+        run: ./gradlew ${{ inputs.checks }} --no-daemon
+
+      - name: Assemble installable APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.app }}-debug-apk
+          path: android/${{ inputs.app }}/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish GitHub release
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.app }}-debug-apk
+          path: release
+
+      - name: Name release asset
+        run: mv release/app-debug.apk "release/${{ inputs.asset-name }}-v${{ needs.build.outputs.version_name }}-build.${{ github.run_number }}.apk"
+
+      - name: Create GitHub release and tag
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag-prefix }}${{ needs.build.outputs.version_name }}-build.${{ github.run_number }}
+          name: ${{ inputs.display-name }} v${{ needs.build.outputs.version_name }} · build ${{ github.run_number }}
+          generate_release_notes: true
+          make_latest: true
+          files: release/*.apk

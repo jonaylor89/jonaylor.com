@@ -1,0 +1,15 @@
+{
+  "name": "parlo-site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build && rm -rf dist/_worker.js dist/_routes.json",
+    "deploy": "wrangler deploy",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "astro": "5.18.2"
+  }
+}

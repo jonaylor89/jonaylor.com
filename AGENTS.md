@@ -22,3 +22,8 @@
   1. `pnpm --filter linktree lint` - Check for linting issues
   2. `pnpm --filter linktree build` - Ensure build passes
   3. `pnpm --filter linktree test` - Run Playwright tests (if applicable)
+
+## Android apps (android/*)
+- Each app (`paperclock`, `saintjohn`, `parlo`) is an independent Gradle project with its own wrapper, version catalog, and JDK; run `./gradlew` from the app directory.
+- Paper Clock and Parlo CI call the reusable `.github/workflows/android-apk.yml`; Saint John has its own signed release workflow.
+- Parlo QA: `./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug` (JDK 17, SDK platform 35).

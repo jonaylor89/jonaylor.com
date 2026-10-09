@@ -1,0 +1,34 @@
+name: Parlo Android APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/parlo/**"
+      - ".github/workflows/android-parlo.yml"
+      - ".github/workflows/android-apk.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "android/parlo/**"
+      - ".github/workflows/android-parlo.yml"
+      - ".github/workflows/android-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    permissions:
+      contents: write
+    uses: ./.github/workflows/android-apk.yml
+    with:
+      app: parlo
+      display-name: Parlo
+      asset-name: Parlo
+      tag-prefix: parlo-v
+      java-version: "17"
+      android-platform: "35"
+      build-tools: 35.0.0
+      checks: testDebugUnitTest lintDebug

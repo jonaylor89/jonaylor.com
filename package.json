@@ -9,6 +9,7 @@
 		"deploy": "turbo run deploy",
 		"android:paperclock:build": "cd android/paperclock && ./gradlew assembleDebug",
 		"android:saintjohn:build": "cd android/saintjohn && ./gradlew assembleDebug",
+		"android:parlo:build": "cd android/parlo && ./gradlew assembleDebug",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
 		"format": "biome format --write .",
