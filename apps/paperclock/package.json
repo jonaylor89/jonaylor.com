@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "deploy": "wrangler deploy --name paperclock --assets ./dist --compatibility-date 2025-03-15",
+    "deploy": "wrangler deploy",
     "preview": "astro preview",
     "check": "astro check"
   },

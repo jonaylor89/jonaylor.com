@@ -1,0 +1,7 @@
+{
+  "name": "paperclock",
+  "compatibility_date": "2025-03-15",
+  "assets": {
+    "directory": "./dist"
+  }
+}
