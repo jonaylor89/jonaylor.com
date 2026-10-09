@@ -44,11 +44,13 @@ const projects = [
 				name: "Paper Clock",
 				description: "Modern remake of the discontinued 'Rock Clock'",
 				url: "https://github.com/jonaylor89/jonaylor.com/tree/main/android/paperclock",
+				downloadUrl: "https://downloads.jonaylor.com/paperclock.apk",
 			},
 			{
 				name: "Parlo",
 				description: "Hands-free AI language tutor for your walks",
 				url: "https://parlo.jonaylor.com",
+				downloadUrl: "https://downloads.jonaylor.com/parlo.apk",
 			},
 			{
 				name: "Pennysite",
@@ -71,6 +73,7 @@ const projects = [
 				name: "Saint John",
 				description: "Distraction-free Android home screen",
 				url: "https://saintjohn.jonaylor.com",
+				downloadUrl: "https://downloads.jonaylor.com/saintjohn.apk",
 				blogSlug: "introducing-saint-john",
 			},
 			{
@@ -169,28 +172,44 @@ const projects = [
         </h2>
         <div class="space-y-4">
           {group.items.map((project) => (
-            <div class="flex items-baseline justify-between gap-4">
-              <div class="flex-1 min-w-0">
-                <a
-                  href={project.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="font-medium hover:underline"
-                >
-                  {project.name}
-                </a>
-                <span class="text-text-secondary ml-2 text-sm">
+            <div>
+              <a
+                href={project.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="font-medium hover:underline"
+              >
+                {project.name}
+              </a>
+              {project.description && (
+                <span class="ml-2 text-sm text-text-secondary">
                   {project.description}
                 </span>
-              </div>
-              {project.blogSlug && (
-                <a
-                  href={`/blog/${project.blogSlug}`}
-                  class="shrink-0 text-xs text-text-muted hover:text-text-secondary transition-colors duration-200"
-                  title={`Read the story behind ${project.name}`}
-                >
-                  read the story →
-                </a>
+              )}
+              {(project.downloadUrl || project.blogSlug) && (
+                <div class="mt-1 flex items-center gap-2 text-xs">
+                  {project.downloadUrl && (
+                    <a
+                      href={project.downloadUrl}
+                      class="font-medium text-social-text underline decoration-current underline-offset-2 transition-opacity duration-200 hover:opacity-70"
+                      title={`Download the ${project.name} APK for Android`}
+                    >
+                      Download APK
+                    </a>
+                  )}
+                  {project.downloadUrl && project.blogSlug && (
+                    <span class="text-text-muted" aria-hidden="true">·</span>
+                  )}
+                  {project.blogSlug && (
+                    <a
+                      href={`/blog/${project.blogSlug}`}
+                      class="font-medium text-social-text underline decoration-current underline-offset-2 transition-opacity duration-200 hover:opacity-70"
+                      title={`Read the story behind ${project.name}`}
+                    >
+                      Read the story
+                    </a>
+                  )}
+                </div>
               )}
             </div>
           ))}

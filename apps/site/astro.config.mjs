@@ -17,8 +17,9 @@ export default defineConfig({
 	redirects: {
 		"/needle_movers.html": "/needle-movers",
 		"/user_manual.html": "/user-manual",
-		"/apks": "/apps",
-		"/downloads": "/apps",
+		"/apps": "/projects",
+		"/apks": "/projects",
+		"/downloads": "/projects",
 	},
 
 	integrations: [
