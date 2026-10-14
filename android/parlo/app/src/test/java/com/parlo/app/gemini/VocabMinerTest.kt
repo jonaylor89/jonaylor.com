@@ -61,7 +61,7 @@ class VocabMinerTest {
         val body = Json.parseToJsonElement(req.body.readUtf8()).jsonObject
         val gen = body["generationConfig"]!!.jsonObject
         assertEquals("application/json", gen["responseMimeType"]!!.jsonPrimitive.content)
-        assertEquals("ARRAY", gen["responseSchema"]!!.jsonObject["type"]!!.jsonPrimitive.content)
+        assertEquals("OBJECT", gen["responseSchema"]!!.jsonObject["type"]!!.jsonPrimitive.content)
         val prompt = body["contents"]!!.jsonArray.single().jsonObject["parts"]!!.jsonArray.single().jsonObject["text"]!!.jsonPrimitive.content
         assertTrue(prompt.contains("USER: Um... what does beber mean?"))
         assertTrue(prompt.contains("TUTOR: Beber means to drink."))

@@ -19,10 +19,10 @@ class VocabRepository(private val dao: VocabDao) {
     ): Long = upsert(word, translation, example, language, sessionId, VocabSource.MANUAL, VocabStatus.KEPT, reason = "")
 
     /**
-     * Silent capture by the tutor or the post-walk miner. Lands in the "Suggested" tray for the
-     * user to keep or dismiss. Returns null when the word is already known (kept or suggested).
+     * Silent capture by the tutor or the post-walk miner. Saved straight to the list; the user can
+     * drop it from the walk recap. Returns null when the word is already known.
      */
-    suspend fun suggest(
+    suspend fun capture(
         word: String,
         translation: String,
         example: String,
@@ -33,10 +33,12 @@ class VocabRepository(private val dao: VocabDao) {
     ): Long? {
         val lang = normalizeLanguage(language)
         if (dao.find(lang, word.trim()) != null) return null
-        return upsert(word, translation, example, lang, sessionId, source, VocabStatus.SUGGESTED, reason)
+        return upsert(word, translation, example, lang, sessionId, source, VocabStatus.KEPT, reason)
     }
 
     suspend fun knownWords(language: String): List<String> = dao.wordsFor(normalizeLanguage(language))
+
+    suspend fun recentWords(language: String, limit: Int): List<String> = dao.recentWords(normalizeLanguage(language), limit)
 
     suspend fun keep(vocab: VocabEntity) = dao.setStatus(vocab.id, VocabStatus.KEPT.name)
     suspend fun keepAllSuggested() = dao.keepAllSuggested()

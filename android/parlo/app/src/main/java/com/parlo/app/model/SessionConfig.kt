@@ -79,6 +79,9 @@ data class SessionConfig(
     val correctionStyle: CorrectionStyle = CorrectionStyle.GENTLE,
     val voice: String = "Puck",
     val model: String = "",
+    /** Free-form walk topic from the tutor's suggestion or update_walk; overrides [scenario] when set. */
+    val topic: String = "",
+    val topicTitle: String = "",
 ) {
     val languageCombo: LanguageCombo get() = LanguageCombo(language, dialect, level)
 }

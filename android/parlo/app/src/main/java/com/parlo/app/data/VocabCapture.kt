@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Runs the post-walk vocab mining pass and files the results as suggestions. */
+/** Runs the post-walk review: saves the mined words and stores the focus + next-walk suggestion on the session. */
 class VocabCapture(
     private val sessions: SessionRepository,
     private val vocab: VocabRepository,
@@ -53,8 +53,8 @@ class VocabCapture(
                 return Outcome.TooShort
             }
             val known = vocab.knownWords(session.language)
-            val mined = withContext(Dispatchers.IO) {
-                miner.mine(
+            val review = withContext(Dispatchers.IO) {
+                miner.review(
                     apiKey = apiKey,
                     language = session.language,
                     level = Level.parse(session.level),
@@ -63,8 +63,8 @@ class VocabCapture(
                 )
             }
             var added = 0
-            for (m in mined) {
-                val id = vocab.suggest(
+            for (m in review.words) {
+                val id = vocab.capture(
                     word = m.word,
                     translation = m.translation,
                     example = m.example,
@@ -75,6 +75,7 @@ class VocabCapture(
                 )
                 if (id != null) added++
             }
+            sessions.saveReview(sessionId, review.focus, review.nextWalkTitle, review.nextWalkPrompt)
             sessions.markMined(sessionId)
             return if (added == 0) Outcome.NothingNew else Outcome.Found(added)
         } catch (e: Exception) {

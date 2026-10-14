@@ -33,6 +33,8 @@ class ToolHandlerTest {
         override suspend fun find(language: String, word: String) =
             rows.value.firstOrNull { it.language.equals(language, true) && it.word.equals(word, true) }
         override suspend fun wordsFor(language: String) = rows.value.filter { it.language.equals(language, true) }.map { it.word }
+        override suspend fun recentWords(language: String, limit: Int) =
+            rows.value.filter { it.language.equals(language, true) }.sortedByDescending { it.savedAt }.take(limit).map { it.word }
         override suspend fun setStatus(id: Long, status: String) {
             rows.value = rows.value.map { if (it.id == id) it.copy(status = status) else it }
         }
@@ -80,7 +82,7 @@ class ToolHandlerTest {
     }
 
     @Test
-    fun `note_vocab files a silent suggestion and never triggers the spoken confirmation`() = runTest {
+    fun `note_vocab saves silently by default and never triggers the spoken confirmation`() = runTest {
         val resp = handler.handle(
             FunctionCall(
                 id = "c2", name = "note_vocab",
@@ -95,7 +97,7 @@ class ToolHandlerTest {
         val row = dao.rows.value.single()
         assertEquals("la cuenta", row.word)
         assertEquals(VocabSource.TUTOR.name, row.source)
-        assertEquals(VocabStatus.SUGGESTED.name, row.status)
+        assertEquals(VocabStatus.KEPT.name, row.status)
         assertEquals("You asked how to say it", row.reason)
         assertEquals("Spanish", row.language)
         assertTrue(saved.isEmpty())
