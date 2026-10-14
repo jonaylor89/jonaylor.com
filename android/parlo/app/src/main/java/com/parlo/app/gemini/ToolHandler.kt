@@ -8,6 +8,7 @@ import com.parlo.app.model.LanguageCatalog
 import com.parlo.app.model.LanguageCombo
 import com.parlo.app.model.Level
 import com.parlo.app.model.Scenario
+import com.parlo.app.model.TryPhrase
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -25,7 +26,12 @@ class ToolHandler(
     private val onVocabNoted: suspend (word: String) -> Unit = {},
     private val onWalkUpdated: suspend (WalkUpdate) -> Unit = {},
     private val onEndWalk: suspend () -> Unit = {},
+    private val onProfileUpdated: suspend (ProfileUpdate) -> Unit = {},
+    private val onShowPhrase: suspend (TryPhrase) -> Unit = {},
 ) {
+    /** Onboarding answers; null / blank means not given in this call. */
+    data class ProfileUpdate(val language: String = "", val dialect: String = "", val goal: String = "", val level: Level? = null)
+
     /** Fields the tutor changed by voice; null / blank means unchanged. */
     data class WalkUpdate(val topic: String = "", val scenario: Scenario? = null, val correctionStyle: CorrectionStyle? = null)
 
@@ -37,6 +43,8 @@ class ToolHandler(
             "switch_language" -> switchLanguage(args)
             "update_walk" -> updateWalk(args)
             "end_walk" -> endWalk()
+            "update_learner_profile" -> updateProfile(args)
+            "show_phrase" -> showPhrase(args)
             else -> buildJsonObject { put("error", "unknown function ${call.name}") }
         }
         return FunctionResponse(id = call.id, name = call.name, response = response)
@@ -111,6 +119,33 @@ class ToolHandler(
             put("result", "ending")
             put("note", "The app will ask you for the recap next; don't say goodbye yet.")
         }
+    }
+
+    private suspend fun updateProfile(args: JsonObject): JsonObject {
+        val language = args.str("language").takeIf { it.isNotBlank() }?.let { LanguageCatalog.canonicalName(it) }.orEmpty()
+        val dialectArg = args.str("dialect")
+        val forLanguage = language.ifBlank { currentLanguage() }
+        val update = ProfileUpdate(
+            language = language,
+            dialect = if (dialectArg.isBlank()) "" else LanguageCatalog.canonicalDialect(forLanguage, dialectArg),
+            goal = args.str("goal"),
+            level = args.str("level").takeIf { it.isNotBlank() }?.let { Level.parse(it) },
+        )
+        if (update == ProfileUpdate()) return buildJsonObject { put("error", "nothing to update") }
+        onProfileUpdated(update)
+        return buildJsonObject {
+            put("result", "ok")
+            if (update.language.isNotBlank()) put("language", update.language)
+            if (update.dialect.isNotBlank()) put("dialect", update.dialect)
+            update.level?.let { put("level", it.label) }
+        }
+    }
+
+    private suspend fun showPhrase(args: JsonObject): JsonObject {
+        val phrase = args.str("phrase")
+        if (phrase.isBlank()) return buildJsonObject { put("error", "phrase is required") }
+        onShowPhrase(TryPhrase(phrase, args.str("translation")))
+        return buildJsonObject { put("result", "shown"); put("note", "Keep talking; don't mention the screen.") }
     }
 
     private fun JsonObject.str(key: String): String =

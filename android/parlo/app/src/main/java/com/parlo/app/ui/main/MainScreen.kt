@@ -92,6 +92,13 @@ import com.parlo.app.model.Speaker
 import com.parlo.app.model.TranscriptTurn
 import com.parlo.app.ui.MainViewModel
 import com.parlo.app.ui.SetupStatus
+import com.parlo.app.ui.components.HeroCard
+import com.parlo.app.ui.theme.ParloSpacing
+import com.parlo.app.ui.onboarding.WelcomeScreen
+import com.parlo.app.model.Scenario
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material.icons.filled.Tune
 import com.parlo.app.ui.settings.SettingsSheet
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -165,9 +172,11 @@ fun MainScreen(
         }
     }
 
+    val firstRun = !ui.hasWalked && !live.isActive && live.error == null
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
+            if (firstRun) return@Scaffold
             TopAppBar(
                 title = { Text("Parlo", style = MaterialTheme.typography.headlineMedium) },
                 actions = {
@@ -182,6 +191,27 @@ fun MainScreen(
             )
         },
     ) { padding ->
+        if (firstRun) {
+            WelcomeScreen(
+                status = ui.setup,
+                maskedKey = ui.maskedKey,
+                onPasteKey = viewModel::setApiKey,
+                onStart = ::requestStart,
+                modifier = Modifier.padding(padding),
+            )
+            return@Scaffold
+        }
+        if (live.isActive) {
+            WalkScreen(
+                live = live,
+                onToggleMute = viewModel::toggleMute,
+                onSlower = viewModel::repeatSlowly,
+                onEnglish = viewModel::englishHelp,
+                onEnd = { viewModel.endSession(skipRecap = false) },
+                modifier = Modifier.padding(padding).padding(horizontal = 16.dp),
+            )
+            return@Scaffold
+        }
         Column(
             Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -205,38 +235,21 @@ fun MainScreen(
                 Spacer(Modifier.height(8.dp))
             }
 
-            AudioIndicator(
-                state = live.audio,
-                active = live.isActive,
-                idleLabel = if (ui.ready) "Ready · tap Start and talk" else "Finish setup to begin",
-                modifier = Modifier.padding(top = 4.dp),
-            )
-            if (live.statusText.isNotBlank() && live.error == null) {
-                Text(live.statusText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Spacer(Modifier.height(12.dp))
-
-            SessionButton(
-                active = live.isActive,
-                ready = ui.ready,
-                ending = live.connection == ConnectionState.ENDING,
-                connecting = live.connection == ConnectionState.CONNECTING,
-                muted = live.muted,
-                onStart = ::requestStart,
-                onEnd = { viewModel.endSession(skipRecap = false) },
-                onToggleMute = viewModel::toggleMute,
-                onSlower = viewModel::repeatSlowly,
-            )
-            Spacer(Modifier.height(12.dp))
-
-            WalkConfigCard(cfg = cfg, onClick = { showConfig = true })
-            Spacer(Modifier.height(12.dp))
-
             val lastWalk = ui.lastWalk
+            NextWalkCard(
+                cfg = cfg,
+                walk = lastWalk,
+                ready = ui.ready,
+                onStart = { if (lastWalk?.nextWalkTitle?.isNotBlank() == true && cfg.topicTitle.isBlank()) viewModel.useSuggestedWalk(); requestStart() },
+                onTune = { showConfig = true },
+                onJustChat = { viewModel.updateConfig { it.copy(topic = "", topicTitle = "", scenario = Scenario.FREE) } },
+                onHarder = { viewModel.updateConfig { it.copy(level = it.level.harder()) } },
+                onOtherLanguage = { showLanguagePicker = true },
+            )
+            Spacer(Modifier.height(12.dp))
             if (!live.isActive && lastWalk != null) {
                 LastWalkCard(
                     walk = lastWalk,
-                    ready = ui.ready,
                     onDrop = { v ->
                         viewModel.dropWord(v)
                         scope.launch {
@@ -244,7 +257,6 @@ fun MainScreen(
                             if (r == SnackbarResult.ActionPerformed) viewModel.restoreWord(v)
                         }
                     },
-                    onStartNext = { viewModel.useSuggestedWalk(); requestStart() },
                 )
                 Spacer(Modifier.height(12.dp))
             } else if (!live.isActive && live.transcript.isEmpty() && ui.suggestedVocab > 0) {
@@ -252,7 +264,7 @@ fun MainScreen(
                 Spacer(Modifier.height(12.dp))
             }
 
-            if (live.isActive || live.transcript.isNotEmpty() || lastWalk == null) {
+            if (live.transcript.isNotEmpty() && lastWalk == null) {
                 Transcript(turns = live.transcript, modifier = Modifier.weight(1f).fillMaxWidth())
             }
         }
@@ -399,10 +411,58 @@ private fun SetupCard(status: SetupStatus, onOpenSettings: () -> Unit, onRefresh
     }
 }
 
+/** Home hero: the tutor's suggested next walk (or today's settings), one Start button, and quick tweaks. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun NextWalkCard(
+    cfg: SessionConfig,
+    walk: LastWalk?,
+    ready: Boolean,
+    onStart: () -> Unit,
+    onTune: () -> Unit,
+    onJustChat: () -> Unit,
+    onHarder: () -> Unit,
+    onOtherLanguage: () -> Unit,
+) {
+    val suggested = cfg.topicTitle.isBlank() && walk?.nextWalkTitle?.isNotBlank() == true && walk.language.equals(cfg.language, true)
+    val title = when {
+        cfg.topicTitle.isNotBlank() -> cfg.topicTitle
+        suggested -> walk!!.nextWalkTitle
+        else -> cfg.scenario.label
+    }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        HeroCard(
+            eyebrow = if (suggested || cfg.topicTitle.isNotBlank()) "Your tutor suggests" else "Your next walk",
+            title = title,
+            subtitle = if (suggested && walk!!.focus.isNotBlank()) "Practise: ${walk.focus}" else "",
+            modifier = Modifier.testTag("next_walk"),
+        ) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SuggestionChip(onClick = onOtherLanguage, label = { Text("${LanguageCatalog.find(cfg.language)?.dialects?.firstOrNull { it.name == cfg.dialect }?.flag ?: LanguageCatalog.find(cfg.language)?.flag.orEmpty()} ${cfg.dialect}".trim(), maxLines = 1) })
+                    SuggestionChip(onClick = onTune, label = { Text(cfg.level.label) })
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onStart, enabled = ready, modifier = Modifier.weight(1f).height(ParloSpacing.heroButton).testTag("start_walk")) {
+                        Icon(Icons.Filled.PlayArrow, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Start walk", style = MaterialTheme.typography.titleMedium)
+                    }
+                    FilledTonalIconButton(onClick = onTune, modifier = Modifier.size(56.dp)) { Icon(Icons.Filled.Tune, "Walk settings") }
+                }
+                Text("Earbuds or out loud: tap Start and talk.", style = MaterialTheme.typography.bodySmall)
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            AssistChip(onClick = onJustChat, label = { Text("Just chat") })
+            AssistChip(onClick = onHarder, enabled = cfg.level != Level.entries.last(), label = { Text("Make it harder") })
+            AssistChip(onClick = onOtherLanguage, label = { Text("Another language") })
+        }
+    }
+}
+
 /** Post-walk reward + the tutor's next-walk suggestion. Only real numbers: length and words saved. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun LastWalkCard(walk: LastWalk, ready: Boolean, onDrop: (VocabEntity) -> Unit, onStartNext: () -> Unit) {
+private fun LastWalkCard(walk: LastWalk, onDrop: (VocabEntity) -> Unit) {
     ElevatedCard(Modifier.fillMaxWidth().testTag("last_walk")) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Last walk", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
@@ -429,16 +489,6 @@ private fun LastWalkCard(walk: LastWalk, ready: Boolean, onDrop: (VocabEntity) -
             }
             if (walk.focus.isNotBlank()) {
                 Text("Work on: ${walk.focus}", style = MaterialTheme.typography.bodyMedium)
-            }
-            if (walk.nextWalkTitle.isNotBlank() && walk.nextWalkPrompt.isNotBlank()) {
-                HorizontalDivider()
-                Text("Your tutor suggests", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(walk.nextWalkTitle, style = MaterialTheme.typography.titleMedium)
-                FilledTonalButton(onClick = onStartNext, enabled = ready, modifier = Modifier.testTag("start_suggested")) {
-                    Icon(Icons.Filled.PlayArrow, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Start this walk")
-                }
             }
         }
     }

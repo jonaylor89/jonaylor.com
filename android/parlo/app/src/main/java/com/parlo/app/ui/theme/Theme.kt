@@ -11,6 +11,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -22,7 +23,8 @@ private val Teal = Color(0xFF1E5F74)
 private val TealLight = Color(0xFF6FB3C4)
 private val Coral = Color(0xFFE8735A)
 
-private val LightScheme = lightColorScheme(
+/** Shared with the home-screen widgets (Glance ColorProviders). */
+internal val LightScheme = lightColorScheme(
     primary = Teal,
     onPrimary = Color.White,
     primaryContainer = Color(0xFFCDEAF2),
@@ -35,11 +37,12 @@ private val LightScheme = lightColorScheme(
     tertiaryContainer = Color(0xFFD7F0D4),
     onTertiaryContainer = Color(0xFF0F2A10),
     surface = Color(0xFFFBFAF6),
+    background = Color(0xFFFBFAF6),
     surfaceVariant = Color(0xFFE5EBED),
     onSurfaceVariant = Color(0xFF3F4A4E),
 )
 
-private val DarkScheme = darkColorScheme(
+internal val DarkScheme = darkColorScheme(
     primary = TealLight,
     onPrimary = Color(0xFF00363F),
     primaryContainer = Color(0xFF0B4A5B),
@@ -52,6 +55,7 @@ private val DarkScheme = darkColorScheme(
     tertiaryContainer = Color(0xFF2B4A2B),
     onTertiaryContainer = Color(0xFFD7F0D4),
     surface = Color(0xFF121517),
+    background = Color(0xFF121517),
     surfaceVariant = Color(0xFF2A3336),
     onSurfaceVariant = Color(0xFFC0CBCF),
 )
@@ -64,9 +68,14 @@ private val ParloShapes = Shapes(
     extraLarge = RoundedCornerShape(28.dp),
 )
 
+/** Serif display/headline for the tutor's voice (titles, phrases); sans for everything functional. */
 private val ParloTypography = Typography().let { t ->
     t.copy(
+        displaySmall = t.displaySmall.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold),
+        headlineLarge = t.headlineLarge.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold),
         headlineMedium = t.headlineMedium.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold),
+        headlineSmall = t.headlineSmall.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold),
+        labelMedium = t.labelMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp),
         titleLarge = t.titleLarge.copy(fontWeight = FontWeight.SemiBold),
         labelLarge = t.labelLarge.copy(letterSpacing = 0.2.sp),
     )
@@ -87,5 +96,7 @@ fun ParloTheme(dynamicColor: Boolean = false, content: @Composable () -> Unit) {
         dark -> DarkScheme
         else -> LightScheme
     }
-    MaterialTheme(colorScheme = scheme, shapes = ParloShapes, typography = ParloTypography, content = content)
+    MaterialTheme(colorScheme = scheme, shapes = ParloShapes, typography = ParloTypography) {
+        CompositionLocalProvider(LocalParloRoles provides rolesFrom(scheme), content = content)
+    }
 }

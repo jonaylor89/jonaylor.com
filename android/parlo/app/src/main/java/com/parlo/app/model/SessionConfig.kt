@@ -32,6 +32,8 @@ enum class Level(val label: String, val shortLabel: String, val description: Str
         "Advanced: native pace, idioms and regional expressions, no English unless asked.",
     );
 
+    fun harder(): Level = entries.getOrElse(ordinal + 1) { this }
+
     companion object {
         fun parse(value: String?): Level {
             val v = value?.trim()?.replace('-', ' ')?.replace('_', ' ') ?: return INTERMEDIATE
@@ -82,6 +84,8 @@ data class SessionConfig(
     /** Free-form walk topic from the tutor's suggestion or update_walk; overrides [scenario] when set. */
     val topic: String = "",
     val topicTitle: String = "",
+    /** First walk: the tutor asks for language, accent, goal and level by voice. Not persisted. */
+    val onboarding: Boolean = false,
 ) {
     val languageCombo: LanguageCombo get() = LanguageCombo(language, dialect, level)
 }
