@@ -10,3 +10,5 @@ directory = "./dist"
 pattern = "saintjohn.jonaylor.com"
 custom_domain = true
 
+
+[previews]
