@@ -94,6 +94,18 @@ import com.parlo.app.ui.MainViewModel
 import com.parlo.app.ui.SetupStatus
 import com.parlo.app.ui.settings.SettingsSheet
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.InputChipDefaults
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay
+import com.parlo.app.data.db.VocabEntity
+import com.parlo.app.ui.LastWalk
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -213,18 +225,36 @@ fun MainScreen(
                 onStart = ::requestStart,
                 onEnd = { viewModel.endSession(skipRecap = false) },
                 onToggleMute = viewModel::toggleMute,
+                onSlower = viewModel::repeatSlowly,
             )
             Spacer(Modifier.height(12.dp))
 
             WalkConfigCard(cfg = cfg, onClick = { showConfig = true })
             Spacer(Modifier.height(12.dp))
 
-            if (!live.isActive && live.transcript.isEmpty() && ui.suggestedVocab > 0) {
+            val lastWalk = ui.lastWalk
+            if (!live.isActive && lastWalk != null) {
+                LastWalkCard(
+                    walk = lastWalk,
+                    ready = ui.ready,
+                    onDrop = { v ->
+                        viewModel.dropWord(v)
+                        scope.launch {
+                            val r = snackbar.showSnackbar("Dropped “${v.word}”", actionLabel = "Undo", duration = SnackbarDuration.Short)
+                            if (r == SnackbarResult.ActionPerformed) viewModel.restoreWord(v)
+                        }
+                    },
+                    onStartNext = { viewModel.useSuggestedWalk(); requestStart() },
+                )
+                Spacer(Modifier.height(12.dp))
+            } else if (!live.isActive && live.transcript.isEmpty() && ui.suggestedVocab > 0) {
                 ReviewCard(count = ui.suggestedVocab, onReview = onOpenVocab)
                 Spacer(Modifier.height(12.dp))
             }
 
-            Transcript(turns = live.transcript, modifier = Modifier.weight(1f).fillMaxWidth())
+            if (live.isActive || live.transcript.isNotEmpty() || lastWalk == null) {
+                Transcript(turns = live.transcript, modifier = Modifier.weight(1f).fillMaxWidth())
+            }
         }
     }
 
@@ -234,7 +264,7 @@ fun MainScreen(
             title = { Text("Before your first walk") },
             text = {
                 Text(
-                    "Parlo needs your microphone to hear you, Bluetooth to use your earbuds' buttons, and notifications to show walk controls on your lock screen.",
+                    "Parlo needs your microphone to hear you. Bluetooth (for earbud buttons) and notifications (for lock-screen controls) are optional; without earbuds the tutor plays through the speaker.",
                 )
             },
             confirmButton = {
@@ -285,7 +315,7 @@ private fun WalkConfigCard(cfg: SessionConfig, onClick: () -> Unit) {
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "${cfg.level.label} · ${cfg.correctionStyle.label} corrections",
+                    listOfNotNull(cfg.topicTitle.takeIf { it.isNotBlank() }, cfg.level.label, "${cfg.correctionStyle.label} corrections").joinToString(" · "),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -313,6 +343,15 @@ private fun WalkConfigSheet(viewModel: MainViewModel, onPickLanguage: () -> Unit
                 TextButton(onClick = onDismiss) { Text("Done") }
             }
             LanguageCard(language = cfg.language, dialect = cfg.dialect, onClick = onPickLanguage)
+            if (cfg.topicTitle.isNotBlank()) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Topic", style = MaterialTheme.typography.labelMedium)
+                        Text(cfg.topicTitle, style = MaterialTheme.typography.bodyLarge)
+                    }
+                    TextButton(onClick = { viewModel.updateConfig { it.copy(topic = "", topicTitle = "") } }) { Text("Clear") }
+                }
+            }
             Text("Level", style = MaterialTheme.typography.labelMedium)
             SegmentedPicker(options = Level.entries, selected = cfg.level, label = { it.shortLabel }, onSelect = { l -> viewModel.updateConfig { it.copy(level = l) } })
             Text("${cfg.level.label} — ${cfg.level.description}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -360,6 +399,51 @@ private fun SetupCard(status: SetupStatus, onOpenSettings: () -> Unit, onRefresh
     }
 }
 
+/** Post-walk reward + the tutor's next-walk suggestion. Only real numbers: length and words saved. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun LastWalkCard(walk: LastWalk, ready: Boolean, onDrop: (VocabEntity) -> Unit, onStartNext: () -> Unit) {
+    ElevatedCard(Modifier.fillMaxWidth().testTag("last_walk")) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Last walk", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            Text("${walk.lengthLabel} · ${walk.language}", style = MaterialTheme.typography.titleMedium)
+            if (walk.reviewing) {
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+                Text("Picking out your words…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (walk.words.isNotEmpty()) {
+                val n = walk.words.size
+                Text("$n word${if (n == 1) "" else "s"} saved · tap one to drop it", style = MaterialTheme.typography.bodyMedium)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    walk.words.forEach { v ->
+                        InputChip(
+                            selected = false,
+                            onClick = { onDrop(v) },
+                            label = { Text(v.word) },
+                            trailingIcon = { Icon(Icons.Filled.Close, "Drop ${v.word}", Modifier.size(InputChipDefaults.IconSize)) },
+                        )
+                    }
+                }
+            } else if (!walk.reviewing) {
+                Text("No new words this time.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (walk.focus.isNotBlank()) {
+                Text("Work on: ${walk.focus}", style = MaterialTheme.typography.bodyMedium)
+            }
+            if (walk.nextWalkTitle.isNotBlank() && walk.nextWalkPrompt.isNotBlank()) {
+                HorizontalDivider()
+                Text("Your tutor suggests", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(walk.nextWalkTitle, style = MaterialTheme.typography.titleMedium)
+                FilledTonalButton(onClick = onStartNext, enabled = ready, modifier = Modifier.testTag("start_suggested")) {
+                    Icon(Icons.Filled.PlayArrow, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Start this walk")
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun ReviewCard(count: Int, onReview: () -> Unit) {
     OutlinedCard(onClick = onReview, modifier = Modifier.fillMaxWidth().testTag("review_card")) {
@@ -386,6 +470,7 @@ private fun SessionButton(
     onStart: () -> Unit,
     onEnd: () -> Unit,
     onToggleMute: () -> Unit,
+    onSlower: () -> Unit,
 ) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         if (!active) {
@@ -418,6 +503,14 @@ private fun SessionButton(
                 } else {
                     Text("End Walk Session", style = MaterialTheme.typography.titleMedium)
                 }
+            }
+            FilledTonalButton(
+                onClick = onSlower,
+                enabled = !connecting && !ending,
+                modifier = Modifier.height(64.dp),
+                shape = RoundedCornerShape(20.dp),
+            ) {
+                Icon(Icons.Filled.Replay, "Repeat slowly")
             }
             FilledTonalButton(
                 onClick = onToggleMute,
@@ -467,7 +560,7 @@ fun Transcript(turns: List<TranscriptTurn>, modifier: Modifier = Modifier) {
     if (turns.isEmpty()) {
         Box(modifier, contentAlignment = Alignment.Center) {
             Text(
-                "Your conversation will appear here.\nPut in your earbuds, tap Start, and just talk.",
+                "Your conversation will appear here.\nTap Start and talk, with earbuds or out loud.",
                 textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -90,7 +90,7 @@ class AudioRouteManager(
         audioManager.registerAudioDeviceCallback(cb, Handler(Looper.getMainLooper()))
     }
 
-    /** Prefer BT headset > wired headset > USB headset > built-in earpiece. */
+    /** Prefer BT headset > wired headset > USB headset > loudspeaker, so walks also work without earbuds. */
     private fun applyBestRoute() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val devices = audioManager.availableCommunicationDevices
@@ -98,6 +98,7 @@ class AudioRouteManager(
                 ?: devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BLE_HEADSET }
                 ?: devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET || it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES }
                 ?: devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_USB_HEADSET }
+                ?: devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
                 ?: devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE }
                 ?: devices.firstOrNull()
             pick?.let {
@@ -109,12 +110,15 @@ class AudioRouteManager(
             run {
                 val outputs = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
                 val bt = outputs.any { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO }
+                val wired = outputs.any {
+                    it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET || it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES || it.type == AudioDeviceInfo.TYPE_USB_HEADSET
+                }
                 if (bt) {
                     audioManager.startBluetoothSco(); audioManager.isBluetoothScoOn = true
                 } else {
                     if (audioManager.isBluetoothScoOn) { audioManager.stopBluetoothSco(); audioManager.isBluetoothScoOn = false }
                 }
-                audioManager.isSpeakerphoneOn = false
+                audioManager.isSpeakerphoneOn = !bt && !wired
             }
         }
     }

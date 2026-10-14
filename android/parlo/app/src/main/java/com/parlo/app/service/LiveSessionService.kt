@@ -43,6 +43,7 @@ import com.parlo.app.model.ConnectionState
 import com.parlo.app.model.LanguageCombo
 import com.parlo.app.model.LiveSessionState
 import com.parlo.app.model.SessionConfig
+import com.parlo.app.model.WalkMemory
 import com.parlo.app.model.SessionError
 import com.parlo.app.model.Speaker
 import com.parlo.app.model.TranscriptTurn
@@ -84,6 +85,7 @@ class LiveSessionService : LifecycleService() {
     private var dbSessionId: Long? = null
     private var eventsJob: Job? = null
     private var recapJob: Job? = null
+    private var walkMemory: WalkMemory? = null
     private var hadReadyOnce = false
     private var pendingResumeContext = false
     private var awaitingRecapTurnComplete = false
@@ -118,7 +120,9 @@ class LiveSessionService : LifecycleService() {
                 appendTurn(Speaker.SYSTEM, "Saved \"$word\" to vocab")
             },
             onLanguageSwitched = ::onVoiceLanguageSwitch,
-            onVocabNoted = { word -> appendTurn(Speaker.SYSTEM, "Noted \"$word\" for review") },
+            onVocabNoted = { word -> appendTurn(Speaker.SYSTEM, "Saved \"$word\" to vocab") },
+            onWalkUpdated = ::onVoiceWalkUpdate,
+            onEndWalk = { lifecycleScope.launch { delay(END_WALK_DELAY_MS); endSession(skipRecap = false) } },
         )
         setupMediaSession()
         registerNetworkCallback()
@@ -172,8 +176,18 @@ class LiveSessionService : LifecycleService() {
         setPlaybackState(PlaybackStateCompat.STATE_PLAYING)
         eventsJob?.cancel()
         eventsJob = lifecycleScope.launch { client.events.collect(::onLiveEvent) }
-        client.start(apiKey) { buildSetup(_state.value.config) }
+        walkMemory = null
+        lifecycleScope.launch {
+            walkMemory = runCatching { loadWalkMemory(effective.language) }.getOrNull()
+            if (_state.value.connection == ConnectionState.CONNECTING) client.start(apiKey) { buildSetup(_state.value.config) }
+        }
     }
+
+    private suspend fun loadWalkMemory(language: String): WalkMemory = WalkMemory(
+        language = language,
+        focus = container.sessions.latestReviewed(language)?.focus.orEmpty(),
+        reviewWords = container.vocab.recentWords(language, MEMORY_WORDS),
+    )
 
     fun toggleMute() = setMuted(!_state.value.muted)
 
@@ -389,6 +403,21 @@ class LiveSessionService : LifecycleService() {
         client.sendText(PromptBuilder.resumeContextMessage(recent, _state.value.config))
     }
 
+    private suspend fun onVoiceWalkUpdate(u: ToolHandler.WalkUpdate) {
+        val old = _state.value.config
+        val new = old.copy(
+            topic = u.topic.ifBlank { if (u.scenario != null) "" else old.topic },
+            topicTitle = u.topic.ifBlank { if (u.scenario != null) "" else old.topicTitle },
+            scenario = u.scenario ?: old.scenario,
+            correctionStyle = u.correctionStyle ?: old.correctionStyle,
+        )
+        if (new == old) return
+        _state.update { it.copy(config = new) }
+        container.settings.saveConfig(new)
+        appendTurn(Speaker.SYSTEM, "Walk updated by voice: ${new.topicTitle.ifBlank { new.scenario.label }} · ${new.correctionStyle.label} corrections")
+        updateNotification()
+    }
+
     private suspend fun onVoiceLanguageSwitch(combo: LanguageCombo) {
         val old = _state.value.config
         val new = old.copy(language = combo.language, dialect = combo.dialect, level = combo.level)
@@ -574,7 +603,7 @@ class LiveSessionService : LifecycleService() {
             responseModalities = listOf("AUDIO"),
             speechConfig = SpeechConfig(VoiceConfig(PrebuiltVoiceConfig(c.voice))),
         ),
-        systemInstruction = Content(parts = listOf(Part(text = PromptBuilder.systemInstruction(c)))),
+        systemInstruction = Content(parts = listOf(Part(text = PromptBuilder.systemInstruction(c, walkMemory)))),
         tools = PromptBuilder.toolDeclarations(),
     )
 
@@ -586,6 +615,8 @@ class LiveSessionService : LifecycleService() {
         const val ACTION_END = "com.parlo.app.action.END"
         const val ACTION_END_NOW = "com.parlo.app.action.END_NOW"
         private const val RECAP_TIMEOUT_MS = 75_000L
+        private const val END_WALK_DELAY_MS = 300L
+        private const val MEMORY_WORDS = 6
 
         fun startIntent(context: Context) = Intent(context, LiveSessionService::class.java).setAction(ACTION_START)
         fun bindIntent(context: Context) = Intent(context, LiveSessionService::class.java)

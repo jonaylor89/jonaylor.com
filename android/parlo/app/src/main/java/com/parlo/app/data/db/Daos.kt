@@ -47,6 +47,12 @@ interface SessionDao {
 
     @Query("UPDATE sessions SET minedAt = :at WHERE id = :id")
     suspend fun markMined(id: Long, at: Long)
+
+    @Query("UPDATE sessions SET focus = :focus, nextWalkTitle = :nextWalkTitle, nextWalkPrompt = :nextWalkPrompt WHERE id = :id")
+    suspend fun saveReview(id: Long, focus: String?, nextWalkTitle: String?, nextWalkPrompt: String?)
+
+    @Query("SELECT * FROM sessions WHERE language = :language COLLATE NOCASE AND focus IS NOT NULL AND focus != '' ORDER BY startedAt DESC LIMIT 1")
+    suspend fun latestReviewed(language: String): SessionEntity?
 }
 
 @Dao
@@ -68,6 +74,9 @@ interface VocabDao {
 
     @Query("SELECT word FROM vocab WHERE language = :language COLLATE NOCASE")
     suspend fun wordsFor(language: String): List<String>
+
+    @Query("SELECT word FROM vocab WHERE language = :language COLLATE NOCASE ORDER BY savedAt DESC LIMIT :limit")
+    suspend fun recentWords(language: String, limit: Int): List<String>
 
     @Query("UPDATE vocab SET status = :status WHERE id = :id")
     suspend fun setStatus(id: Long, status: String)
