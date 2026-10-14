@@ -20,6 +20,10 @@ data class SessionEntity(
     val recap: String? = null,
     /** When the transcript was mined for vocab; null until the post-walk pass has run. */
     @ColumnInfo(defaultValue = "NULL") val minedAt: Long? = null,
+    /** From the post-walk review: one thing to work on, and the tutor's suggested next walk. */
+    @ColumnInfo(defaultValue = "NULL") val focus: String? = null,
+    @ColumnInfo(defaultValue = "NULL") val nextWalkTitle: String? = null,
+    @ColumnInfo(defaultValue = "NULL") val nextWalkPrompt: String? = null,
 )
 
 @Entity(

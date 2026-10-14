@@ -104,7 +104,7 @@ class PromptBuilderTest {
     @Test
     fun `tool declarations match the required schema`() {
         val fns = PromptBuilder.toolDeclarations().single().functionDeclarations.associateBy { it.name }
-        assertEquals(setOf("save_vocab", "note_vocab", "switch_language"), fns.keys)
+        assertEquals(setOf("save_vocab", "note_vocab", "switch_language", "update_walk", "end_walk"), fns.keys)
 
         val note = fns.getValue("note_vocab").parameters!!
         assertEquals(setOf("word", "translation", "example_sentence", "reason", "language"), note["properties"]!!.jsonObject.keys)

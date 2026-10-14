@@ -25,6 +25,14 @@ data class MinedWord(
     val reason: String = "",
 )
 
+/** Post-walk review: the words to keep, one thing to work on, and the tutor's suggested next walk. */
+data class WalkReview(
+    val words: List<MinedWord> = emptyList(),
+    val focus: String = "",
+    val nextWalkTitle: String = "",
+    val nextWalkPrompt: String = "",
+)
+
 /**
  * Post-walk pass: sends the finished transcript to a text model (`generateContent`, JSON mode) and asks
  * for the words the learner did not know. Pure network + parsing; persistence lives in VocabCapture.
@@ -47,8 +55,17 @@ class VocabMiner(
         transcript: List<Pair<String, String>>,
         knownWords: List<String>,
         maxWords: Int = 6,
-    ): List<MinedWord> {
-        if (transcript.none { it.first.equals("user", true) }) return emptyList()
+    ): List<MinedWord> = review(apiKey, language, level, transcript, knownWords, maxWords).words
+
+    fun review(
+        apiKey: String,
+        language: String,
+        level: Level,
+        transcript: List<Pair<String, String>>,
+        knownWords: List<String>,
+        maxWords: Int = 6,
+    ): WalkReview {
+        if (transcript.none { it.first.equals("user", true) }) return WalkReview()
         val body = requestBody(language, level, transcript, knownWords, maxWords).toString()
         var lastError: Exception? = null
         for (model in models) {
@@ -56,7 +73,7 @@ class VocabMiner(
             val resp = client.newCall(Request.Builder().url(url).post(body.toRequestBody(JSON_MEDIA)).build()).execute()
             val text = resp.body?.string().orEmpty()
             when {
-                resp.isSuccessful -> return parse(text, knownWords, maxWords)
+                resp.isSuccessful -> return parseReview(text, knownWords, maxWords)
                 resp.code == 404 -> { lastError = IllegalStateException(GeminiApi.describeHttpError(404, text)); continue }
                 else -> throw IllegalStateException(GeminiApi.describeHttpError(resp.code, text))
             }
@@ -87,6 +104,10 @@ Rules:
 - Skip these words the learner already has saved: $known
 - "word" is in $language (dictionary form), "translation" is short English, "example" is the actual sentence from the transcript (or a very short natural one), "reason" is one of: asked_meaning, asked_how_to_say, corrected, struggled, introduced.
 
+Also return:
+- "focus": one short English sentence naming the single most useful thing for the learner to work on next time, based only on what actually happened in this transcript (for example a mistake they repeated). Empty if nothing stands out.
+- "next_walk": a suggestion for the next walk that builds on this one, in English: "title" (at most six words, e.g. "Ordering tapas at a bar") and "prompt" (one sentence telling the tutor which topic or role-play to run and what to practise).
+
 Transcript:
 $lines
         """.trimIndent()
@@ -102,23 +123,41 @@ $lines
                 put("temperature", 0.2)
                 put("responseMimeType", "application/json")
                 putJsonObject("responseSchema") {
-                    put("type", "ARRAY")
-                    putJsonObject("items") {
-                        put("type", "OBJECT")
-                        putJsonObject("properties") {
-                            putJsonObject("word") { put("type", "STRING") }
-                            putJsonObject("translation") { put("type", "STRING") }
-                            putJsonObject("example") { put("type", "STRING") }
-                            putJsonObject("reason") { put("type", "STRING") }
+                    put("type", "OBJECT")
+                    putJsonObject("properties") {
+                        putJsonObject("words") {
+                            put("type", "ARRAY")
+                            putJsonObject("items") {
+                                put("type", "OBJECT")
+                                putJsonObject("properties") {
+                                    putJsonObject("word") { put("type", "STRING") }
+                                    putJsonObject("translation") { put("type", "STRING") }
+                                    putJsonObject("example") { put("type", "STRING") }
+                                    putJsonObject("reason") { put("type", "STRING") }
+                                }
+                                putJsonArray("required") { add(kotlinx.serialization.json.JsonPrimitive("word")); add(kotlinx.serialization.json.JsonPrimitive("translation")) }
+                            }
                         }
-                        putJsonArray("required") { add(kotlinx.serialization.json.JsonPrimitive("word")); add(kotlinx.serialization.json.JsonPrimitive("translation")) }
+                        putJsonObject("focus") { put("type", "STRING") }
+                        putJsonObject("next_walk") {
+                            put("type", "OBJECT")
+                            putJsonObject("properties") {
+                                putJsonObject("title") { put("type", "STRING") }
+                                putJsonObject("prompt") { put("type", "STRING") }
+                            }
+                        }
                     }
+                    putJsonArray("required") { add(kotlinx.serialization.json.JsonPrimitive("words")) }
                 }
             }
         }
     }
 
-    internal fun parse(responseBody: String, knownWords: List<String>, maxWords: Int): List<MinedWord> {
+    internal fun parse(responseBody: String, knownWords: List<String>, maxWords: Int): List<MinedWord> =
+        parseReview(responseBody, knownWords, maxWords).words
+
+    /** Accepts the review object, or a bare word array from older responses. */
+    internal fun parseReview(responseBody: String, knownWords: List<String>, maxWords: Int): WalkReview {
         val root = json.parseToJsonElement(responseBody).jsonObject
         val text = root["candidates"]?.jsonArray?.firstOrNull()?.jsonObject
             ?.get("content")?.jsonObject?.get("parts")?.jsonArray
@@ -126,8 +165,23 @@ $lines
             ?.joinToString("")
             ?.trim()
             .orEmpty()
-        if (text.isEmpty()) return emptyList()
-        val array: JsonArray = runCatching { json.parseToJsonElement(stripFences(text)).jsonArray }.getOrElse { return emptyList() }
+        if (text.isEmpty()) return WalkReview()
+        val element = runCatching { json.parseToJsonElement(stripFences(text)) }.getOrElse { return WalkReview() }
+        val obj = element as? JsonObject
+        val array: JsonArray = (if (obj != null) obj["words"] as? JsonArray else element as? JsonArray) ?: JsonArray(emptyList())
+        val next = obj?.get("next_walk") as? JsonObject
+        return WalkReview(
+            words = words(array, knownWords, maxWords),
+            focus = obj.text("focus"),
+            nextWalkTitle = next.text("title"),
+            nextWalkPrompt = next.text("prompt"),
+        )
+    }
+
+    private fun JsonObject?.text(key: String): String =
+        runCatching { this?.get(key)?.jsonPrimitive?.content }.getOrNull()?.trim().orEmpty()
+
+    private fun words(array: JsonArray, knownWords: List<String>, maxWords: Int): List<MinedWord> {
         val known = knownWords.map { it.trim().lowercase() }.toSet()
         return array.mapNotNull { runCatching { json.decodeFromJsonElement(MinedWord.serializer(), it) }.getOrNull() }
             .map { it.copy(word = it.word.trim(), translation = it.translation.trim(), example = it.example.trim(), reason = it.reason.trim()) }
