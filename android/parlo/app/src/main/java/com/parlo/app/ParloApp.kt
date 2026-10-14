@@ -16,6 +16,17 @@ import com.parlo.app.gemini.VoiceSampler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import com.parlo.app.model.LiveSessionState
+import com.parlo.app.widget.WidgetData
+import com.parlo.app.widget.WidgetDataBuilder
+import com.parlo.app.widget.WidgetUpdater
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
@@ -39,6 +50,16 @@ class AppContainer(context: Context) {
         VocabMiner(okHttp.newBuilder().readTimeout(60, TimeUnit.SECONDS).build()),
         appScope,
     )
+    /** Mirror of the walk service's state, so widgets can show a running walk. */
+    val liveWalk = MutableStateFlow(LiveSessionState())
+    val widgetData: StateFlow<WidgetData> = combine(
+        combine(sessions.observeSessions(), vocab.observeAll(), ::Pair),
+        liveWalk.map(WidgetDataBuilder::liveWalk).distinctUntilChanged().map { liveWalk.value },
+        settings.config,
+        combine(settings.apiKey, settings.cachedModels, settings.dynamicColor, ::Triple),
+    ) { (s, v), live, cfg, (key, models, dynamic) ->
+        WidgetDataBuilder.build(s, v, live, cfg.language, key.isNotBlank(), models.isNotEmpty() || cfg.model.isNotBlank(), dynamic)
+    }.stateIn(appScope, SharingStarted.Eagerly, WidgetData())
 }
 
 class ParloApp : Application() {
@@ -49,6 +70,7 @@ class ParloApp : Application() {
         super.onCreate()
         container = AppContainer(this)
         createChannels()
+        WidgetUpdater.start(this, container.widgetData, container.appScope)
     }
 
     private fun createChannels() {

@@ -48,5 +48,40 @@
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
         </receiver>
+        <receiver
+            android:name=".widget.NextWalkWidgetReceiver"
+            android:exported="false"
+            android:label="Next walk">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_next_walk" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.ReviewWordWidgetReceiver"
+            android:exported="false"
+            android:label="Review a word">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_review_word" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.ThisWeekWidgetReceiver"
+            android:exported="false"
+            android:label="This week">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_this_week" />
+        </receiver>
     </application>
 </manifest>
