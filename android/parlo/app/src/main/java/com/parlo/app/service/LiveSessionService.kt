@@ -330,8 +330,14 @@ class LiveSessionService : LifecycleService() {
                         pendingResumeContext = false
                         sendResumeContext()
                     }
+                    flushBuffers()
+                    val last = _state.value.transcript.lastOrNull { it.speaker != Speaker.SYSTEM }
+                    if (last?.speaker == Speaker.USER && !_state.value.recapInProgress) {
+                        client.sendText(PromptBuilder.unansweredTurnMessage(last.text))
+                    }
                 } else {
                     earcons.play(Earcons.Cue.SESSION_STARTED)
+                    client.sendText(PromptBuilder.kickoffMessage())
                 }
                 refreshAudioState(); updateNotification()
             }
@@ -366,7 +372,7 @@ class LiveSessionService : LifecycleService() {
                     earcons.play(Earcons.Cue.RECONNECTING)
                 }
                 player.flush()
-                _state.update { it.copy(connection = ConnectionState.RECONNECTING, statusText = "Reconnecting (attempt ${e.attempt})…") }
+                _state.update { it.copy(connection = ConnectionState.RECONNECTING, statusText = if (e.attempt > 1) "Connection dropped · retry ${e.attempt}" else "") }
                 refreshAudioState(); updateNotification()
             }
             LiveEvent.ResumptionLost -> pendingResumeContext = true
@@ -407,7 +413,7 @@ class LiveSessionService : LifecycleService() {
     }
 
     private fun commitUser() { val t = userBuffer.toString(); userBuffer.clear(); appendTurn(Speaker.USER, t) }
-    private fun commitTutor() { val t = tutorBuffer.toString(); tutorBuffer.clear(); appendTurn(Speaker.TUTOR, t) }
+    private fun commitTutor() { val t = collapseRepeat(tutorBuffer.toString()); tutorBuffer.clear(); appendTurn(Speaker.TUTOR, t) }
     private fun flushBuffers() { if (userBuffer.isNotEmpty()) commitUser(); if (tutorBuffer.isNotEmpty()) commitTutor(); publishPartial() }
 
     private fun appendTurn(speaker: Speaker, text: String) {
@@ -512,7 +518,7 @@ class LiveSessionService : LifecycleService() {
 
     private fun goForeground() {
         val n = buildNotification()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
             ServiceCompat.startForeground(this, NOTIFICATION_ID, n, type)
@@ -584,4 +590,12 @@ class LiveSessionService : LifecycleService() {
         fun startIntent(context: Context) = Intent(context, LiveSessionService::class.java).setAction(ACTION_START)
         fun bindIntent(context: Context) = Intent(context, LiveSessionService::class.java)
     }
+}
+
+/** Gemini sometimes re-emits a whole output transcription around a tool call; keep one copy. */
+internal fun collapseRepeat(text: String): String {
+    val t = text.trim()
+    if (t.length < 2 || t.length % 2 != 0) return text
+    val half = t.length / 2
+    return if (t.substring(0, half).trim() == t.substring(half).trim()) t.substring(0, half).trim() else text
 }

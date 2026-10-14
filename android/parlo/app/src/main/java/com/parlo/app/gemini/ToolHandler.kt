@@ -71,7 +71,7 @@ class ToolHandler(
         val language = LanguageCatalog.canonicalName(args.str("language").ifBlank { currentLanguage() })
         val dialectArg = args.str("dialect")
         val dialect = when {
-            dialectArg.isNotBlank() -> dialectArg
+            dialectArg.isNotBlank() -> LanguageCatalog.canonicalDialect(language, dialectArg)
             language.equals(currentLanguage(), true) -> currentDialect()
             else -> LanguageCatalog.defaultDialectFor(language)
         }

@@ -108,7 +108,7 @@ private fun SessionCard(s: SessionEntity, onClick: () -> Unit, onDelete: () -> U
     Card(Modifier.fillMaxWidth().clickable(onClick = onClick), colors = CardDefaults.elevatedCardColors()) {
         Row(Modifier.padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("${s.dialect.ifBlank { s.language }} · ${Level.parse(s.level).label}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("${sessionTitle(s.language, s.dialect)} · ${Level.parse(s.level).label}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(
                     "${formatDate(s.startedAt)} · ${formatDuration(s.durationMs)}" + if (s.endedAt == null) " · in progress" else "",
                     style = MaterialTheme.typography.bodySmall,
@@ -228,4 +228,11 @@ private fun weekLabel(ms: Long): String {
         weekDiff == 1 -> "Last week"
         else -> java.text.SimpleDateFormat("MMMM yyyy", java.util.Locale.getDefault()).format(Date(ms))
     }
+}
+
+/** "Castilian Spanish", or "Italian · Standard" when the accent alone doesn't name the language. */
+internal fun sessionTitle(language: String, dialect: String): String = when {
+    dialect.isBlank() -> language
+    language.isBlank() || dialect.contains(language, ignoreCase = true) -> dialect
+    else -> "$language · $dialect"
 }

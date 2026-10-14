@@ -296,7 +296,7 @@ private fun ConnectionRow(status: SetupStatus, model: String, onRefresh: () -> U
             )
             Text(
                 when (status) {
-                    SetupStatus.READY -> "Using ${model.removePrefix("models/")} · key encrypted on device"
+                    SetupStatus.READY -> "Using ${modelLabel(model)} · key encrypted on device"
                     SetupStatus.CHECKING -> "Looking for voice models this key can use"
                     SetupStatus.OFFLINE -> "Check your connection and try again"
                     SetupStatus.NO_MODEL -> "The key works, but Gemini offered no live voice models"
@@ -311,3 +311,10 @@ private fun ConnectionRow(status: SetupStatus, model: String, onRefresh: () -> U
         }
     }
 }
+
+/** "gemini-2.5-flash-native-audio-preview-12-2025" → "Gemini 2.5 Flash Native Audio Preview". */
+internal fun modelLabel(model: String): String =
+    model.removePrefix("models/")
+        .replace(Regex("""-(\d{2}-\d{4}|\d{2}-\d{2}|latest)$"""), "")
+        .split('-')
+        .joinToString(" ") { part -> part.replaceFirstChar { it.uppercase() } }
