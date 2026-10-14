@@ -93,6 +93,12 @@ data class LiveSessionState(
     val sessionStartMs: Long = 0L,
     val recapInProgress: Boolean = false,
     val statusText: String = "",
+    /** The phrase the tutor wants the learner to try saying (show_phrase). */
+    val phrase: TryPhrase? = null,
+    /** Words saved during this walk, newest last. */
+    val caughtWords: List<String> = emptyList(),
+    /** Filled in by the tutor during the voice onboarding walk (update_learner_profile). */
+    val profile: LearnerProfile? = null,
 ) {
     val isActive: Boolean get() = connection != ConnectionState.IDLE && connection != ConnectionState.ERROR
 }

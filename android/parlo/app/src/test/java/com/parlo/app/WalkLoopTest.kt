@@ -14,6 +14,7 @@ import com.parlo.app.model.CorrectionStyle
 import com.parlo.app.model.Level
 import com.parlo.app.model.Scenario
 import com.parlo.app.model.SessionConfig
+import com.parlo.app.model.TryPhrase
 import com.parlo.app.model.WalkMemory
 import com.parlo.app.ui.lastWalkOf
 import com.parlo.app.ui.walkLengthLabel
@@ -55,6 +56,52 @@ class WalkLoopTest {
     private val repo = VocabRepository(dao)
     private val updates = mutableListOf<ToolHandler.WalkUpdate>()
     private var ended = 0
+    private val profiles = mutableListOf<ToolHandler.ProfileUpdate>()
+    private val phrases = mutableListOf<TryPhrase>()
+    private val agentic = ToolHandler(
+        vocab = repo,
+        currentLanguage = { "Spanish" },
+        currentDialect = { "Castilian Spanish (Madrid)" },
+        currentLevel = { Level.INTERMEDIATE },
+        sessionId = { 1L },
+        onVocabSaved = {},
+        onLanguageSwitched = {},
+        onProfileUpdated = { profiles += it },
+        onShowPhrase = { phrases += it },
+    )
+
+    @Test
+    fun `update_learner_profile canonicalises language, parses level, rejects empty`() = runTest {
+        val r = agentic.handle(FunctionCall(id = "p", name = "update_learner_profile", args = buildJsonObject {
+            put("language", "japanese"); put("goal", "travel in Osaka"); put("level", "super beginner")
+        }))
+        assertEquals("ok", r.response["result"]!!.jsonPrimitive.content)
+        assertEquals(ToolHandler.ProfileUpdate(language = "Japanese", goal = "travel in Osaka", level = Level.SUPER_BEGINNER), profiles.single())
+        val empty = agentic.handle(FunctionCall(name = "update_learner_profile", args = buildJsonObject {}))
+        assertTrue(empty.response.containsKey("error"))
+        assertEquals(1, profiles.size)
+    }
+
+    @Test
+    fun `show_phrase needs a phrase and passes the translation`() = runTest {
+        agentic.handle(FunctionCall(id = "s", name = "show_phrase", args = buildJsonObject {
+            put("phrase", "¿Me da medio kilo?"); put("translation", "Can I have half a kilo?")
+        }))
+        assertEquals(TryPhrase("¿Me da medio kilo?", "Can I have half a kilo?"), phrases.single())
+        val bad = agentic.handle(FunctionCall(name = "show_phrase", args = buildJsonObject {}))
+        assertTrue(bad.response.containsKey("error"))
+    }
+
+    @Test
+    fun `onboarding walk asks in English and uses the profile tool`() {
+        val prompt = PromptBuilder.systemInstruction(SessionConfig(onboarding = true))
+        assertTrue(prompt.contains("first walk"))
+        assertTrue(prompt.contains("update_learner_profile"))
+        assertFalse(PromptBuilder.systemInstruction(SessionConfig()).contains("update_learner_profile"))
+        assertEquals(Level.ADVANCED, Level.INTERMEDIATE.harder())
+        assertEquals(Level.ADVANCED, Level.ADVANCED.harder())
+    }
+
     private val handler = ToolHandler(
         vocab = repo,
         currentLanguage = { "Spanish" },

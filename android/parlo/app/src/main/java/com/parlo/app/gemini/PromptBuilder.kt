@@ -13,6 +13,7 @@ import kotlinx.serialization.json.putJsonObject
 object PromptBuilder {
 
     fun systemInstruction(c: SessionConfig, memory: WalkMemory? = null): String {
+        if (c.onboarding) return onboardingInstruction(c)
         val dialect = c.dialect.ifBlank { "standard ${c.language}" }
         val level = c.level.label
         val correction = c.correctionStyle.label
@@ -51,6 +52,9 @@ Vocabulary capture (silent, automatic):
 - When the user makes a mistake, note the correct form (never the user's wrong form) with reason corrected, and use the user's sentence as the example.
 - Do not note trivial words, names, or words the user clearly already knows. Never announce or confirm a note_vocab call; keep talking naturally.
 - Only call save_vocab when the user explicitly asks to save a word; that one is confirmed to them.
+
+Phrase card (optional):
+- When you want the user to say a specific phrase, call show_phrase with it and its English translation so they can glance at it. At most once per turn, and only for a phrase you're asking them to say.
 
 ${memoryBlock(c, memory)}${opening(c)}
         """.trimIndent()
@@ -103,6 +107,32 @@ ${memoryBlock(c, memory)}${opening(c)}
         val ackLanguage = if (new.level == Level.SUPER_BEGINNER) "English" else new.language
         return "[System] From now on, $body. Briefly acknowledge the switch in $ackLanguage and continue the conversation. Do not call switch_language for this change."
     }
+
+    /** First walk: the tutor sets the app up by voice instead of a form. */
+    internal fun onboardingInstruction(c: SessionConfig) = """
+You are Parlo, a friendly voice language tutor. This is the user's first walk with you. They are walking, through earbuds or the phone's speaker, and can rarely look at the screen.
+
+First, set up their profile by talking, in English, one short question at a time:
+1. Which language they want to practise.
+2. Which accent or region (offer two or three common ones for that language, e.g. "Mexico, Spain, or somewhere else?").
+3. Why they're learning: travel, work, family, or something else.
+After each answer, call update_learner_profile with what you learned (only the fields you just learned). If they say "you pick" or don't mind, choose a sensible default and call the tool with it.
+
+Then work out their level by talking: ask one or two easy questions in the language and listen. Don't ask them to rate themselves. Call update_learner_profile with level (Super Beginner, Beginner, Intermediate, or Advanced). If they know none of the language, use Super Beginner.
+
+Once language, accent and level are set, tell them in one sentence that you're starting, switch into the language at their level, and open a short role-play that fits their goal. From then on:
+- Keep replies to one to three sentences and end most turns with a simple question.
+- Gently recast mistakes in your next reply.
+- Call note_vocab silently for words they struggle with or ask about, with the correct form, a short translation, the sentence, and the reason.
+- When you want them to say a specific phrase, call show_phrase with it and its English translation, at most once per turn.
+- If they say "let's wrap up" or "I'm done", call end_walk.
+
+Begin now: say hi, introduce yourself as Parlo in one sentence, and ask which language they want to practise.
+    """.trimIndent()
+
+    /** Toolbar "English" button. */
+    fun englishHelpMessage() =
+        "[System] The user tapped 'English': briefly explain in English what you just said and what they could answer, then continue in the target language."
 
     /** Native-audio Live models wait for a client turn, so the tutor needs an explicit cue to speak first. */
     fun kickoffMessage() = "[System] The learner has started the walk and is listening. Begin now."
@@ -169,6 +199,31 @@ ${memoryBlock(c, memory)}${opening(c)}
                             putJsonObject("level") { put("type", "STRING"); put("description", "Super Beginner, Beginner, Intermediate, or Advanced") }
                         }
                         putJsonArray("required") { add(kotlinx.serialization.json.JsonPrimitive("language")) }
+                    },
+                ),
+                FunctionDeclaration(
+                    name = "update_learner_profile",
+                    description = "During the first-walk onboarding, record what you learned about the learner so the app can set itself up. Include only the fields you just learned.",
+                    parameters = buildJsonObject {
+                        put("type", "OBJECT")
+                        putJsonObject("properties") {
+                            putJsonObject("language") { put("type", "STRING"); put("description", "Language to practise, e.g. Spanish") }
+                            putJsonObject("dialect") { put("type", "STRING"); put("description", "Accent or region, e.g. Mexican Spanish") }
+                            putJsonObject("goal") { put("type", "STRING"); put("description", "Why they're learning, a few words, e.g. travel in Mexico") }
+                            putJsonObject("level") { put("type", "STRING"); put("description", "Super Beginner, Beginner, Intermediate, or Advanced") }
+                        }
+                    },
+                ),
+                FunctionDeclaration(
+                    name = "show_phrase",
+                    description = "Show the learner a phrase you want them to try saying, with its English translation, as a glanceable card. At most once per turn.",
+                    parameters = buildJsonObject {
+                        put("type", "OBJECT")
+                        putJsonObject("properties") {
+                            putJsonObject("phrase") { put("type", "STRING"); put("description", "The phrase in the target language") }
+                            putJsonObject("translation") { put("type", "STRING"); put("description", "Short English translation") }
+                        }
+                        putJsonArray("required") { add(kotlinx.serialization.json.JsonPrimitive("phrase")) }
                     },
                 ),
                 FunctionDeclaration(

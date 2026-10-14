@@ -48,6 +48,9 @@ data class MainUiState(
     val voicePreview: VoicePreview = VoicePreview(),
     /** Most recent finished walk, shown as the post-walk recap and next-walk suggestion. */
     val lastWalk: LastWalk? = null,
+    /** False until the first walk has finished; drives the welcome screen and voice onboarding. */
+    val hasWalked: Boolean = true,
+    val maskedKey: String = "",
 ) {
     /** True once a walk can actually start: a key is saved and a voice model is known. */
     val ready: Boolean get() = hasApiKey && !keyRejected && (config.model.isNotBlank() || models.isNotEmpty())
@@ -146,6 +149,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         .combine(combine(container.sessions.observeSessions(), vocab.observeAll(), container.vocabCapture.mining, ::lastWalkOf)) { s, w ->
             s.copy(lastWalk = w)
         }
+        .combine(settings.apiKey) { s, k -> s.copy(maskedKey = com.parlo.app.ui.onboarding.maskKey(k)) }
+        .combine(container.sessions.observeSessions()) { s, all -> s.copy(hasWalked = all.any { it.endedAt != null }) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, MainUiState())
 
     private val connection = object : ServiceConnection {
@@ -183,7 +188,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun startSession(context: Context) {
-        val cfg = localConfig.value ?: uiState.value.config
+        val base = localConfig.value ?: uiState.value.config
+        val cfg = base.copy(onboarding = !uiState.value.hasWalked)
         viewModelScope.launch { settings.saveConfig(cfg) }
         ContextCompat.startForegroundService(context, LiveSessionService.startIntent(context))
         service?.startSession(cfg)
@@ -194,6 +200,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleMute() = service?.toggleMute()
 
     fun repeatSlowly() = service?.requestRepeatSlowly()
+
+    fun englishHelp() = service?.requestEnglishHelp()
 
     /** Point the next walk at the tutor's suggestion from [LastWalk]. */
     fun useSuggestedWalk() {

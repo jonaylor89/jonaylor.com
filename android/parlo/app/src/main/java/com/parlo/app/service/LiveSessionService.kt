@@ -40,7 +40,9 @@ import com.parlo.app.gemini.ToolHandler
 import com.parlo.app.gemini.VoiceConfig
 import com.parlo.app.model.AudioState
 import com.parlo.app.model.ConnectionState
+import com.parlo.app.model.LanguageCatalog
 import com.parlo.app.model.LanguageCombo
+import com.parlo.app.model.LearnerProfile
 import com.parlo.app.model.LiveSessionState
 import com.parlo.app.model.SessionConfig
 import com.parlo.app.model.WalkMemory
@@ -118,9 +120,15 @@ class LiveSessionService : LifecycleService() {
             onVocabSaved = { word ->
                 earcons.play(Earcons.Cue.VOCAB_SAVED)
                 appendTurn(Speaker.SYSTEM, "Saved \"$word\" to vocab")
+                _state.update { it.copy(caughtWords = it.caughtWords + word) }
             },
             onLanguageSwitched = ::onVoiceLanguageSwitch,
-            onVocabNoted = { word -> appendTurn(Speaker.SYSTEM, "Saved \"$word\" to vocab") },
+            onVocabNoted = { word ->
+                appendTurn(Speaker.SYSTEM, "Saved \"$word\" to vocab")
+                _state.update { it.copy(caughtWords = it.caughtWords + word) }
+            },
+            onProfileUpdated = ::onProfileUpdate,
+            onShowPhrase = { phrase -> _state.update { it.copy(phrase = phrase) } },
             onWalkUpdated = ::onVoiceWalkUpdate,
             onEndWalk = { lifecycleScope.launch { delay(END_WALK_DELAY_MS); endSession(skipRecap = false) } },
         )
@@ -164,6 +172,7 @@ class LiveSessionService : LifecycleService() {
             config = effective,
             sessionStartMs = System.currentTimeMillis(),
             statusText = "Connecting…",
+            profile = if (effective.onboarding) LearnerProfile() else null,
         )
         goForeground()
         lifecycleScope.launch {
@@ -224,6 +233,12 @@ class LiveSessionService : LifecycleService() {
 
     fun switchCombo(combo: LanguageCombo) =
         applyConfig(_state.value.config.copy(language = combo.language, dialect = combo.dialect, level = combo.level))
+
+    fun requestEnglishHelp() {
+        if (!client.isReady) return
+        player.flush()
+        client.sendText(PromptBuilder.englishHelpMessage())
+    }
 
     fun requestRepeatSlowly() {
         if (!client.isReady) return
@@ -415,6 +430,30 @@ class LiveSessionService : LifecycleService() {
         _state.update { it.copy(config = new) }
         container.settings.saveConfig(new)
         appendTurn(Speaker.SYSTEM, "Walk updated by voice: ${new.topicTitle.ifBlank { new.scenario.label }} · ${new.correctionStyle.label} corrections")
+        updateNotification()
+    }
+
+    /** Onboarding answers fill the profile tiles and the walk config; once language and level are known the walk is a normal one. */
+    private suspend fun onProfileUpdate(u: ToolHandler.ProfileUpdate) {
+        val old = _state.value.config
+        val language = u.language.ifBlank { old.language }
+        val dialect = when {
+            u.dialect.isNotBlank() -> u.dialect
+            u.language.isNotBlank() && !u.language.equals(old.language, true) -> LanguageCatalog.defaultDialectFor(language)
+            else -> old.dialect
+        }
+        val profile = (_state.value.profile ?: LearnerProfile()).let { p ->
+            p.copy(
+                language = u.language.ifBlank { p.language },
+                dialect = if (u.dialect.isNotBlank() || u.language.isNotBlank()) dialect else p.dialect,
+                goal = u.goal.ifBlank { p.goal },
+                level = u.level?.label ?: p.level,
+            )
+        }
+        val done = profile.language.isNotBlank() && profile.level.isNotBlank()
+        val new = old.copy(language = language, dialect = dialect, level = u.level ?: old.level, onboarding = old.onboarding && !done)
+        _state.update { it.copy(config = new, profile = profile) }
+        container.settings.saveConfig(new)
         updateNotification()
     }
 

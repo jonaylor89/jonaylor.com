@@ -20,6 +20,10 @@ androidxJunit = "1.2.1"
 espresso = "3.6.1"
 
 [libraries]
+robolectric = { module = "org.robolectric:robolectric", version = "4.14.1" }
+roborazzi = { module = "io.github.takahirom.roborazzi:roborazzi", version = "1.43.0" }
+roborazzi-compose = { module = "io.github.takahirom.roborazzi:roborazzi-compose", version = "1.43.0" }
+androidx-test-core-ktx = { module = "androidx.test:core-ktx", version = "1.6.1" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
