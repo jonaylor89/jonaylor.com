@@ -3,15 +3,17 @@ package com.parlo.app.gemini
 import com.parlo.app.data.VocabCapture
 import com.parlo.app.data.VocabRepository
 import com.parlo.app.data.db.VocabSource
+import com.parlo.app.model.CorrectionStyle
 import com.parlo.app.model.LanguageCatalog
 import com.parlo.app.model.LanguageCombo
 import com.parlo.app.model.Level
+import com.parlo.app.model.Scenario
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
-/** Executes `save_vocab` / `note_vocab` / `switch_language` locally and produces the `toolResponse` payloads. */
+/** Executes the Live tools (vocab, language switch, walk updates, end of walk) locally and produces the `toolResponse` payloads. */
 class ToolHandler(
     private val vocab: VocabRepository,
     private val currentLanguage: () -> String,
@@ -21,13 +23,20 @@ class ToolHandler(
     private val onVocabSaved: suspend (word: String) -> Unit,
     private val onLanguageSwitched: suspend (LanguageCombo) -> Unit,
     private val onVocabNoted: suspend (word: String) -> Unit = {},
+    private val onWalkUpdated: suspend (WalkUpdate) -> Unit = {},
+    private val onEndWalk: suspend () -> Unit = {},
 ) {
+    /** Fields the tutor changed by voice; null / blank means unchanged. */
+    data class WalkUpdate(val topic: String = "", val scenario: Scenario? = null, val correctionStyle: CorrectionStyle? = null)
+
     suspend fun handle(call: FunctionCall): FunctionResponse {
         val args = call.args ?: JsonObject(emptyMap())
         val response: JsonObject = when (call.name) {
             "save_vocab" -> saveVocab(args)
             "note_vocab" -> noteVocab(args)
             "switch_language" -> switchLanguage(args)
+            "update_walk" -> updateWalk(args)
+            "end_walk" -> endWalk()
             else -> buildJsonObject { put("error", "unknown function ${call.name}") }
         }
         return FunctionResponse(id = call.id, name = call.name, response = response)
@@ -47,11 +56,11 @@ class ToolHandler(
         return buildJsonObject { put("result", "saved"); put("id", id) }
     }
 
-    /** Silent capture: goes to the Suggested tray, no earcon, and the model is told not to mention it. */
+    /** Silent capture: saved to the list (droppable from the recap), no earcon, and the model is told not to mention it. */
     private suspend fun noteVocab(args: JsonObject): JsonObject {
         val word = args.str("word")
         if (word.isBlank()) return buildJsonObject { put("error", "word is required") }
-        val id = vocab.suggest(
+        val id = vocab.capture(
             word = word,
             translation = args.str("translation"),
             example = args.str("example_sentence"),
@@ -82,6 +91,25 @@ class ToolHandler(
         return buildJsonObject {
             put("result", "ok")
             put("language", language); put("dialect", dialect); put("level", level.label)
+        }
+    }
+
+    private suspend fun updateWalk(args: JsonObject): JsonObject {
+        val update = WalkUpdate(
+            topic = args.str("topic"),
+            scenario = args.str("scenario").takeIf { it.isNotBlank() }?.let { s -> Scenario.entries.firstOrNull { it.name.equals(s, true) } },
+            correctionStyle = args.str("correction_style").takeIf { it.isNotBlank() }?.let { s -> CorrectionStyle.entries.firstOrNull { it.name.equals(s, true) } },
+        )
+        if (update == WalkUpdate()) return buildJsonObject { put("error", "nothing to update") }
+        onWalkUpdated(update)
+        return buildJsonObject { put("result", "ok") }
+    }
+
+    private suspend fun endWalk(): JsonObject {
+        onEndWalk()
+        return buildJsonObject {
+            put("result", "ending")
+            put("note", "The app will ask you for the recap next; don't say goodbye yet.")
         }
     }
 

@@ -14,7 +14,10 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.parlo.app.ParloApp
 import com.parlo.app.audio.AudioPlayer
+import com.parlo.app.data.db.SessionEntity
+import com.parlo.app.data.db.VocabEntity
 import com.parlo.app.model.LanguageCombo
+import com.parlo.app.model.Level
 import com.parlo.app.model.LiveSessionState
 import com.parlo.app.model.SessionConfig
 import com.parlo.app.service.LiveSessionService
@@ -43,6 +46,8 @@ data class MainUiState(
     val suggestedVocab: Int = 0,
     val dynamicColor: Boolean = false,
     val voicePreview: VoicePreview = VoicePreview(),
+    /** Most recent finished walk, shown as the post-walk recap and next-walk suggestion. */
+    val lastWalk: LastWalk? = null,
 ) {
     /** True once a walk can actually start: a key is saved and a voice model is known. */
     val ready: Boolean get() = hasApiKey && !keyRejected && (config.model.isNotBlank() || models.isNotEmpty())
@@ -58,6 +63,43 @@ data class MainUiState(
             modelsError != null -> SetupStatus.OFFLINE
             else -> SetupStatus.NO_MODEL
         }
+}
+
+/** Real numbers only: the walk's length and the words saved from it. */
+data class LastWalk(
+    val sessionId: Long,
+    val language: String,
+    val dialect: String,
+    val level: String,
+    val durationMs: Long,
+    val words: List<VocabEntity>,
+    val focus: String,
+    val nextWalkTitle: String,
+    val nextWalkPrompt: String,
+    val reviewing: Boolean,
+) {
+    val lengthLabel: String get() = walkLengthLabel(durationMs)
+}
+
+internal fun walkLengthLabel(durationMs: Long): String {
+    val minutes = durationMs / 60_000
+    return if (minutes < 1) "Under a minute" else "$minutes min"
+}
+
+internal fun lastWalkOf(sessions: List<SessionEntity>, vocab: List<VocabEntity>, mining: Set<Long>): LastWalk? {
+    val s = sessions.filter { it.endedAt != null }.maxByOrNull { it.startedAt } ?: return null
+    return LastWalk(
+        sessionId = s.id,
+        language = s.language,
+        dialect = s.dialect,
+        level = s.level,
+        durationMs = s.durationMs,
+        words = vocab.filter { it.sessionId == s.id && !it.isSuggested }.sortedBy { it.savedAt },
+        focus = s.focus.orEmpty(),
+        nextWalkTitle = s.nextWalkTitle.orEmpty(),
+        nextWalkPrompt = s.nextWalkPrompt.orEmpty(),
+        reviewing = s.id in mining,
+    )
 }
 
 enum class SetupStatus { NO_KEY, CHECKING, BAD_KEY, OFFLINE, NO_MODEL, READY }
@@ -101,6 +143,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         .combine(vocab.observeAll()) { s, words -> s.copy(suggestedVocab = words.count { it.isSuggested }) }
         .combine(settings.dynamicColor) { s, d -> s.copy(dynamicColor = d) }
         .combine(preview) { s, p -> s.copy(voicePreview = p) }
+        .combine(combine(container.sessions.observeSessions(), vocab.observeAll(), container.vocabCapture.mining, ::lastWalkOf)) { s, w ->
+            s.copy(lastWalk = w)
+        }
         .stateIn(viewModelScope, SharingStarted.Eagerly, MainUiState())
 
     private val connection = object : ServiceConnection {
@@ -138,7 +183,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun startSession(context: Context) {
-        val cfg = uiState.value.config
+        val cfg = localConfig.value ?: uiState.value.config
         viewModelScope.launch { settings.saveConfig(cfg) }
         ContextCompat.startForegroundService(context, LiveSessionService.startIntent(context))
         service?.startSession(cfg)
@@ -147,6 +192,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun endSession(skipRecap: Boolean) = service?.endSession(skipRecap)
 
     fun toggleMute() = service?.toggleMute()
+
+    fun repeatSlowly() = service?.requestRepeatSlowly()
+
+    /** Point the next walk at the tutor's suggestion from [LastWalk]. */
+    fun useSuggestedWalk() {
+        val w = uiState.value.lastWalk ?: return
+        if (w.nextWalkPrompt.isBlank()) return
+        updateConfig {
+            val sameLanguage = it.language.equals(w.language, true)
+            it.copy(
+                language = w.language,
+                dialect = if (sameLanguage) it.dialect else w.dialect,
+                level = if (sameLanguage) it.level else Level.parse(w.level),
+                topic = w.nextWalkPrompt,
+                topicTitle = w.nextWalkTitle,
+            )
+        }
+    }
+
+    fun dropWord(word: VocabEntity) {
+        viewModelScope.launch { vocab.delete(word) }
+    }
+
+    fun restoreWord(word: VocabEntity) {
+        viewModelScope.launch { vocab.restore(listOf(word)) }
+    }
 
     fun dismissError() = service?.dismissError()
 

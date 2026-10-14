@@ -2,7 +2,9 @@ package com.parlo.app.gemini
 
 import com.parlo.app.model.CorrectionStyle
 import com.parlo.app.model.Level
+import com.parlo.app.model.Scenario
 import com.parlo.app.model.SessionConfig
+import com.parlo.app.model.WalkMemory
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
@@ -10,12 +12,12 @@ import kotlinx.serialization.json.putJsonObject
 
 object PromptBuilder {
 
-    fun systemInstruction(c: SessionConfig): String {
+    fun systemInstruction(c: SessionConfig, memory: WalkMemory? = null): String {
         val dialect = c.dialect.ifBlank { "standard ${c.language}" }
         val level = c.level.label
         val correction = c.correctionStyle.label
         return """
-You are a friendly, patient conversation partner helping the user practice ${c.language} with a $dialect accent and vocabulary, at a $level level. The user is walking outdoors, wearing earbuds, and cannot look at a screen.
+You are a friendly, patient conversation partner helping the user practice ${c.language} with a $dialect accent and vocabulary, at a $level level. The user is usually walking outdoors, through earbuds or the phone's speaker, and can rarely look at the screen.
 
 Conversation style:
 - Keep each reply short: usually one to three sentences. This is a conversation, not a lecture.
@@ -24,7 +26,7 @@ Conversation style:
 ${Level.entries.joinToString("\n") { "  - " + it.guidance }}
 ${levelReminder(c.level)}
 - Use vocabulary, expressions, and pronunciation typical of $dialect.
-- Current scenario: ${c.scenario.label} — ${c.scenario.prompt}. Stay in that scenario unless the user changes topic.
+- ${scenarioLine(c)} Stay in it unless the user changes topic.
 - If the user is silent for a long time, don't fill the silence repeatedly. They may be crossing a street or catching their breath. Wait, then offer at most one gentle prompt.
 
 Corrections ($correction):
@@ -37,7 +39,9 @@ Commands the user may say at any time, in English or ${c.language}:
 - 'slower' / 'repeat': repeat your last sentence slowly and clearly.
 - 'what does X mean?': explain briefly, then return to the conversation.
 - 'say it in English': give a short English translation, then continue in ${c.language}.
-- 'more corrections' / 'fewer corrections': adjust correction style.
+- 'more corrections' / 'fewer corrections': adjust correction style and call update_walk with the new correction_style.
+- 'let's talk about X' / a new role-play: switch to it and call update_walk with the topic.
+- 'let's wrap up' / 'I'm done' / 'stop the walk': call end_walk, then give the recap you're asked for.
 - 'save that word': call save_vocab with the most relevant recent word.
 - 'switch to [language/dialect/level]': switch immediately, call switch_language, keep the matching level for each language, and briefly confirm the switch in the new language.
 
@@ -48,8 +52,21 @@ Vocabulary capture (silent, automatic):
 - Do not note trivial words, names, or words the user clearly already knows. Never announce or confirm a note_vocab call; keep talking naturally.
 - Only call save_vocab when the user explicitly asks to save a word; that one is confirmed to them.
 
-${opening(c)}
+${memoryBlock(c, memory)}${opening(c)}
         """.trimIndent()
+    }
+
+    private fun scenarioLine(c: SessionConfig) =
+        if (c.topic.isNotBlank()) "Current topic: ${c.topic}." else "Current scenario: ${c.scenario.label} — ${c.scenario.prompt}."
+
+    /** Carries the last walk's focus and recently saved words into the next one. */
+    internal fun memoryBlock(c: SessionConfig, memory: WalkMemory?): String {
+        if (memory == null || memory.isEmpty || !memory.language.equals(c.language, true)) return ""
+        val lines = buildList {
+            if (memory.focus.isNotBlank()) add("- Last time the learner needed work on: ${memory.focus} Give them one natural chance to practise it early on, without saying it's a review.")
+            if (memory.reviewWords.isNotEmpty()) add("- Words they saved recently: ${memory.reviewWords.joinToString(", ")}. Weave two or three back into the conversation when it fits.")
+        }
+        return "Memory from earlier walks:\n${lines.joinToString("\n")}\n\n"
     }
 
     private fun levelReminder(level: Level) = "Your current level is ${level.label}." + when (level) {
@@ -76,7 +93,11 @@ ${opening(c)}
             changes += "speak ${new.dialect.ifBlank { new.language }} (${new.language}) at ${new.level.label} level"
             if (old.level != new.level) changes += new.level.guidance
         }
-        if (old.scenario != new.scenario) changes += "switch the scenario to \"${new.scenario.label}\": ${new.scenario.prompt}"
+        if (new.topic.isNotBlank() && old.topic != new.topic) {
+            changes += "switch the topic to: ${new.topic}"
+        } else if (old.scenario != new.scenario || (old.topic.isNotBlank() && new.topic.isBlank())) {
+            changes += "switch the scenario to \"${new.scenario.label}\": ${new.scenario.prompt}"
+        }
         if (old.correctionStyle != new.correctionStyle) changes += "use the ${new.correctionStyle.label} correction style"
         val body = if (changes.isEmpty()) "continue as before" else changes.joinToString("; ")
         val ackLanguage = if (new.level == Level.SUPER_BEGINNER) "English" else new.language
@@ -120,7 +141,7 @@ ${opening(c)}
                 ),
                 FunctionDeclaration(
                     name = "note_vocab",
-                    description = "Silently record a word or phrase the user struggled with, asked about, was corrected on, or that you introduced. The app files it as a suggestion for later review. Do not tell the user you called this.",
+                    description = "Silently record a word or phrase the user struggled with, asked about, was corrected on, or that you introduced. The app saves it to the user's vocabulary list. Do not tell the user you called this.",
                     parameters = buildJsonObject {
                         put("type", "OBJECT")
                         putJsonObject("properties") {
@@ -148,6 +169,33 @@ ${opening(c)}
                             putJsonObject("level") { put("type", "STRING"); put("description", "Super Beginner, Beginner, Intermediate, or Advanced") }
                         }
                         putJsonArray("required") { add(kotlinx.serialization.json.JsonPrimitive("language")) }
+                    },
+                ),
+                FunctionDeclaration(
+                    name = "update_walk",
+                    description = "Report that the walk's topic, scenario, or correction style changed at the user's request so the app can show it. Language and level changes go through switch_language instead.",
+                    parameters = buildJsonObject {
+                        put("type", "OBJECT")
+                        putJsonObject("properties") {
+                            putJsonObject("topic") { put("type", "STRING"); put("description", "Short description of the new topic or role-play, in English, e.g. Haggling at a market") }
+                            putJsonObject("scenario") {
+                                put("type", "STRING")
+                                put("description", "One of the built-in scenarios, if the user picked one")
+                                putJsonArray("enum") { Scenario.entries.forEach { add(kotlinx.serialization.json.JsonPrimitive(it.name)) } }
+                            }
+                            putJsonObject("correction_style") {
+                                put("type", "STRING")
+                                putJsonArray("enum") { CorrectionStyle.entries.forEach { add(kotlinx.serialization.json.JsonPrimitive(it.name)) } }
+                            }
+                        }
+                    },
+                ),
+                FunctionDeclaration(
+                    name = "end_walk",
+                    description = "End the walk when the user says they want to stop (e.g. 'let's wrap up', 'I'm done'). The app then asks you for the spoken recap.",
+                    parameters = buildJsonObject {
+                        put("type", "OBJECT")
+                        putJsonObject("properties") {}
                     },
                 ),
             ),

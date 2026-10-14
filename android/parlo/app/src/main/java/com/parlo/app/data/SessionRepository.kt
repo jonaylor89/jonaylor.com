@@ -54,6 +54,11 @@ class SessionRepository(private val dao: SessionDao) {
 
     suspend fun markMined(id: Long, at: Long = System.currentTimeMillis()) = dao.markMined(id, at)
 
+    suspend fun saveReview(id: Long, focus: String, nextWalkTitle: String, nextWalkPrompt: String) =
+        dao.saveReview(id, focus.ifBlank { null }, nextWalkTitle.ifBlank { null }, nextWalkPrompt.ifBlank { null })
+
+    suspend fun latestReviewed(language: String): SessionEntity? = dao.latestReviewed(language)
+
     suspend fun deleteSession(id: Long) = dao.deleteSession(id)
 
     suspend fun cleanupEmpty() = dao.deleteEmptyUnfinishedSessions()
