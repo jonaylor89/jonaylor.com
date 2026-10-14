@@ -1,6 +1,7 @@
 ---
 import Seo from "../components/Seo.astro";
 import "../styles/global.css";
+import DownloadForm from "@jonaylor/download-gate";
 
 const description =
   "Paper Clock is a private, offline Android alarm clock for building mornings around meaningful goals.";
@@ -95,12 +96,7 @@ const features = [
             <a href="#how-it-works">How it works</a>
             <a href="#private">Why offline</a>
           </div>
-          <a
-            class="nav-cta"
-            href={downloadUrl}
-            target="_blank"
-            rel="noreferrer"
-          >Get the app <span aria-hidden="true">↗</span></a>
+          <a class="nav-cta" href="#get-the-app">Get the app <span aria-hidden="true">↓</span></a>
         </nav>
 
         <div class="hero-grid shell">
@@ -112,12 +108,9 @@ const features = [
               Start with the next honest move.
             </p>
             <div class="hero-actions">
-              <a
-                class="button button-primary"
-                href={downloadUrl}
-                target="_blank"
-                rel="noreferrer"
-              >GET THE APP <span>→</span></a>
+              <DownloadForm app="paperclock" href={downloadUrl} buttonClass="button button-primary"
+                >GET THE APP <span>→</span></DownloadForm
+              >
               <a class="text-link" href="#how-it-works">SEE THE FLOW <span>↓</span></a>
             </div>
             <dl class="proof-points" aria-label="Paper Clock principles">
@@ -235,12 +228,9 @@ const features = [
           <p class="section-label">START TOMORROW DIFFERENTLY</p>
           <h2>GET UP FOR<br /><em>SOMETHING.</em></h2>
           <p>Paper Clock is an offline Android alarm clock for meaningful mornings.</p>
-          <a
-            class="button button-primary"
-            href={downloadUrl}
-            target="_blank"
-            rel="noreferrer"
-          >GET THE LATEST RELEASE <span>→</span></a>
+          <DownloadForm app="paperclock" href={downloadUrl} buttonClass="button button-primary"
+            >GET THE LATEST RELEASE <span>→</span></DownloadForm
+          >
         </div>
       </section>
     </main>

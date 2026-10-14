@@ -1,4 +1,5 @@
 ---
+import DownloadForm from "@jonaylor/download-gate";
 import Base from '../layouts/Base.astro';
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const shot = (name: string) => `${base}/screenshots/${name}.png`;
@@ -106,10 +107,10 @@ const icons: Record<string, string> = {
           conversation with a patient native speaker — in any of 137 languages and 850+ regional accents.
         </p>
         <div class="cta">
-          <a class="btn filled" href={downloadUrl}>
+          <DownloadForm app="parlo" href={downloadUrl} buttonClass="btn filled">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 9.48l1.84-3.18c.16-.31.04-.69-.26-.85a.637.637 0 0 0-.83.22l-1.88 3.24a11.43 11.43 0 0 0-8.94 0L5.65 5.67a.643.643 0 0 0-.87-.2c-.28.18-.37.54-.22.83L6.4 9.48A10.78 10.78 0 0 0 1 18h22a10.78 10.78 0 0 0-5.4-8.52ZM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Z"/></svg>
             Download the APK
-          </a>
+          </DownloadForm>
           <a class="btn outlined" href="#how">See how it works</a>
         </div>
         <ul class="hero-stats">
@@ -280,7 +281,7 @@ const icons: Record<string, string> = {
       <pre><code>git clone https://github.com/jonaylor89/jonaylor.com.git
 cd jonaylor.com/android/parlo && ./gradlew installDebug</code></pre>
       <div class="cta">
-        <a class="btn filled" href={downloadUrl}>Download the APK</a>
+        <DownloadForm app="parlo" href={downloadUrl} buttonClass="btn filled">Download the APK</DownloadForm>
         <a class="btn outlined" href={repo}>View on GitHub</a>
         <a class="btn outlined" href="https://aistudio.google.com/apikey">Get a free Gemini key</a>
       </div>
@@ -313,7 +314,11 @@ cd jonaylor.com/android/parlo && ./gradlew installDebug</code></pre>
   .hero-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 48px; align-items: center; }
   h1 { font-size: clamp(42px, 6vw, 76px); line-height: 1; font-weight: 900; margin-top: 22px; }
   h1 em, .h2 em { font-style: italic; color: var(--primary); font-weight: 700; }
-  .cta { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 30px; }
+  .cta {
+    display: flex; gap: 12px; flex-wrap: wrap; margin-top: 30px;
+    --download-form-height: 56px; --download-form-radius: var(--r-full); --download-form-padding: 22px;
+    --download-form-border: 1px solid var(--outline-variant);
+  }
   .hero-stats { list-style: none; padding: 0; margin: 40px 0 0; display: flex; gap: 32px; flex-wrap: wrap; }
   .hero-stats li { display: flex; flex-direction: column; }
   .hero-stats strong { font: 700 30px var(--display); color: var(--on-surface); }
@@ -431,7 +436,8 @@ cd jonaylor.com/android/parlo && ./gradlew installDebug</code></pre>
   .cta-band .h2 em { color: var(--secondary-container); }
   .cta-inner { text-align: center; display: flex; flex-direction: column; align-items: center; }
   .cta-band .cta { justify-content: center; }
-  .cta-band .btn.filled { background: var(--secondary); color: var(--on-secondary); }
+  .cta-band .cta { --download-form-border: 1px solid rgba(255,255,255,0.35); }
+  .cta-band :global(.btn.filled) { background: var(--secondary); color: var(--on-secondary); }
   .cta-band .btn.outlined { color: var(--on-primary); border-color: rgba(255,255,255,0.35); }
   pre { margin: 28px 0 8px; padding: 18px 24px; border-radius: var(--r-l); background: rgba(0, 0, 0, 0.25); color: #e6f4f7; font-size: 14px; text-align: left; overflow-x: auto; max-width: 100%; }
 

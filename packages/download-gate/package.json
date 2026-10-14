@@ -1,0 +1,12 @@
+{
+	"name": "@jonaylor/download-gate",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./DownloadForm.astro"
+	},
+	"peerDependencies": {
+		"astro": "^5"
+	}
+}

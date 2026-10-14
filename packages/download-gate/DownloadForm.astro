@@ -1,0 +1,175 @@
+---
+interface Props {
+	/** App slug hub knows about, e.g. "parlo". */
+	app: string;
+	/** Where the download lives. */
+	href: string;
+	/** Class(es) for the download button, so it keeps the site's own button styles. */
+	buttonClass?: string;
+	/** Extra class(es) for the form wrapper. */
+	class?: string;
+	placeholder?: string;
+	/** Base URL of hub. Defaults to PUBLIC_DOWNLOADS_API_URL, then production. */
+	hubUrl?: string;
+}
+
+const {
+	app,
+	href,
+	buttonClass,
+	class: className,
+	placeholder = "you@example.com",
+	hubUrl = import.meta.env.PUBLIC_DOWNLOADS_API_URL ?? "https://hub.jonaylor.com",
+} = Astro.props;
+---
+
+<form
+	class:list={["download-form", className]}
+	action={href}
+	method="get"
+	data-download-form
+	data-app={app}
+	data-hub-url={hubUrl}
+>
+	<!-- Inputs are deliberately unnamed so a no-JS submit goes straight to the download. -->
+	<input
+		class="download-form-email"
+		type="email"
+		required
+		autocomplete="email"
+		inputmode="email"
+		placeholder={placeholder}
+		aria-label="Email address"
+	/>
+	<input class="download-form-hp" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" />
+	<button class={buttonClass} type="submit"><slot /></button>
+</form>
+
+<script>
+	const STORAGE_KEY = "download-gate-email";
+	const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+	function rememberedEmail(): string {
+		try {
+			return localStorage.getItem(STORAGE_KEY) ?? "";
+		} catch {
+			return "";
+		}
+	}
+
+	function remember(email: string) {
+		try {
+			localStorage.setItem(STORAGE_KEY, email);
+		} catch {
+			// Storage can be unavailable (private mode); they'll just type it again next time.
+		}
+	}
+
+	function isValid(input: HTMLInputElement): boolean {
+		const value = input.value.trim();
+		return input.checkValidity() && EMAIL_PATTERN.test(value);
+	}
+
+	for (const form of document.querySelectorAll<HTMLFormElement>("[data-download-form]")) {
+		const email = form.querySelector<HTMLInputElement>(".download-form-email");
+		const honeypot = form.querySelector<HTMLInputElement>(".download-form-hp");
+		const button = form.querySelector<HTMLButtonElement>("button[type=submit]");
+		if (!email || !button) continue;
+
+		const sync = () => {
+			button.disabled = !isValid(email);
+		};
+
+		if (!email.value) email.value = rememberedEmail();
+		sync();
+		email.addEventListener("input", sync);
+		// Browser autofill doesn't always fire "input".
+		email.addEventListener("change", sync);
+
+		form.addEventListener("submit", (event) => {
+			event.preventDefault();
+			if (!isValid(email)) {
+				sync();
+				return;
+			}
+
+			const address = email.value.trim();
+			remember(address);
+			fetch(`${form.dataset.hubUrl}/api/downloads`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ app: form.dataset.app, email: address, website: honeypot?.value ?? "" }),
+				keepalive: true,
+			}).catch(() => {
+				// Recording is best-effort; never block the download on it.
+			});
+			window.location.href = form.action;
+		});
+	}
+</script>
+
+<style>
+	/*
+	 * Sites tune the email field with custom properties on any ancestor:
+	 * --download-form-height, --download-form-radius, --download-form-border,
+	 * --download-form-bg, --download-form-color, --download-form-width, --download-form-padding.
+	 */
+	.download-form {
+		position: relative;
+		display: inline-flex;
+		align-items: stretch;
+		gap: 8px;
+		max-width: 100%;
+	}
+
+	.download-form button {
+		flex: none;
+	}
+
+	.download-form-email {
+		flex: 1 1 var(--download-form-width, 15rem);
+		min-width: 0;
+		min-height: var(--download-form-height, 48px);
+		box-sizing: border-box;
+		padding: 0 var(--download-form-padding, 14px);
+		border: var(--download-form-border, 1px solid color-mix(in srgb, currentColor 35%, transparent));
+		border-radius: var(--download-form-radius, 8px);
+		background: var(--download-form-bg, transparent);
+		color: var(--download-form-color, inherit);
+		font: inherit;
+		font-size: max(16px, 1em);
+	}
+
+	.download-form-email::placeholder {
+		color: inherit;
+		opacity: 0.5;
+	}
+
+	.download-form-hp {
+		position: absolute;
+		left: -9999px;
+		width: 1px;
+		height: 1px;
+		opacity: 0;
+	}
+
+	@media (max-width: 520px) {
+		.download-form {
+			display: flex;
+			flex-wrap: wrap;
+			width: 100%;
+		}
+
+		.download-form-email {
+			flex-basis: 100%;
+		}
+	}
+
+	.download-form button:disabled,
+	.download-form button:disabled:hover {
+		opacity: 0.45;
+		cursor: not-allowed;
+		transform: none;
+		box-shadow: none;
+	}
+</style>
