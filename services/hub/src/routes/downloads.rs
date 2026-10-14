@@ -40,7 +40,7 @@ pub const DOWNLOADABLE_APPS: &[DownloadableApp] = &[
     DownloadableApp {
         slug: "fuego",
         name: "Fuego",
-        download_url: "https://github.com/jonaylor89/Fuego/releases/latest",
+        download_url: "https://github.com/jonaylor89/Fuego/releases/latest/download/Fuego.dmg",
     },
 ];
 
