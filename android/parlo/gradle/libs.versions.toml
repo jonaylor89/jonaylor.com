@@ -18,8 +18,12 @@ appcompat = "1.7.0"
 junit = "4.13.2"
 androidxJunit = "1.2.1"
 espresso = "3.6.1"
+glance = "1.2.0"
 
 [libraries]
+androidx-glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "glance" }
+androidx-glance-material3 = { group = "androidx.glance", name = "glance-material3", version.ref = "glance" }
+androidx-glance-appwidget-testing = { group = "androidx.glance", name = "glance-appwidget-testing", version.ref = "glance" }
 robolectric = { module = "org.robolectric:robolectric", version = "4.14.1" }
 roborazzi = { module = "io.github.takahirom.roborazzi:roborazzi", version = "1.43.0" }
 roborazzi-compose = { module = "io.github.takahirom.roborazzi:roborazzi-compose", version = "1.43.0" }

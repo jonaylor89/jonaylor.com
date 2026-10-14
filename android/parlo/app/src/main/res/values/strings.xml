@@ -5,4 +5,7 @@
     <string name="action_mute">Mute</string>
     <string name="action_unmute">Unmute</string>
     <string name="action_end">End</string>
+    <string name="widget_next_walk_description">Your tutor\'s suggested walk, with Start. Becomes Mute and End during a walk.</string>
+    <string name="widget_review_word_description">One saved word at a time. Tap to reveal it.</string>
+    <string name="widget_this_week_description">Minutes walked, walks and words saved over the last 7 days.</string>
 </resources>
