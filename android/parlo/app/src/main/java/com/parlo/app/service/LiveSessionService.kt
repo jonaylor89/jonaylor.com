@@ -134,6 +134,7 @@ class LiveSessionService : LifecycleService() {
         )
         setupMediaSession()
         registerNetworkCallback()
+        lifecycleScope.launch { _state.collect { container.liveWalk.value = it } }
     }
 
     override fun onBind(intent: Intent): IBinder {
@@ -144,7 +145,14 @@ class LiveSessionService : LifecycleService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
         when (intent?.action) {
-            ACTION_START -> lifecycleScope.launch { startSession(container.settings.currentConfig()) }
+            ACTION_START -> {
+                // Started with startForegroundService (widget/notification): promote before any early failure.
+                if (!_state.value.isActive) goForeground()
+                lifecycleScope.launch {
+                    if (container.models.defaultModel() == null) container.models.loadCached()
+                    startSession(container.settings.currentConfig())
+                }
+            }
             ACTION_TOGGLE_MUTE -> toggleMute()
             ACTION_END -> endSession(skipRecap = false)
             ACTION_END_NOW -> endSession(skipRecap = true)
