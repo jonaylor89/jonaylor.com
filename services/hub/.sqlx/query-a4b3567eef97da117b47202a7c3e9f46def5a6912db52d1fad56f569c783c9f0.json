@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT INTO downloads (id, email, app, downloaded_at, referrer, user_agent)\n        VALUES (?, ?, ?, ?, ?, ?)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "a4b3567eef97da117b47202a7c3e9f46def5a6912db52d1fad56f569c783c9f0"
+}

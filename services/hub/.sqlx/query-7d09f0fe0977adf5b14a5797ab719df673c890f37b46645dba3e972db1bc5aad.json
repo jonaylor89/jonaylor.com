@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT COUNT(DISTINCT email) as \"count!: i64\"\n        FROM downloads\n        WHERE (? IS NULL OR app = ?)\n          AND (? IS NULL OR email LIKE ?)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "count!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7d09f0fe0977adf5b14a5797ab719df673c890f37b46645dba3e972db1bc5aad"
+}

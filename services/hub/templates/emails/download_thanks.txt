@@ -1,0 +1,17 @@
+Thanks for downloading {{ app_name }}
+
+Hi there,
+
+Thanks for downloading {{ app_name }} — I hope you enjoy it. If the download didn't start, you can always grab the latest version here:
+
+{{ download_url }}
+{% match subscribe_link %}{% when Some with (link) %}
+If you want to stay in touch about some of my other projects or blog posts, consider subscribing to my email list, Buried Treasure. No spam, just the occasional post worth reading:
+
+{{ link }}
+
+You're getting this one-time email because you entered this address to download {{ app_name }}. You won't be added to any list unless you click the link above.
+{% when None %}
+You're already on the Buried Treasure list, so you'll keep hearing about new projects and posts. Appreciate you being here!
+{% endmatch %}
+— Johannes

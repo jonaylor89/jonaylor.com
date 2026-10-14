@@ -30,11 +30,12 @@ use crate::pastebin::{
     api_create_paste, create_paste_from_form, delete_paste, pastebin_admin, show_paste,
 };
 use crate::routes::{
-    admin_dashboard, admin_stats, api_publish_newsletter, api_subscribe, apple_touch_icon,
-    change_password, change_password_form, confirm, delete_subscriber, favicon_ico, favicon_svg,
-    get_newsletter, health_check, home, list_dead_letters, list_newsletters, list_subscribers,
-    log_out, login, login_form, newsletters_form, og_image, preview_newsletter, publish_newsletter,
-    retry_dead_letter, robots_txt, subscribe, unsubscribe_get, unsubscribe_post,
+    admin_dashboard, admin_stats, api_publish_newsletter, api_record_download, api_subscribe,
+    apple_touch_icon, change_password, change_password_form, confirm, delete_subscriber,
+    favicon_ico, favicon_svg, get_newsletter, health_check, home, list_dead_letters,
+    list_downloads, list_newsletters, list_subscribers, log_out, login, login_form,
+    newsletters_form, og_image, preview_newsletter, publish_newsletter, retry_dead_letter,
+    robots_txt, subscribe, unsubscribe_get, unsubscribe_post,
 };
 use crate::vault::api::{create_thread_share, handoff_record, ingest_events};
 use crate::vault::web::{
@@ -202,6 +203,7 @@ fn build_router(
         .route("/newsletters/preview", post(preview_newsletter))
         .route("/newsletters/{issue_id}", get(get_newsletter))
         .route("/subscribers", get(list_subscribers))
+        .route("/downloads", get(list_downloads))
         .route("/subscribers/{subscriber_id}", delete(delete_subscriber))
         .route("/stats", get(admin_stats))
         .route("/dead-letters", get(list_dead_letters))
@@ -233,6 +235,11 @@ fn build_router(
         .allow_origin(AllowOrigin::list([
             "https://jonaylor.com".parse().unwrap(),
             "https://www.jonaylor.com".parse().unwrap(),
+            "https://paperclock.jonaylor.com".parse().unwrap(),
+            "https://parlo.jonaylor.com".parse().unwrap(),
+            "https://saintjohn.jonaylor.com".parse().unwrap(),
+            "https://getfuego.dev".parse().unwrap(),
+            "https://www.getfuego.dev".parse().unwrap(),
             "http://localhost:4321".parse().unwrap(),
         ]))
         .allow_methods([http::Method::POST, http::Method::PUT, http::Method::OPTIONS])
@@ -256,6 +263,7 @@ fn build_router(
         .route("/cli-login", get(cli_login))
         .route("/api/newsletters", post(api_publish_newsletter))
         .route("/api/subscriptions", post(api_subscribe))
+        .route("/api/downloads", post(api_record_download))
         .route(
             "/api/pastes",
             put(api_create_paste).layer(DefaultBodyLimit::max(256 * 1024)),

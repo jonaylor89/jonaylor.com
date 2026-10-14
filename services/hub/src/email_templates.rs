@@ -41,3 +41,19 @@ pub struct BlogPostEmailText {
     pub description: String,
     pub post_url: String,
 }
+
+#[derive(Template)]
+#[template(path = "emails/download_thanks.html")]
+pub struct DownloadThanksEmailHtml {
+    pub app_name: String,
+    pub download_url: String,
+    pub subscribe_link: Option<String>,
+}
+
+#[derive(Template)]
+#[template(path = "emails/download_thanks.txt")]
+pub struct DownloadThanksEmailText {
+    pub app_name: String,
+    pub download_url: String,
+    pub subscribe_link: Option<String>,
+}

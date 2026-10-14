@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT\n            d.email as \"email!\",\n            GROUP_CONCAT(DISTINCT d.app) as \"apps!: String\",\n            COUNT(*) as \"downloads!: i64\",\n            MIN(d.downloaded_at) as \"first_downloaded_at!: String\",\n            MAX(d.downloaded_at) as \"last_downloaded_at!: String\",\n            s.status as \"subscription_status?: String\"\n        FROM downloads d\n        LEFT JOIN subscriptions s ON s.email = d.email\n        WHERE (? IS NULL OR d.app = ?)\n          AND (? IS NULL OR d.email LIKE ?)\n        GROUP BY d.email\n        ORDER BY MAX(d.downloaded_at) DESC\n        LIMIT ? OFFSET ?\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "email!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "apps!: String",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "downloads!: i64",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "first_downloaded_at!: String",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "last_downloaded_at!: String",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "subscription_status?: String",
+        "ordinal": 5,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": [
+      true,
+      true,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "71a26a8f467ec1ab33a7d3abae148516921eadc1798d81b34edd6077048237ec"
+}

@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT app, COUNT(*) as \"downloads!: i64\", COUNT(DISTINCT email) as \"contacts!: i64\"\n        FROM downloads\n        GROUP BY app\n        ORDER BY 2 DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "app",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "downloads!: i64",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "contacts!: i64",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a57f85e027ea7d2508c81fd9872d9a68b34f0c626135c9b2437ac3035fe11478"
+}

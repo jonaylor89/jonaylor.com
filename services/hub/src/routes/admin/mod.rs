@@ -1,5 +1,6 @@
 mod dashboard;
 mod dead_letters;
+mod downloads;
 mod logout;
 mod newsletter_detail;
 mod newsletters;
@@ -9,6 +10,7 @@ mod subscribers;
 
 pub use dashboard::{admin_dashboard, get_username};
 pub use dead_letters::{list_dead_letters, retry_dead_letter};
+pub use downloads::list_downloads;
 pub use logout::log_out;
 pub use newsletter_detail::{get_newsletter, list_newsletters, preview_newsletter};
 pub use newsletters::{newsletters_form, publish_newsletter};
