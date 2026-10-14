@@ -32,7 +32,7 @@ object GeminiApi {
                 SessionError.QuotaExceeded
             code == 404 || "not found" in r && "model" in r || "is not found for api version" in r ->
                 SessionError.ModelNotFound(model)
-            "invalid_argument" in r || "unsupported" in r || "does not support" in r || "not supported" in r || "invalid" in r && "config" in r ->
+            code == 1007 || "invalid_argument" in r || "must be specified" in r || "unsupported" in r || "does not support" in r || "not supported" in r || "invalid" in r && "config" in r ->
                 SessionError.UnsupportedConfig(shorten(reason))
             "network" in r || "unable to resolve host" in r || "failed to connect" in r || "timeout" in r ->
                 SessionError.Network

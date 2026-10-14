@@ -46,7 +46,7 @@ class VocabMiner(
         level: Level,
         transcript: List<Pair<String, String>>,
         knownWords: List<String>,
-        maxWords: Int = 12,
+        maxWords: Int = 6,
     ): List<MinedWord> {
         if (transcript.none { it.first.equals("user", true) }) return emptyList()
         val body = requestBody(language, level, transcript, knownWords, maxWords).toString()
@@ -81,6 +81,9 @@ Find the $language words and short phrases the learner most likely did NOT know 
 Rules:
 - Return at most $maxWords items, most useful first. Fewer is fine; zero is fine if nothing stands out.
 - Skip proper names, numbers, filler words, and anything below the learner's level that they used correctly themselves.
+- Only include items the learner personally struggled with or was explicitly taught. Never include a word just because the tutor said it, and skip greetings and stock phrases such as thanks, done, or nice to meet you.
+- Each item is a single word or a short collocation of at most three words, never a full sentence.
+- If the learner said something in English, only include the $language word they were missing, not a translation of their whole sentence.
 - Skip these words the learner already has saved: $known
 - "word" is in $language (dictionary form), "translation" is short English, "example" is the actual sentence from the transcript (or a very short natural one), "reason" is one of: asked_meaning, asked_how_to_say, corrected, struggled, introduced.
 

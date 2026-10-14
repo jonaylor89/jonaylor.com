@@ -28,7 +28,7 @@ ${levelReminder(c.level)}
 - If the user is silent for a long time, don't fill the silence repeatedly. They may be crossing a street or catching their breath. Wait, then offer at most one gentle prompt.
 
 Corrections ($correction):
-- Gentle: don't point out errors directly; naturally repeat the corrected phrase in your reply.
+- Gentle: don't point out errors directly, but always recast them: in your very next reply, naturally reuse the user's phrase with the correct form so they hear it.
 - Explicit: briefly give the correct form in one short sentence, then continue the conversation.
 - None: ignore errors unless meaning is unclear.
 ${correctionReminder(c.correctionStyle)}
@@ -44,6 +44,7 @@ Commands the user may say at any time, in English or ${c.language}:
 Vocabulary capture (silent, automatic):
 - Call note_vocab, without saying anything about it, whenever the user shows a gap: they ask what a word means, ask how to say something, ask you to repeat a specific word, get stuck or answer in English, or you correct a word they misused. Also note a genuinely useful new word you introduce, at most one per turn.
 - Always include the word in ${c.language}, a short English translation, the sentence it appeared in, and the reason (asked_meaning, asked_how_to_say, corrected, struggled, introduced).
+- When the user makes a mistake, note the correct form (never the user's wrong form) with reason corrected, and use the user's sentence as the example.
 - Do not note trivial words, names, or words the user clearly already knows. Never announce or confirm a note_vocab call; keep talking naturally.
 - Only call save_vocab when the user explicitly asks to save a word; that one is confirmed to them.
 
@@ -52,7 +53,7 @@ ${opening(c)}
     }
 
     private fun levelReminder(level: Level) = "Your current level is ${level.label}." + when (level) {
-        Level.SUPER_BEGINNER -> " Keep it tiny: English first, one short phrase at a time, translate everything, repeat a lot, celebrate small wins. When switching level mid-session, a request like 'easier' from a Super Beginner means even shorter phrases and more English, not a new level."
+        Level.SUPER_BEGINNER -> " Keep it tiny: English first, one short phrase at a time, translate everything, repeat a lot, celebrate small wins using only real, common words (never invent words or romanizations). When switching level mid-session, a request like 'easier' from a Super Beginner means even shorter phrases and more English, not a new level."
         else -> ""
     }
 
@@ -63,7 +64,7 @@ ${opening(c)}
     }
 
     private fun correctionReminder(style: CorrectionStyle) = when (style) {
-        CorrectionStyle.GENTLE -> "Your current correction style is Gentle."
+        CorrectionStyle.GENTLE -> "Your current correction style is Gentle: recast every mistake you notice in your next reply, without labelling it as a correction."
         CorrectionStyle.EXPLICIT -> "Your current correction style is Explicit."
         CorrectionStyle.NONE -> "Your current correction style is None."
     }
@@ -82,11 +83,18 @@ ${opening(c)}
         return "[System] From now on, $body. Briefly acknowledge the switch in $ackLanguage and continue the conversation. Do not call switch_language for this change."
     }
 
+    /** Native-audio Live models wait for a client turn, so the tutor needs an explicit cue to speak first. */
+    fun kickoffMessage() = "[System] The learner has started the walk and is listening. Begin now."
+
+    /** Sent after a reconnect when the learner's last turn never got a reply. */
+    fun unansweredTurnMessage(lastUserText: String) =
+        "[System] The connection dropped before you answered the learner's last message: \"$lastUserText\". Answer it now, naturally, without mentioning the reconnection."
+
     fun repeatSlowlyMessage() =
         "[System] The user pressed the headset button: repeat your last sentence slowly and clearly, then wait."
 
     fun recapMessage(c: SessionConfig) =
-        "[System] The walk is ending. Give a spoken recap of about 30 seconds in ${if (c.level == Level.SUPER_BEGINNER) "English, repeating each ${c.language} phrase slowly with its meaning," else "a mix of ${c.language} and English"} suited to a ${c.level.label} learner: recurring mistakes you noticed, what went well, and three words or phrases to review. Do not ask a question at the end; finish with a short goodbye."
+        "[System] The walk is ending. Give a spoken recap of about 30 seconds in ${if (c.level == Level.SUPER_BEGINNER) "English, repeating each ${c.language} phrase slowly with its meaning," else "a mix of ${c.language} and English"} suited to a ${c.level.label} learner: recurring mistakes you noticed, what went well, and three words or phrases to review. Keep the recap about the language practised; if the walk switched languages, name each language briefly instead of mixing their mistakes. Do not ask a question at the end; finish with a short goodbye."
 
     fun resumeContextMessage(recent: List<Pair<String, String>>, c: SessionConfig): String {
         val lines = recent.joinToString("\n") { (who, text) -> "$who: $text" }

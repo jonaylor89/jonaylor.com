@@ -43,12 +43,19 @@ class LiveModelDiscovery(
             pageToken = parsed.nextPageToken
         } while (!pageToken.isNullOrBlank())
         return rank(
-            out.filter { LIVE_METHOD in it.supportedGenerationMethods }.map { it.name.removePrefix("models/") },
+            out.filter { LIVE_METHOD in it.supportedGenerationMethods }
+                .map { it.name.removePrefix("models/") }
+                .filter(::isConversational),
         )
     }
 
     companion object {
         const val LIVE_METHOD = "bidiGenerateContent"
+
+        /** Live models that can't hold an audio tutoring conversation with Parlo's setup. */
+        private val NON_CONVERSATIONAL = listOf("transcribe", "translate", "robotics", "thinking")
+
+        fun isConversational(name: String): Boolean = NON_CONVERSATIONAL.none { it in name.lowercase() }
 
         fun rank(names: List<String>): List<String> =
             names.distinct().sortedWith(compareByDescending<String> { score(it) }.thenByDescending { it })

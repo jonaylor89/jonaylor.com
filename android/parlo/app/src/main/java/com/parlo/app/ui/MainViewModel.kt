@@ -1,5 +1,6 @@
 package com.parlo.app.ui
 
+import android.annotation.SuppressLint
 import android.app.Application
 import android.content.ComponentName
 import android.content.Context
@@ -44,14 +45,16 @@ data class MainUiState(
     val voicePreview: VoicePreview = VoicePreview(),
 ) {
     /** True once a walk can actually start: a key is saved and a voice model is known. */
-    val ready: Boolean get() = hasApiKey && (config.model.isNotBlank() || models.isNotEmpty())
+    val ready: Boolean get() = hasApiKey && !keyRejected && (config.model.isNotBlank() || models.isNotEmpty())
+
+    private val keyRejected: Boolean get() = modelsError?.contains("API key", ignoreCase = true) == true
 
     val setup: SetupStatus
         get() = when {
             !hasApiKey -> SetupStatus.NO_KEY
             modelsLoading && models.isEmpty() -> SetupStatus.CHECKING
+            keyRejected -> SetupStatus.BAD_KEY
             ready -> SetupStatus.READY
-            modelsError?.contains("API key", ignoreCase = true) == true -> SetupStatus.BAD_KEY
             modelsError != null -> SetupStatus.OFFLINE
             else -> SetupStatus.NO_MODEL
         }
@@ -74,6 +77,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (!speaking) preview.update { it.copy(playing = null) }
     })
 
+    // Bound service reference; cleared in onServiceDisconnected.
+    @SuppressLint("StaticFieldLeak")
     private var service: LiveSessionService? = null
     private var serviceStateJob: Job? = null
     private val liveState = MutableStateFlow(LiveSessionState())

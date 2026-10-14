@@ -1613,6 +1613,17 @@ object LanguageCatalog {
 
     fun defaultDialectFor(language: String): String = find(language)?.defaultDialect?.name ?: language.trim()
 
+    /** Maps a free-text accent from the model onto a catalog dialect; generic ones ("Standard") become the default, custom ones pass through. */
+    fun canonicalDialect(language: String, dialect: String): String {
+        val dialects = dialectsOf(language)
+        val d = dialect.trim().lowercase()
+        if (dialects.isEmpty()) return dialect.trim()
+        return dialects.firstOrNull { it.name.lowercase() == d }?.name
+            ?: if (d in GENERIC_DIALECTS) defaultDialectFor(language) else dialect.trim()
+    }
+
+    private val GENERIC_DIALECTS = setOf("standard", "neutral", "default", "general", "normal", "")
+
     /** Search across language names, native names, dialect names and regions. */
     fun search(query: String): List<SearchHit> {
         val q = query.trim().lowercase()
