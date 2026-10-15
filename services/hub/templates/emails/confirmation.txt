@@ -1,4 +1,4 @@
-Welcome to Buried Treasure
+Thanks for subscribing
 
 Hi {{ subscriber_name }},
 

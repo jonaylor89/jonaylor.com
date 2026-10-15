@@ -1,4 +1,4 @@
-New post on Buried Treasure
+New post from Johannes Naylor
 
 {{ title }}
 
@@ -7,6 +7,6 @@ New post on Buried Treasure
 {% endif %}Read the full post: {{ post_url }}
 
 —
-You're receiving this because you subscribed to Buried Treasure.
+You're receiving this because you subscribed to my email list.
 
 — Johannes

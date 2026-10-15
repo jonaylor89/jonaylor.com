@@ -2,7 +2,7 @@ You're Already Subscribed!
 
 Hi {{ subscriber_name }},
 
-Looks like you're already on the Buried Treasure list — no action needed. You'll keep getting new posts at this email address.
+Looks like you're already on my email list — no action needed. You'll keep getting new posts at this email address.
 
 Appreciate you being here!
 
