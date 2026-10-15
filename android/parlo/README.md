@@ -31,7 +31,7 @@ Native Kotlin + Jetpack Compose (Material 3), Gemini Live API over WebSockets. S
   - *After the session*: the stored transcript is sent once to Gemini `generateContent` (JSON mode) to mine words you didn't know or the tutor introduced, skipping anything already in your list. Sessions with fewer than two learner turns are skipped. Runs in the background after the recap; you can also re-run it from a session's history page (✨).
   - Suggested entries sit in their own tray at the top of Vocabulary — Keep / Skip individually or all at once, with Undo. Kept words join the normal list and flashcards.
 - **Session history** with full transcript and spoken end-of-session recap (a snackbar offers **Skip** while the recap is being written)
-- **Automatic model discovery**: lists models advertising `bidiGenerateContent`, prefers the newest native-audio Live model, and lets you override it under Settings → Advanced
+- **Automatic model discovery**: lists models advertising `bidiGenerateContent`, prefers newer conversational Live generations, and lets you override it under Settings → Advanced
 - **Resilience**: session resumption handles, exponential-backoff reconnect, connectivity monitoring, fresh-session fallback with recent-transcript context
 - **Encrypted API key storage** via `EncryptedSharedPreferences` (Android Keystore)
 
@@ -73,7 +73,7 @@ None of the tests need a Gemini API key or network access.
 | Suite | Where | What it covers |
 | --- | --- | --- |
 | `GeminiLiveClientIntegrationTest` | `app/src/test` | Drives the real `GeminiLiveClient` over OkHttp against an in-process fake of the Live WebSocket endpoint (`MockWebServer`): setup handshake and `?key=` auth, `setupComplete` gating, PCM `realtimeInput`, `clientContent`, `toolResponse`, decoding of audio / transcripts / tool calls / cancellations / `interrupted` / `turnComplete`, resumption-handle tracking, `goAway` reconnect that resumes with the handle, fallback to a fresh session when the server rejects the handle, fatal `403` → `InvalidApiKey` with no retry, and exponential backoff after a transient drop. |
-| `LiveModelDiscoveryTest` | `app/src/test` | `/models` pagination, `bidiGenerateContent` filtering, ranking (newest native-audio Live model first), API-key error surfacing. |
+| `LiveModelDiscoveryTest` | `app/src/test` | `/models` pagination, `bidiGenerateContent` filtering, ranking (newer conversational Live generations first), API-key error surfacing. |
 | `MessagesTest` | `app/src/test` | Exact JSON shape of every client message and tolerant parsing of server messages (unknown fields ignored). |
 | `LanguageCatalogTest` | `app/src/test` | Catalog breadth and integrity (every language has accents, unique names), case-insensitive / native-name lookup, search ranking, default config points at a real entry. |
 | `PromptBuilderTest`, `ToolHandlerTest`, `GeminiApiTest` | `app/src/test` | System prompt contents per language/dialect/level/scenario/correction style; `save_vocab` / `note_vocab` / `switch_language` declarations, execution and responses (silent suggestion, dedupe, promotion of a suggestion by an explicit save); error classification. |
@@ -87,7 +87,7 @@ What is *not* covered automatically: a real Gemini Live session (audio quality, 
 
 1. Open Parlo and tap the gear icon.
 2. Paste your Gemini API key and tap **Save**. It is stored encrypted on-device and never leaves the phone except in requests to `generativelanguage.googleapis.com`.
-3. Tap **Refresh** under *Model* to discover Live-capable models. The best native-audio model is picked automatically; type a model name to override.
+3. Tap **Refresh** under *Model* to discover Live-capable models. The highest-ranked conversational Live model is picked automatically; type a model name to override.
 4. Pick a voice — all 30 Gemini prebuilt voices, grouped Female / Male with their character (e.g. "Sulafat · Warm", "Charon · Informative"). Tap any voice to hear it greet you in your current language and accent (a short Gemini TTS call on your key, cached per voice).
 5. Back on the main screen tap the walk card to choose language, dialect, level, and correction style, then tap **Start Walk Session**.
 
@@ -103,7 +103,20 @@ The tutor speaks first and keeps turns short. Things you can say at any time (in
 - "Save that word" → stored to Vocabulary (words you struggle with are also captured silently — see *Automatic vocab capture*)
 - "Let's switch to Italian" / "Make it easier" → switches language / level live
 
-Changing language, dialect, level, or correction style in the UI during a session sends a text turn to the tutor. Changing voice or model reconnects with session resumption so context is kept.
+Changing language, dialect, level, or correction style in the UI during a session sends a text turn to the tutor. Changing voice or model reconnects with session resumption so context is kept. Voice-driven changes are saved and used for the next walk too.
+
+The first-walk interview keeps the native-accent instructions active throughout. When language, accent and level are confirmed, the profile tool returns the current pronunciation/level guidance to hand off to normal conversation without injecting an interrupting user turn. English explanations must not anglicise the target-language pronunciation.
+
+### Conversation/audio acceptance check (real device)
+
+Use earbuds and then repeat on the phone speaker, with a real key:
+
+1. Start the first walk, choose a non-English regional accent, and finish the interview. Check native pronunciation during the level check and after handoff.
+2. Ask for an English explanation, then return to the target language. Check the accent hasn't shifted to English.
+3. Change language/accent by voice, end the walk, and start another without restarting the app. Check the selection survives.
+4. Interrupt Parlo mid-sentence, including around a phrase-card/vocabulary save. Old speech should stop promptly; the next response and speaking indicator should recover immediately.
+5. Pause to think mid-sentence and mute/unmute mid-utterance. Check for premature replies or stalls. Compare end-of-speech → first audible response and interruption → silence across several exchanges; don't tune the silence window below natural learner pauses just to improve the latency number.
+6. Refresh models in Automatic mode and check the selected generation; verify an explicit override still works.
 
 ## Project layout
 
@@ -126,7 +139,10 @@ app/src/main/java/com/parlo/app/
   (API version is centralised in `GeminiApi.API_VERSION`)
 - Input: 16 kHz mono 16-bit PCM, ~30 ms chunks, base64 in `realtimeInput.audio`
 - Output: 24 kHz mono 16-bit PCM played via `AudioTrack` with a jitter buffer
-- Setup enables `AUDIO` response modality, input/output transcription, session resumption, sliding-window context compression, and the `save_vocab` / `note_vocab` / `switch_language` tools.
+- Setup enables `AUDIO` response modality, input/output transcription, session resumption, sliding-window context compression, and tutor tools.
+- Automatic speech detection uses a 60 ms pre-speech buffer and 600 ms silence window, with barge-in enabled. The mic remains open while Parlo speaks. Muting or losing audio focus sends `audioStreamEnd` so pending speech doesn't stall.
+- Tools execute in order outside the audio-event collector. Cancellation and reconnects discard pending tool responses. On known async-capable families (2.5 native audio and 3.8 Live), `note_vocab`, `show_phrase`, and `update_walk` are non-blocking with silent responses; profile/language changes and explicit actions remain blocking. Other models retain the sequential protocol.
+- Automatic discovery ranks model generations before legacy naming bonuses, including cached results. The resolved automatic model isn't persisted as an override. Existing saved overrides are preserved: use **Settings → Advanced → Back to automatic** to resume automatic selection.
 - Post-session vocab mining is the only non-Live call: one `POST /v1beta/models/{model}:generateContent` with `responseMimeType: application/json` (tries `gemini-2.5-flash`, then `gemini-2.0-flash`, then `gemini-flash-latest`).
 
 ## Releases

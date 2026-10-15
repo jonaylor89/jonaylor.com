@@ -93,7 +93,7 @@ fun WalkScreen(
         }
         StateOrb(audio = live.audio, connecting = connecting, ending = ending)
         Spacer(Modifier.height(12.dp))
-        Text(stateLabel(live.audio, connecting, ending), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stateLabel(live.audio, connecting, ending, live.muted), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
         Spacer(Modifier.height(16.dp))
         live.profile?.let { ProfileTiles(it) }
         Column(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -132,10 +132,11 @@ fun WalkScreen(
     }
 }
 
-private fun stateLabel(audio: AudioState, connecting: Boolean, ending: Boolean) = when {
+internal fun stateLabel(audio: AudioState, connecting: Boolean, ending: Boolean, muted: Boolean = false) = when {
     ending -> "Writing your recap…"
     connecting -> "Connecting…"
-    audio == AudioState.SPEAKING -> "Parlo is speaking"
+    audio == AudioState.SPEAKING -> if (muted) "Parlo is speaking · mic muted" else "Parlo is speaking · interrupt anytime"
     audio == AudioState.MUTED -> "Muted"
-    else -> "Your turn"
+    audio == AudioState.LISTENING -> "Listening…"
+    else -> "Listening · take your time"
 }

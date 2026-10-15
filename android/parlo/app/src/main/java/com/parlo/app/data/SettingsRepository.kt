@@ -56,8 +56,12 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun currentConfig(): SessionConfig = config.first()
 
-    suspend fun saveConfig(config: SessionConfig) {
-        context.dataStore.edit { p ->
+    suspend fun saveConfig(config: SessionConfig) = updateConfig { config }
+
+    /** Transform the latest persisted value, so quick edits cannot overwrite voice-driven changes. */
+    suspend fun updateConfig(transform: (SessionConfig) -> SessionConfig) {
+        val updated = context.dataStore.edit { p ->
+            val config = transform(p.toConfig())
             p[LANGUAGE] = config.language
             p[DIALECT] = config.dialect
             p[LEVEL] = config.level.name
@@ -65,8 +69,10 @@ class SettingsRepository(private val context: Context) {
             p[CORRECTION] = config.correctionStyle.name
             p[VOICE] = config.voice
             p[MODEL] = config.model
+            p[TOPIC] = config.topic
+            p[TOPIC_TITLE] = config.topicTitle
         }
-        rememberCombo(config.languageCombo)
+        rememberCombo(updated.toConfig().languageCombo)
     }
 
     val recentCombos: Flow<List<LanguageCombo>> = context.dataStore.data.map { p ->
@@ -105,6 +111,8 @@ class SettingsRepository(private val context: Context) {
         correctionStyle = CorrectionStyle.parse(this[CORRECTION]),
         voice = this[VOICE] ?: "Puck",
         model = this[MODEL] ?: "",
+        topic = this[TOPIC] ?: "",
+        topicTitle = this[TOPIC_TITLE] ?: "",
     )
 
     private companion object {
@@ -117,6 +125,8 @@ class SettingsRepository(private val context: Context) {
         val CORRECTION = stringPreferencesKey("correction")
         val VOICE = stringPreferencesKey("voice")
         val MODEL = stringPreferencesKey("model")
+        val TOPIC = stringPreferencesKey("topic")
+        val TOPIC_TITLE = stringPreferencesKey("topic_title")
         val RECENT_COMBOS = stringPreferencesKey("recent_combos")
         val CACHED_MODELS = stringPreferencesKey("cached_models")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")

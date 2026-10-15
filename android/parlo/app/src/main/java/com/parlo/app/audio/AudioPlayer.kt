@@ -48,14 +48,15 @@ class AudioPlayer(
     private val generation = AtomicInteger(0)
     private val paused = AtomicBoolean(false)
     private val queuedBytes = AtomicInteger(0)
+    private val speaking = AtomicBoolean(false)
 
     /** Chunks discarded because they belonged to an interrupted turn. Diagnostic only. */
     val droppedChunks = AtomicInteger(0)
     /** Times the sink died mid-session and was rebuilt. Diagnostic only. */
     val sinkRebuilds = AtomicInteger(0)
 
-    @Volatile private var lastWriteMs = 0L
-    val isSpeaking: Boolean get() = queuedBytes.get() > 0 || clock() - lastWriteMs < 250
+    @Volatile private var lastWriteMs: Long? = null
+    val isSpeaking: Boolean get() = speaking.get() || queuedBytes.get() > 0 || lastWriteMs?.let { clock() - it < 250 } == true
 
     fun start() {
         if (job?.isActive == true) return
@@ -63,32 +64,37 @@ class AudioPlayer(
         sink = s
         s.play()
         job = scope.launch(dispatcher) {
-            var speaking = false
             while (isActive) {
                 val chunk = withTimeoutOrNull(200) { queue.receive() }
                 if (chunk == null) {
-                    if (speaking && queuedBytes.get() == 0) { speaking = false; onSpeakingChanged(false) }
+                    if (queuedBytes.get() == 0) setSpeaking(false)
                     continue
                 }
                 queuedBytes.addAndGet(-chunk.pcm.size)
                 if (chunk.gen != generation.get()) { droppedChunks.incrementAndGet(); continue }
                 if (paused.get()) continue
-                if (!speaking) { speaking = true; onSpeakingChanged(true) }
-                writeChunk(chunk.pcm)
-                lastWriteMs = clock()
+                setSpeaking(true)
+                writeChunk(chunk)
+                if (chunk.gen == generation.get()) lastWriteMs = clock()
             }
         }
     }
 
-    private fun writeChunk(pcm: ByteArray) {
+    private fun setSpeaking(value: Boolean) {
+        if (speaking.getAndSet(value) != value) onSpeakingChanged(value)
+    }
+
+    private fun writeChunk(chunk: Chunk) {
+        val pcm = chunk.pcm
         var off = 0
         var retriedWithNewSink = false
-        while (off < pcm.size) {
+        while (off < pcm.size && chunk.gen == generation.get() && !paused.get()) {
             val s = sink ?: return
             val w = try { s.write(pcm, off, pcm.size - off) } catch (e: Exception) { Log.w(TAG, "write threw", e); -1 }
-            if (w >= 0) { off += w; continue }
+            if (w == 0) return // A paused/stopped sink must not spin the playback thread.
+            if (w > 0) { off += w; continue }
             Log.w(TAG, "write error $w")
-            if (retriedWithNewSink || !rebuildSink()) return
+            if (chunk.gen != generation.get() || retriedWithNewSink || !rebuildSink()) return
             retriedWithNewSink = true
         }
     }
@@ -116,7 +122,8 @@ class AudioPlayer(
         sink?.let {
             try { it.pause(); it.flush(); if (!paused.get()) it.play() } catch (e: Exception) { Log.w(TAG, "flush failed", e) }
         }
-        onSpeakingChanged(false)
+        lastWriteMs = null
+        setSpeaking(false)
     }
 
     fun setPaused(value: Boolean) {
@@ -125,16 +132,20 @@ class AudioPlayer(
     }
 
     fun stop() {
+        generation.incrementAndGet()
         job?.cancel(); job = null
         drainQueue()
         sink?.let { runCatching { it.pause(); it.flush(); it.release() } }
         sink = null
-        onSpeakingChanged(false)
+        lastWriteMs = null
+        setSpeaking(false)
     }
 
     private fun drainQueue() {
-        while (queue.tryReceive().isSuccess) { /* discard */ }
-        queuedBytes.set(0)
+        while (true) {
+            val chunk = queue.tryReceive().getOrNull() ?: break
+            queuedBytes.addAndGet(-chunk.pcm.size)
+        }
     }
 
     private companion object { const val TAG = "AudioPlayer" }
@@ -153,7 +164,7 @@ class AudioTrackSink private constructor(private val track: AudioTrack) : AudioP
         fun create(): AudioTrackSink? {
             val rate = GeminiApi.OUTPUT_SAMPLE_RATE
             val minBuf = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
-            val bufSize = maxOf(minBuf, rate * 2 / 5) // ≥200 ms
+            val bufSize = maxOf(minBuf, rate * 2 / 10) // 100 ms or the device's minimum buffer, whichever is larger.
             return try {
                 val track = AudioTrack.Builder()
                     .setAudioAttributes(

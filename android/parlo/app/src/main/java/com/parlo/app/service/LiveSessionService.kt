@@ -27,17 +27,13 @@ import com.parlo.app.audio.AudioPlayer
 import com.parlo.app.audio.AudioRouteManager
 import com.parlo.app.audio.Earcons
 import com.parlo.app.audio.MicrophoneStreamer
-import com.parlo.app.gemini.Content
-import com.parlo.app.gemini.GenerationConfig
 import com.parlo.app.gemini.GeminiLiveClient
 import com.parlo.app.gemini.LiveEvent
-import com.parlo.app.gemini.Part
-import com.parlo.app.gemini.PrebuiltVoiceConfig
+import com.parlo.app.gemini.LiveToolDispatcher
+import com.parlo.app.gemini.LiveSetup
 import com.parlo.app.gemini.PromptBuilder
 import com.parlo.app.gemini.Setup
-import com.parlo.app.gemini.SpeechConfig
 import com.parlo.app.gemini.ToolHandler
-import com.parlo.app.gemini.VoiceConfig
 import com.parlo.app.model.AudioState
 import com.parlo.app.model.ConnectionState
 import com.parlo.app.model.LanguageCatalog
@@ -80,6 +76,9 @@ class LiveSessionService : LifecycleService() {
     private lateinit var route: AudioRouteManager
     private lateinit var earcons: Earcons
     private lateinit var toolHandler: ToolHandler
+    private lateinit var toolDispatcher: LiveToolDispatcher
+    /** Resolved model for this connection, separate from the persisted optional override. */
+    private var liveModel = ""
     private var mediaSession: MediaSessionCompat? = null
     private var connectivity: ConnectivityManager? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
@@ -128,9 +127,16 @@ class LiveSessionService : LifecycleService() {
                 _state.update { it.copy(caughtWords = it.caughtWords + word) }
             },
             onProfileUpdated = ::onProfileUpdate,
+            currentConfig = { _state.value.config },
             onShowPhrase = { phrase -> _state.update { it.copy(phrase = phrase) } },
             onWalkUpdated = ::onVoiceWalkUpdate,
             onEndWalk = { lifecycleScope.launch { delay(END_WALK_DELAY_MS); endSession(skipRecap = false) } },
+        )
+        toolDispatcher = LiveToolDispatcher(
+            scope = lifecycleScope,
+            model = { liveModel },
+            handle = toolHandler::handle,
+            respond = { response -> client.sendToolResponses(listOf(response)) },
         )
         setupMediaSession()
         registerNetworkCallback()
@@ -150,7 +156,7 @@ class LiveSessionService : LifecycleService() {
                 if (!_state.value.isActive) goForeground()
                 lifecycleScope.launch {
                     if (container.models.defaultModel() == null) container.models.loadCached()
-                    startSession(container.settings.currentConfig())
+                    startSession(container.settings.currentConfig().copy(onboarding = intent.getBooleanExtra(EXTRA_ONBOARDING, false)))
                 }
             }
             ACTION_TOGGLE_MUTE -> toggleMute()
@@ -169,7 +175,9 @@ class LiveSessionService : LifecycleService() {
         if (apiKey.isBlank()) { fail(SessionError.MissingApiKey); return }
         val model = config.model.ifBlank { container.models.defaultModel().orEmpty() }
         if (model.isBlank()) { fail(SessionError.NoLiveModel); return }
-        val effective = config.copy(model = model)
+        liveModel = model
+        val effective = config
+        toolDispatcher.clear()
 
         hadReadyOnce = false
         pendingResumeContext = false
@@ -211,6 +219,7 @@ class LiveSessionService : LifecycleService() {
     fun setMuted(muted: Boolean) {
         if (!_state.value.isActive) return
         mic.setMuted(muted)
+        if (muted) client.endAudioStream()
         _state.update { it.copy(muted = muted) }
         earcons.play(if (muted) Earcons.Cue.MUTED else Earcons.Cue.UNMUTED)
         refreshAudioState()
@@ -220,13 +229,16 @@ class LiveSessionService : LifecycleService() {
     /** Apply new settings mid-session. Live-switchable fields go over the wire as a text turn; voice/model reconnect. */
     fun applyConfig(new: SessionConfig) {
         val old = _state.value.config
-        val merged = new.copy(model = new.model.ifBlank { old.model })
+        val merged = new
         if (merged == old) return
         _state.update { it.copy(config = merged) }
         lifecycleScope.launch { container.settings.saveConfig(merged) }
         if (!_state.value.isActive) return
-        val needsReconnect = merged.voice != old.voice || merged.model != old.model
+        val model = merged.model.ifBlank { container.models.defaultModel() ?: liveModel }
+        val needsReconnect = merged.voice != old.voice || model != liveModel
         if (needsReconnect) {
+            liveModel = model
+            toolDispatcher.clear()
             _state.update { it.copy(connection = ConnectionState.RECONNECTING, statusText = "Applying voice/model…") }
             earcons.play(Earcons.Cue.RECONNECTING)
             player.flush()
@@ -294,6 +306,7 @@ class LiveSessionService : LifecycleService() {
         val config = _state.value.config
         val id = dbSessionId
         val endedAt = System.currentTimeMillis()
+        toolDispatcher.clear()
         client.close()
         mic.stop()
         player.stop()
@@ -320,6 +333,7 @@ class LiveSessionService : LifecycleService() {
     private fun fail(error: SessionError) {
         Log.w(TAG, "session failed: ${error.message}")
         earcons.play(Earcons.Cue.ERROR)
+        toolDispatcher.clear()
         client.close()
         mic.stop()
         player.stop()
@@ -343,6 +357,7 @@ class LiveSessionService : LifecycleService() {
     }
 
     override fun onDestroy() {
+        toolDispatcher.clear()
         if (_state.value.isActive) {
             client.close(); mic.stop(); player.stop(); route.end()
         }
@@ -399,12 +414,10 @@ class LiveSessionService : LifecycleService() {
                 if (awaitingRecapTurnComplete) awaitingRecapTurnComplete = false
             }
             LiveEvent.GenerationComplete -> Unit
-            is LiveEvent.ToolCalls -> {
-                val responses = e.calls.map { call -> toolHandler.handle(call) }
-                client.sendToolResponses(responses)
-            }
-            is LiveEvent.ToolCallsCancelled -> Unit
+            is LiveEvent.ToolCalls -> toolDispatcher.dispatch(e.calls)
+            is LiveEvent.ToolCallsCancelled -> toolDispatcher.cancel(e.ids)
             is LiveEvent.Reconnecting -> {
+                toolDispatcher.clear()
                 if (_state.value.connection != ConnectionState.RECONNECTING && _state.value.connection != ConnectionState.ENDING) {
                     earcons.play(Earcons.Cue.RECONNECTING)
                 }
@@ -441,25 +454,9 @@ class LiveSessionService : LifecycleService() {
         updateNotification()
     }
 
-    /** Onboarding answers fill the profile tiles and the walk config; once language and level are known the walk is a normal one. */
+    /** Profile/tool responses hand off to normal tutoring once language, accent and level are confirmed. */
     private suspend fun onProfileUpdate(u: ToolHandler.ProfileUpdate) {
-        val old = _state.value.config
-        val language = u.language.ifBlank { old.language }
-        val dialect = when {
-            u.dialect.isNotBlank() -> u.dialect
-            u.language.isNotBlank() && !u.language.equals(old.language, true) -> LanguageCatalog.defaultDialectFor(language)
-            else -> old.dialect
-        }
-        val profile = (_state.value.profile ?: LearnerProfile()).let { p ->
-            p.copy(
-                language = u.language.ifBlank { p.language },
-                dialect = if (u.dialect.isNotBlank() || u.language.isNotBlank()) dialect else p.dialect,
-                goal = u.goal.ifBlank { p.goal },
-                level = u.level?.label ?: p.level,
-            )
-        }
-        val done = profile.language.isNotBlank() && profile.level.isNotBlank()
-        val new = old.copy(language = language, dialect = dialect, level = u.level ?: old.level, onboarding = old.onboarding && !done)
+        val (new, profile) = applyProfileUpdate(_state.value.config, _state.value.profile ?: LearnerProfile(), u)
         _state.update { it.copy(config = new, profile = profile) }
         container.settings.saveConfig(new)
         updateNotification()
@@ -531,6 +528,7 @@ class LiveSessionService : LifecycleService() {
             AudioRouteManager.FocusState.LOST_TRANSIENT, AudioRouteManager.FocusState.LOST -> {
                 focusPaused = true
                 mic.setPaused(true); player.setPaused(true)
+                client.endAudioStream()
                 _state.update { it.copy(statusText = "Paused (audio focus lost)") }
                 if (focus == AudioRouteManager.FocusState.LOST) {
                     lifecycleScope.launch {
@@ -644,15 +642,7 @@ class LiveSessionService : LifecycleService() {
 
     // ------------------------------------------------------------------ setup
 
-    private fun buildSetup(c: SessionConfig): Setup = Setup(
-        model = if (c.model.startsWith("models/")) c.model else "models/${c.model}",
-        generationConfig = GenerationConfig(
-            responseModalities = listOf("AUDIO"),
-            speechConfig = SpeechConfig(VoiceConfig(PrebuiltVoiceConfig(c.voice))),
-        ),
-        systemInstruction = Content(parts = listOf(Part(text = PromptBuilder.systemInstruction(c, walkMemory)))),
-        tools = PromptBuilder.toolDeclarations(),
-    )
+    private fun buildSetup(c: SessionConfig): Setup = LiveSetup.build(c, liveModel, walkMemory)
 
     companion object {
         private const val TAG = "LiveSessionService"
@@ -665,9 +655,38 @@ class LiveSessionService : LifecycleService() {
         private const val END_WALK_DELAY_MS = 300L
         private const val MEMORY_WORDS = 6
 
-        fun startIntent(context: Context) = Intent(context, LiveSessionService::class.java).setAction(ACTION_START)
+        private const val EXTRA_ONBOARDING = "onboarding"
+
+        fun startIntent(context: Context, onboarding: Boolean = false) = Intent(context, LiveSessionService::class.java)
+            .setAction(ACTION_START).putExtra(EXTRA_ONBOARDING, onboarding)
         fun bindIntent(context: Context) = Intent(context, LiveSessionService::class.java)
     }
+}
+
+/** A default dialect is useful for config, but isn't a confirmed onboarding answer. */
+internal fun applyProfileUpdate(
+    old: SessionConfig,
+    previous: LearnerProfile,
+    update: ToolHandler.ProfileUpdate,
+): Pair<SessionConfig, LearnerProfile> {
+    val language = update.language.ifBlank { old.language }
+    val languageChanged = update.language.isNotBlank() && !language.equals(previous.language, true)
+    val dialect = update.dialect.ifBlank {
+        if (!language.equals(old.language, true)) LanguageCatalog.defaultDialectFor(language) else old.dialect
+    }
+    val profile = previous.copy(
+        language = update.language.ifBlank { previous.language },
+        dialect = update.dialect.ifBlank { if (languageChanged) "" else previous.dialect },
+        goal = update.goal.ifBlank { previous.goal },
+        level = update.level?.label ?: if (languageChanged) "" else previous.level,
+    )
+    val done = profile.language.isNotBlank() && profile.dialect.isNotBlank() && profile.level.isNotBlank()
+    return old.copy(
+        language = language,
+        dialect = dialect,
+        level = update.level ?: old.level,
+        onboarding = old.onboarding && !done,
+    ) to profile
 }
 
 /** Gemini sometimes re-emits a whole output transcription around a tool call; keep one copy. */

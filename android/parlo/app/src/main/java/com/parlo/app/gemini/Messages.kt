@@ -44,6 +44,7 @@ data class FunctionDeclaration(
     val name: String,
     val description: String,
     val parameters: JsonObject? = null,
+    val behavior: String? = null,
 )
 
 @Serializable
@@ -63,6 +64,21 @@ data class ContextWindowCompressionConfig(
 )
 
 @Serializable
+data class AutomaticActivityDetection(
+    val disabled: Boolean,
+    val startOfSpeechSensitivity: String,
+    val endOfSpeechSensitivity: String,
+    val prefixPaddingMs: Int,
+    val silenceDurationMs: Int,
+)
+
+@Serializable
+data class RealtimeInputConfig(
+    val automaticActivityDetection: AutomaticActivityDetection,
+    val activityHandling: String,
+)
+
+@Serializable
 class AudioTranscriptionConfig
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -76,6 +92,16 @@ data class Setup(
     @EncodeDefault val contextWindowCompression: ContextWindowCompressionConfig = ContextWindowCompressionConfig(),
     @EncodeDefault val inputAudioTranscription: AudioTranscriptionConfig = AudioTranscriptionConfig(),
     @EncodeDefault val outputAudioTranscription: AudioTranscriptionConfig = AudioTranscriptionConfig(),
+    @EncodeDefault val realtimeInputConfig: RealtimeInputConfig = RealtimeInputConfig(
+        automaticActivityDetection = AutomaticActivityDetection(
+            disabled = false,
+            startOfSpeechSensitivity = "START_SENSITIVITY_HIGH",
+            endOfSpeechSensitivity = "END_SENSITIVITY_LOW",
+            prefixPaddingMs = 60,
+            silenceDurationMs = 600,
+        ),
+        activityHandling = "START_OF_ACTIVITY_INTERRUPTS",
+    ),
 )
 
 @Serializable
@@ -90,7 +116,12 @@ data class RealtimeInput(
 data class ClientContent(val turns: List<Content>, @EncodeDefault val turnComplete: Boolean = true)
 
 @Serializable
-data class FunctionResponse(val id: String? = null, val name: String, val response: JsonObject)
+data class FunctionResponse(
+    val id: String? = null,
+    val name: String,
+    val response: JsonObject,
+    val scheduling: String? = null,
+)
 
 @Serializable
 data class ToolResponse(val functionResponses: List<FunctionResponse>)

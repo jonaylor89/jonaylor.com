@@ -24,7 +24,7 @@ class ModelRepository(
     val error: StateFlow<String?> = _error
 
     suspend fun loadCached() {
-        val cached = settings.cachedModels.first()
+        val cached = LiveModelDiscovery.rank(settings.cachedModels.first().filter(LiveModelDiscovery::isConversational))
         if (cached.isNotEmpty() && _models.value.isEmpty()) _models.value = cached
     }
 
@@ -47,6 +47,6 @@ class ModelRepository(
         }
     }
 
-    /** Model to use when the user hasn't overridden: newest native-audio Live model, else first discovered. */
+    /** Model to use when the user hasn't overridden: highest-ranked conversational Live model. */
     fun defaultModel(): String? = _models.value.firstOrNull()
 }

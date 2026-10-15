@@ -17,14 +17,7 @@ import org.junit.Test
 class MessagesTest {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = false; explicitNulls = false }
 
-    private fun setupFor(config: SessionConfig, model: String = "models/gemini-test-live") = Setup(
-        model = model,
-        generationConfig = GenerationConfig(
-            speechConfig = SpeechConfig(VoiceConfig(PrebuiltVoiceConfig(config.voice))),
-        ),
-        systemInstruction = Content(parts = listOf(Part(text = PromptBuilder.systemInstruction(config)))),
-        tools = PromptBuilder.toolDeclarations(),
-    )
+    private fun setupFor(config: SessionConfig, model: String = "models/gemini-test-live") = LiveSetup.build(config, model)
 
     @Test
     fun `setup message has the shape the Live API expects`() {
@@ -45,12 +38,30 @@ class MessagesTest {
         assertNotNull(setup["outputAudioTranscription"])
         assertNotNull(setup["sessionResumption"])
         assertNotNull(setup["contextWindowCompression"]!!.jsonObject["slidingWindow"])
+        val input = setup["realtimeInputConfig"]!!.jsonObject
+        assertEquals("START_OF_ACTIVITY_INTERRUPTS", input["activityHandling"]!!.jsonPrimitive.content)
+        val vad = input["automaticActivityDetection"]!!.jsonObject
+        assertEquals("false", vad["disabled"]!!.jsonPrimitive.content)
+        assertEquals("600", vad["silenceDurationMs"]!!.jsonPrimitive.content)
+        assertEquals("60", vad["prefixPaddingMs"]!!.jsonPrimitive.content)
+        assertEquals("START_SENSITIVITY_HIGH", vad["startOfSpeechSensitivity"]!!.jsonPrimitive.content)
+        assertEquals("END_SENSITIVITY_LOW", vad["endOfSpeechSensitivity"]!!.jsonPrimitive.content)
 
         val fns = setup["tools"]!!.jsonArray.single().jsonObject["functionDeclarations"]!!.jsonArray
         assertEquals(listOf("save_vocab", "note_vocab", "switch_language", "update_learner_profile", "show_phrase", "update_walk", "end_walk"), fns.map { it.jsonObject["name"]!!.jsonPrimitive.content })
         // no nulls / no "temperature" leaking in
         assertFalse(text.contains("null"))
         assertFalse(text.contains("temperature"))
+    }
+
+    @Test
+    fun `resolved automatic model does not mutate the override and uses model capabilities`() {
+        val config = SessionConfig()
+        val setup = setupFor(config, "gemini-3.8-live")
+        assertEquals("", config.model)
+        assertEquals("models/gemini-3.8-live", setup.model)
+        assertEquals("NON_BLOCKING", setup.tools.single().functionDeclarations.first { it.name == "note_vocab" }.behavior)
+        assertNull(setupFor(config, "gemini-3.1-flash-live-preview").tools.single().functionDeclarations.first { it.name == "note_vocab" }.behavior)
     }
 
     @Test
@@ -122,6 +133,19 @@ class MessagesTest {
             """{"error":{"code":400,"message":"API key not valid","status":"INVALID_ARGUMENT"}}""",
         )
         assertEquals("API key not valid", msg.error!!.jsonObject["message"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `nonblocking scheduling is a wire field not part of the tool result`() {
+        val response = FunctionResponse(
+            id = "c1",
+            name = "note_vocab",
+            response = buildJsonObject { put("result", "noted") },
+            scheduling = "SILENT",
+        )
+        val root = json.parseToJsonElement(json.encodeToString(FunctionResponse.serializer(), response)).jsonObject
+        assertEquals("SILENT", root["scheduling"]!!.jsonPrimitive.content)
+        assertFalse(root["response"]!!.jsonObject.containsKey("scheduling"))
     }
 
     @Test

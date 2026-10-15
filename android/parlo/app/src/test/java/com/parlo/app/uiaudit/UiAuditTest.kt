@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.parlo.app.service.LiveSessionService
+import org.junit.After
 import org.junit.Before
 import org.robolectric.Robolectric
 import org.robolectric.Shadows.shadowOf
@@ -30,6 +31,7 @@ import com.parlo.app.model.SessionConfig
 import com.parlo.app.model.Speaker
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
@@ -50,12 +52,22 @@ class UiAuditTest {
     private val app get() = ApplicationProvider.getApplicationContext<ParloApp>()
     private val container get() = ParloApp.container(app)
     private var scenario: ActivityScenario<MainActivity>? = null
+    private lateinit var liveService: LiveSessionService
 
     /** Binds the real LiveSessionService so the UI drives a real Gemini Live session. */
     @Before fun bindRealService() {
         val intent = LiveSessionService.bindIntent(app)
-        val svc = Robolectric.buildService(LiveSessionService::class.java, intent).create().get()
-        shadowOf(app).setComponentNameAndServiceForBindServiceForIntent(intent, ComponentName(app, LiveSessionService::class.java), svc.onBind(intent))
+        liveService = Robolectric.buildService(LiveSessionService::class.java, intent).create().get()
+        shadowOf(app).setComponentNameAndServiceForBindServiceForIntent(
+            intent,
+            ComponentName(app, LiveSessionService::class.java),
+            liveService.onBind(intent),
+        )
+    }
+
+    @After fun tearDownRealSession() {
+        scenario?.close()
+        if (::liveService.isInitialized) liveService.onDestroy()
     }
 
     private fun launch() { scenario = ActivityScenario.launch(MainActivity::class.java); rule.waitForIdle() }
@@ -150,15 +162,22 @@ class UiAuditTest {
         assumeTrue(key.isNotBlank())
         shadowOf(app).grantPermissions(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.BLUETOOTH_CONNECT)
         setKey(key)
+        runBlocking { container.models.refresh(key) }
+        check(container.models.models.value.isNotEmpty()) { container.models.error.value ?: "No Live model discovered" }
         launch()
-        seedReturning(); waitText("Start walk")
+        seedReturning()
+        waitText("Start walk")
         rule.onNodeWithTag("start_walk").performClick()
+        // Robolectric records startForegroundService but doesn't deliver it to the manually bound
+        // service above; enter the same public service path with the persisted config.
+        liveService.startSession(runBlocking { container.settings.currentConfig() })
         shot("20_walk_connecting")
         rule.waitUntil(30_000) { rule.onAllNodesWithTag("walk_screen").fetchSemanticsNodes().isNotEmpty() }
         shot("21_walk_connected")
         val t0 = System.currentTimeMillis()
         val greeted = runCatching { waitText("Show transcript", 25_000) }.isSuccess
         println("UIAUDIT tutor greeted within 25s of connect: $greeted (${System.currentTimeMillis() - t0}ms)")
+        assertTrue("Tutor did not produce a greeting within 25 seconds", greeted)
         shot("22_walk_after_25s")
         rule.onNodeWithContentDescription("Mute").performClick()
         shot("23_walk_muted")
@@ -167,6 +186,7 @@ class UiAuditTest {
         shot("24_walk_ending")
         val ended = runCatching { waitText("Start walk", 90_000) }.isSuccess
         println("UIAUDIT walk ended back to idle: $ended")
+        assertTrue("Walk did not return to idle", ended)
         shot("25_after_walk")
     }
 

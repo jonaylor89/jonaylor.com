@@ -34,6 +34,22 @@ class LiveModelDiscoveryTest {
     }
 
     @Test
+    fun `new generations outrank legacy native audio names and dated previews sort chronologically`() {
+        val ranked = LiveModelDiscovery.rank(listOf(
+            "gemini-2.5-flash-native-audio-preview-12-2025",
+            "gemini-2.5-flash-native-audio-preview-09-2025",
+            "gemini-3.1-flash-live-preview",
+            "gemini-3.8-live",
+        ))
+        assertEquals(listOf(
+            "gemini-3.8-live",
+            "gemini-3.1-flash-live-preview",
+            "gemini-2.5-flash-native-audio-preview-12-2025",
+            "gemini-2.5-flash-native-audio-preview-09-2025",
+        ), ranked)
+    }
+
+    @Test
     fun `ranking dedupes and is deterministic for ties`() {
         assertEquals(listOf("b", "a"), LiveModelDiscovery.rank(listOf("a", "b", "a")))
     }

@@ -104,6 +104,12 @@ class GeminiLiveClient(
         send(ClientMessage(realtimeInput = RealtimeInput(audio = Blob(GeminiApi.INPUT_MIME, b64))))
     }
 
+    /** Tell server-side VAD to finish pending speech when capture is muted or paused. */
+    fun endAudioStream() {
+        if (!ready.get()) return
+        send(ClientMessage(realtimeInput = RealtimeInput(audioStreamEnd = true)))
+    }
+
     fun sendText(text: String) {
         if (!ready.get()) return
         send(ClientMessage(clientContent = ClientContent(turns = listOf(Content(role = "user", parts = listOf(Part(text = text)))), turnComplete = true)))

@@ -11,6 +11,9 @@ import com.parlo.app.gemini.PromptBuilder
 import com.parlo.app.gemini.ToolHandler
 import com.parlo.app.gemini.VocabMiner
 import com.parlo.app.model.CorrectionStyle
+import com.parlo.app.model.AudioState
+import com.parlo.app.model.LearnerProfile
+import com.parlo.app.model.LanguageCatalog
 import com.parlo.app.model.Level
 import com.parlo.app.model.Scenario
 import com.parlo.app.model.SessionConfig
@@ -18,6 +21,8 @@ import com.parlo.app.model.TryPhrase
 import com.parlo.app.model.WalkMemory
 import com.parlo.app.ui.lastWalkOf
 import com.parlo.app.ui.walkLengthLabel
+import com.parlo.app.ui.main.stateLabel
+import com.parlo.app.service.applyProfileUpdate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
@@ -80,6 +85,65 @@ class WalkLoopTest {
         val empty = agentic.handle(FunctionCall(name = "update_learner_profile", args = buildJsonObject {}))
         assertTrue(empty.response.containsKey("error"))
         assertEquals(1, profiles.size)
+    }
+
+    @Test
+    fun `profile handoff waits for an explicit accent and returns native guidance without another user turn`() = runTest {
+        var config = SessionConfig(onboarding = true)
+        var profile = LearnerProfile()
+        val handler = ToolHandler(
+            vocab = repo,
+            currentLanguage = { config.language },
+            currentDialect = { config.dialect },
+            currentLevel = { config.level },
+            sessionId = { 1L },
+            onVocabSaved = {},
+            onLanguageSwitched = {},
+            currentConfig = { config },
+            onProfileUpdated = { update ->
+                val result = applyProfileUpdate(config, profile, update)
+                config = result.first
+                profile = result.second
+            },
+        )
+        val partial = handler.handle(FunctionCall(name = "update_learner_profile", args = buildJsonObject {
+            put("language", "Japanese"); put("level", "Advanced")
+        }))
+        assertTrue(config.onboarding)
+        assertEquals("", profile.dialect)
+        assertEquals("false", partial.response["onboarding_complete"]!!.jsonPrimitive.content)
+        val complete = handler.handle(FunctionCall(name = "update_learner_profile", args = buildJsonObject {
+            put("dialect", "Kansai Japanese")
+        }))
+        assertFalse(config.onboarding)
+        assertEquals("true", complete.response["onboarding_complete"]!!.jsonPrimitive.content)
+        val guidance = complete.response["learner_instruction"]!!.jsonPrimitive.content
+        assertTrue(guidance.contains("native speaker of Kansai Japanese"))
+        assertTrue(guidance.contains(Level.ADVANCED.guidance))
+        assertFalse(guidance.contains(Level.SUPER_BEGINNER.guidance))
+        assertFalse(PromptBuilder.systemInstruction(config).contains("First-walk setup"))
+    }
+
+    @Test
+    fun `changing onboarding language clears the previous accent and assessed level`() {
+        val (config, profile) = applyProfileUpdate(
+            SessionConfig(onboarding = true),
+            LearnerProfile(language = "Spanish", dialect = "Castilian Spanish (Madrid)", level = "Advanced"),
+            ToolHandler.ProfileUpdate(language = "Japanese"),
+        )
+        assertTrue(config.onboarding)
+        assertEquals("", profile.dialect)
+        assertEquals("", profile.level)
+        assertEquals(LanguageCatalog.defaultDialectFor("Japanese"), config.dialect)
+    }
+
+    @Test
+    fun `walk labels invite interruptions and do not enforce turns`() {
+        assertTrue(stateLabel(AudioState.SPEAKING, false, false).contains("interrupt anytime"))
+        assertEquals("Listening…", stateLabel(AudioState.LISTENING, false, false))
+        assertEquals("Listening · take your time", stateLabel(AudioState.IDLE, false, false))
+        assertEquals("Muted", stateLabel(AudioState.MUTED, false, false))
+        assertEquals("Connecting…", stateLabel(AudioState.IDLE, true, false))
     }
 
     @Test

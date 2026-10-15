@@ -134,6 +134,7 @@ class GeminiLiveClientIntegrationTest {
         val live = enqueueLive()
         val h = Harness()
         h.client.sendText("too early") // dropped: not connected
+        h.client.endAudioStream() // also gated on setupComplete
         h.client.start("k", setupProvider())
         live.next() // setup
         h.await<LiveEvent.Ready>()
@@ -143,6 +144,12 @@ class GeminiLiveClientIntegrationTest {
         val audio = json.parseToJsonElement(live.next()).jsonObject["realtimeInput"]!!.jsonObject["audio"]!!.jsonObject
         assertEquals(GeminiApi.INPUT_MIME, audio["mimeType"]!!.jsonPrimitive.content)
         assertEquals(Base64.getEncoder().encodeToString(byteArrayOf(1, 2, 3, 4)), audio["data"]!!.jsonPrimitive.content)
+
+        h.client.endAudioStream()
+        val streamEnd = json.parseToJsonElement(live.next()).jsonObject["realtimeInput"]!!.jsonObject
+        assertEquals("true", streamEnd["audioStreamEnd"]!!.jsonPrimitive.content)
+        h.client.sendAudio(pcm) // Sending audio reopens the stream after unmuting.
+        assertTrue(json.parseToJsonElement(live.next()).jsonObject["realtimeInput"]!!.jsonObject.containsKey("audio"))
 
         h.client.sendText("Hola")
         val cc = json.parseToJsonElement(live.next()).jsonObject["clientContent"]!!.jsonObject

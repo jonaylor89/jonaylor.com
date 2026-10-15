@@ -10,7 +10,9 @@ import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.parlo.app.ParloApp
+import com.parlo.app.data.db.VocabEntity
 import com.parlo.app.data.db.VocabSource
+import com.parlo.app.data.db.VocabStatus
 import com.parlo.app.ui.theme.ParloTheme
 import com.parlo.app.ui.vocab.VocabListScreen
 import kotlinx.coroutines.flow.first
@@ -32,8 +34,21 @@ class VocabScreenTest {
     @Before
     fun seed() = runBlocking<Unit> {
         repo.save("perro", "dog", "El perro corre.", language, sessionId = null)
-        repo.suggest("la cuenta", "the bill", "¿Me trae la cuenta?", language, null, VocabSource.TUTOR, "You asked how to say it")
-        repo.suggest("zumo", "juice", "", language, null, VocabSource.MINED, "Found in your transcript")
+        val now = System.currentTimeMillis()
+        repo.restore(
+            listOf(
+                VocabEntity(
+                    word = "la cuenta", translation = "the bill", exampleSentence = "¿Me trae la cuenta?",
+                    language = language, savedAt = now, source = VocabSource.TUTOR.name,
+                    status = VocabStatus.SUGGESTED.name, reason = "You asked how to say it",
+                ),
+                VocabEntity(
+                    word = "zumo", translation = "juice", exampleSentence = "", language = language,
+                    savedAt = now + 1, source = VocabSource.MINED.name,
+                    status = VocabStatus.SUGGESTED.name, reason = "Found in your transcript",
+                ),
+            ),
+        )
     }
 
     @After

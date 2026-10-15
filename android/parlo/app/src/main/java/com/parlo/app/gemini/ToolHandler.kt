@@ -8,6 +8,7 @@ import com.parlo.app.model.LanguageCatalog
 import com.parlo.app.model.LanguageCombo
 import com.parlo.app.model.Level
 import com.parlo.app.model.Scenario
+import com.parlo.app.model.SessionConfig
 import com.parlo.app.model.TryPhrase
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -28,6 +29,7 @@ class ToolHandler(
     private val onEndWalk: suspend () -> Unit = {},
     private val onProfileUpdated: suspend (ProfileUpdate) -> Unit = {},
     private val onShowPhrase: suspend (TryPhrase) -> Unit = {},
+    private val currentConfig: () -> SessionConfig? = { null },
 ) {
     /** Onboarding answers; null / blank means not given in this call. */
     data class ProfileUpdate(val language: String = "", val dialect: String = "", val goal: String = "", val level: Level? = null)
@@ -99,6 +101,7 @@ class ToolHandler(
         return buildJsonObject {
             put("result", "ok")
             put("language", language); put("dialect", dialect); put("level", level.label)
+            put("learner_instruction", PromptBuilder.learnerInstruction(SessionConfig(language = language, dialect = dialect, level = level)))
         }
     }
 
@@ -138,6 +141,13 @@ class ToolHandler(
             if (update.language.isNotBlank()) put("language", update.language)
             if (update.dialect.isNotBlank()) put("dialect", update.dialect)
             update.level?.let { put("level", it.label) }
+            currentConfig()?.let { config ->
+                put("language", config.language)
+                put("dialect", config.dialect)
+                put("level", config.level.label)
+                put("onboarding_complete", !config.onboarding)
+                put("learner_instruction", PromptBuilder.learnerInstruction(config))
+            }
         }
     }
 

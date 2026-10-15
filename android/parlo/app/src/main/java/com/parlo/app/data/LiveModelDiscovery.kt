@@ -18,7 +18,7 @@ private data class ModelInfo(
 
 /**
  * Pure model-discovery logic: paginates the models endpoint, keeps only models advertising
- * `bidiGenerateContent`, and ranks them so the newest native-audio Live model comes first.
+ * `bidiGenerateContent`, and ranks newer conversational Live generations before legacy naming bonuses.
  */
 class LiveModelDiscovery(
     private val client: OkHttpClient,
@@ -66,12 +66,15 @@ class LiveModelDiscovery(
             if ("native-audio" in n) s += 100
             if ("live" in n) s += 50
             if ("audio" in n) s += 20
-            if ("preview" in n) s += 5
+            if ("preview" in n) s -= 5
             if ("exp" in n) s -= 10
             Regex("""(\d+)\.(\d+)""").find(n)?.let { m ->
-                s += m.groupValues[1].toInt() * 10 + m.groupValues[2].toInt()
+                // Generation dominates legacy naming bonuses (new Live models omit 'native-audio').
+                s += m.groupValues[1].toInt() * 10_000 + m.groupValues[2].toInt() * 1_000
             }
-            Regex("""(\d{2})-(\d{2})""").find(n)?.let { m -> s += m.groupValues[1].toInt() + m.groupValues[2].toInt() / 4 }
+            Regex("""(\d{2})-(\d{4})$""").find(n)?.let { m ->
+                s += (m.groupValues[2].toInt() - 2000).coerceIn(0, 50) * 12 + m.groupValues[1].toInt()
+            }
             return s
         }
     }

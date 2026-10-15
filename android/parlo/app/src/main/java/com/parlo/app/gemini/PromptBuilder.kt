@@ -13,7 +13,6 @@ import kotlinx.serialization.json.putJsonObject
 object PromptBuilder {
 
     fun systemInstruction(c: SessionConfig, memory: WalkMemory? = null): String {
-        if (c.onboarding) return onboardingInstruction(c)
         val dialect = c.dialect.ifBlank { "standard ${c.language}" }
         val level = c.level.label
         val correction = c.correctionStyle.label
@@ -22,11 +21,13 @@ You are a friendly, patient conversation partner helping the user practice ${c.l
 
 Conversation style:
 - Keep each reply short: usually one to three sentences. This is a conversation, not a lecture.
-- End most turns with a simple question or prompt so the user always knows it's their turn.
+- Follow what the learner says naturally: react, share a thought, or ask a relevant question. Don't turn every reply into a quiz or announce whose turn it is.
+- The learner can interrupt at any time. Stop, listen, and respond to their latest thought rather than finishing a script.
+- Leave room for thinking and breathing; don't mistake every pause for a request for help.
 - Speak at a pace suited to $level.
-${Level.entries.joinToString("\n") { "  - " + it.guidance }}
+${c.level.guidance}
 ${levelReminder(c.level)}
-- Use vocabulary, expressions, and pronunciation typical of $dialect.
+${accentInstruction(c)}
 - ${scenarioLine(c)} Stay in it unless the user changes topic.
 - If the user is silent for a long time, don't fill the silence repeatedly. They may be crossing a street or catching their breath. Wait, then offer at most one gentle prompt.
 
@@ -45,6 +46,7 @@ Commands the user may say at any time, in English or ${c.language}:
 - 'let's wrap up' / 'I'm done' / 'stop the walk': call end_walk, then give the recap you're asked for.
 - 'save that word': call save_vocab with the most relevant recent word.
 - 'switch to [language/dialect/level]': switch immediately, call switch_language, keep the matching level for each language, and briefly confirm the switch in the new language.
+- A tool's latest learner_instruction replaces the initial language, accent and level guidance throughout this conversation.
 
 Vocabulary capture (silent, automatic):
 - Call note_vocab, without saying anything about it, whenever the user shows a gap: they ask what a word means, ask how to say something, ask you to repeat a specific word, get stuck or answer in English, or you correct a word they misused. Also note a genuinely useful new word you introduce, at most one per turn.
@@ -56,9 +58,18 @@ Vocabulary capture (silent, automatic):
 Phrase card (optional):
 - When you want the user to say a specific phrase, call show_phrase with it and its English translation so they can glance at it. At most once per turn, and only for a phrase you're asking them to say.
 
-${memoryBlock(c, memory)}${opening(c)}
+${memoryBlock(c, memory)}${if (c.onboarding) onboardingInstruction(c) else opening(c)}
         """.trimIndent()
     }
+
+    internal fun accentInstruction(c: SessionConfig): String =
+        "Speak ${c.language} as a native speaker of ${c.dialect.ifBlank { "standard ${c.language}" }}: use that region's pronunciation, rhythm, intonation, and vocabulary, not an English speaker imitating it. " +
+            "Your prebuilt voice sets the timbre, not the accent. Slowing down or explaining something in English must not anglicise the next target-language phrase. " +
+            "When the learner changes language or region, apply the new native accent immediately."
+
+    /** Authoritative guidance returned by profile/language tools, without injecting an interrupting user turn. */
+    fun learnerInstruction(c: SessionConfig): String =
+        "${accentInstruction(c)} ${c.level.guidance} ${levelReminder(c.level)}"
 
     private fun scenarioLine(c: SessionConfig) =
         if (c.topic.isNotBlank()) "Current topic: ${c.topic}." else "Current scenario: ${c.scenario.label} — ${c.scenario.prompt}."
@@ -95,7 +106,7 @@ ${memoryBlock(c, memory)}${opening(c)}
         val changes = mutableListOf<String>()
         if (old.language != new.language || old.dialect != new.dialect || old.level != new.level) {
             changes += "speak ${new.dialect.ifBlank { new.language }} (${new.language}) at ${new.level.label} level"
-            if (old.level != new.level) changes += new.level.guidance
+            changes += learnerInstruction(new)
         }
         if (new.topic.isNotBlank() && old.topic != new.topic) {
             changes += "switch the topic to: ${new.topic}"
@@ -110,18 +121,19 @@ ${memoryBlock(c, memory)}${opening(c)}
 
     /** First walk: the tutor sets the app up by voice instead of a form. */
     internal fun onboardingInstruction(c: SessionConfig) = """
-You are Parlo, a friendly voice language tutor. This is the user's first walk with you. They are walking, through earbuds or the phone's speaker, and can rarely look at the screen.
-
-First, set up their profile by talking, in English, one short question at a time:
+First-walk setup (temporarily takes priority over the opening, current language, level and scenario above):
+This is the learner's first walk. Each returned learner_instruction supersedes the starting preferences everywhere above, including vocabulary capture.
+The starting preferences are ${c.language}, ${c.dialect.ifBlank { "standard ${c.language}" }}, ${c.level.label}; confirm rather than assume them.
+Set up their profile conversationally, using brief English questions where needed, one question at a time:
 1. Which language they want to practise.
 2. Which accent or region (offer two or three common ones for that language, e.g. "Mexico, Spain, or somewhere else?").
 3. Why they're learning: travel, work, family, or something else.
-After each answer, call update_learner_profile with what you learned (only the fields you just learned). If they say "you pick" or don't mind, choose a sensible default and call the tool with it.
+After each answer, call update_learner_profile with what you learned (only the fields you just learned). If they say "you pick" or don't mind, choose a sensible default and call the tool with it. As soon as a language and accent are chosen, pronounce every phrase in that language as a native of that region, including during the level check; English setup is not an English accent for the target language.
 
 Then work out their level by talking: ask one or two easy questions in the language and listen. Don't ask them to rate themselves. Call update_learner_profile with level (Super Beginner, Beginner, Intermediate, or Advanced). If they know none of the language, use Super Beginner.
 
-Once language, accent and level are set, tell them in one sentence that you're starting, switch into the language at their level, and open a short role-play that fits their goal. From then on:
-- Keep replies to one to three sentences and end most turns with a simple question.
+When update_learner_profile reports onboarding_complete, setup is over: follow the returned learner_instruction instead of the initial language/level above. Don't restart the interview. Tell them in one sentence that you're starting and open a short role-play that fits their goal. From then on:
+- Follow the normal conversation and native-accent instructions above. Keep replies short without making every reply a question.
 - Gently recast mistakes in your next reply.
 - Call note_vocab silently for words they struggle with or ask about, with the correct form, a short translation, the sentence, and the reason.
 - When you want them to say a specific phrase, call show_phrase with it and its English translation, at most once per turn.
@@ -132,7 +144,7 @@ Begin now: say hi, introduce yourself as Parlo in one sentence, and ask which la
 
     /** Toolbar "English" button. */
     fun englishHelpMessage() =
-        "[System] The user tapped 'English': briefly explain in English what you just said and what they could answer, then continue in the target language."
+        "[System] The user tapped 'English': briefly explain in English what you just said and what they could answer, then continue in the target language with its native regional pronunciation, not an English accent."
 
     /** Native-audio Live models wait for a client turn, so the tutor needs an explicit cue to speak first. */
     fun kickoffMessage() = "[System] The learner has started the walk and is listening. Begin now."
@@ -152,7 +164,7 @@ Begin now: say hi, introduce yourself as Parlo in one sentence, and ask which la
         return "[System] The connection dropped and was re-established without memory. Continue the same ${c.language} conversation naturally from this recent transcript. Do not mention the reconnection:\n$lines"
     }
 
-    fun toolDeclarations(): List<Tool> = listOf(
+    fun toolDeclarations(model: String = ""): List<Tool> = listOf(
         Tool(
             functionDeclarations = listOf(
                 FunctionDeclaration(
@@ -253,7 +265,11 @@ Begin now: say hi, introduce yourself as Parlo in one sentence, and ask which la
                         putJsonObject("properties") {}
                     },
                 ),
-            ),
+            ).map { declaration ->
+                if (LiveModelCapabilities.supportsAsyncTools(model)) {
+                    declaration.copy(behavior = if (declaration.name in LiveModelCapabilities.backgroundTools) "NON_BLOCKING" else "BLOCKING")
+                } else declaration
+            },
         ),
     )
 }

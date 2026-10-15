@@ -128,14 +128,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var serviceStateJob: Job? = null
     private val liveState = MutableStateFlow(LiveSessionState())
     private val bound = MutableStateFlow(false)
-    private val localConfig = MutableStateFlow<SessionConfig?>(null)
 
     val uiState: StateFlow<MainUiState> = combine(
         liveState, settings.config, settings.recentCombos, settings.apiKey, bound,
     ) { live, persisted, combos, key, isBound ->
         MainUiState(
             live = live,
-            config = if (live.isActive) live.config else (localConfig.value ?: persisted),
+            config = if (live.isActive) live.config else persisted,
             recentCombos = combos,
             hasApiKey = key.isNotBlank(),
             serviceBound = isBound,
@@ -174,7 +173,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             models.loadCached()
             settings.apiKey.collect { key -> if (key.isNotBlank()) models.refresh(key) }
         }
-        viewModelScope.launch { settings.config.collect { if (localConfig.value == null) localConfig.value = it } }
     }
 
     fun bind(context: Context) {
@@ -188,11 +186,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun startSession(context: Context) {
-        val base = localConfig.value ?: uiState.value.config
-        val cfg = base.copy(onboarding = !uiState.value.hasWalked)
-        viewModelScope.launch { settings.saveConfig(cfg) }
-        ContextCompat.startForegroundService(context, LiveSessionService.startIntent(context))
-        service?.startSession(cfg)
+        // One start path, including when the service hasn't bound yet. Read settings in the service
+        // after queued edits, and carry the transient onboarding flag explicitly in the intent.
+        ContextCompat.startForegroundService(context, LiveSessionService.startIntent(context, onboarding = !uiState.value.hasWalked))
     }
 
     fun endSession(skipRecap: Boolean) = service?.endSession(skipRecap)
@@ -230,13 +226,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun dismissError() = service?.dismissError()
 
     fun updateConfig(transform: (SessionConfig) -> SessionConfig) {
-        val new = transform(uiState.value.config)
-        localConfig.value = new
         val svc = service
-        if (uiState.value.live.isActive && svc != null) {
-            svc.applyConfig(new)
+        if (svc != null && svc.state.value.isActive) {
+            svc.applyConfig(transform(svc.state.value.config))
         } else {
-            viewModelScope.launch { settings.saveConfig(new) }
+            viewModelScope.launch { settings.updateConfig(transform) }
         }
     }
 

@@ -58,6 +58,44 @@ class PromptBuilderTest {
     }
 
     @Test
+    fun `only the selected level guidance is sent and replies are not compulsory questions`() {
+        for (level in Level.entries) {
+            val prompt = PromptBuilder.systemInstruction(SessionConfig(level = level))
+            assertTrue(prompt.contains(level.guidance))
+            for (other in Level.entries.filterNot { it == level }) {
+                assertFalse("Unexpected guidance for $other at $level", prompt.contains(other.guidance))
+            }
+            assertFalse(prompt.contains("End most turns"))
+            assertTrue(prompt.contains("The learner can interrupt at any time"))
+        }
+    }
+
+    @Test
+    fun `onboarding retains native pronunciation and normal conversation instructions`() {
+        val prompt = PromptBuilder.systemInstruction(
+            SessionConfig(language = "Japanese", dialect = "Kansai Japanese", onboarding = true),
+        )
+        assertTrue(prompt.contains("native speaker of Kansai Japanese"))
+        assertTrue(prompt.contains("not an English speaker imitating it"))
+        assertTrue(prompt.contains("onboarding_complete"))
+        assertTrue(prompt.contains("learner_instruction"))
+        assertFalse(prompt.contains("end most turns with a simple question"))
+        assertTrue(PromptBuilder.englishHelpMessage().contains("native regional pronunciation"))
+    }
+
+    @Test
+    fun `background tools are nonblocking only for supported Live families`() {
+        for (model in listOf("gemini-2.5-flash-native-audio-preview-12-2025", "models/gemini-3.8-live")) {
+            val tools = PromptBuilder.toolDeclarations(model).single().functionDeclarations
+            assertTrue(tools.filter { it.name in LiveModelCapabilities.backgroundTools }.all { it.behavior == "NON_BLOCKING" })
+            assertTrue(tools.filterNot { it.name in LiveModelCapabilities.backgroundTools }.all { it.behavior == "BLOCKING" })
+        }
+        for (model in listOf("", "gemini-3.1-flash-live-preview", "gemini-future-live", "gemini-3.8-live-extended-thinking")) {
+            assertTrue(PromptBuilder.toolDeclarations(model).single().functionDeclarations.all { it.behavior == null })
+        }
+    }
+
+    @Test
     fun `level parse is forgiving`() {
         assertEquals(Level.SUPER_BEGINNER, Level.parse("SUPER_BEGINNER"))
         assertEquals(Level.SUPER_BEGINNER, Level.parse("Super Beginner"))

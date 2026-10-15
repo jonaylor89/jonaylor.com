@@ -14,6 +14,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class AudioPlayerTest {
     private class FakeSink : AudioPlayer.PcmSink {
@@ -126,6 +128,53 @@ class AudioPlayerTest {
         assertEquals(1, p.sinkRebuilds.get())
         assertEquals(2.toByte(), second.bytes()[0])
         assertTrue(second.events.contains("play"))
+        p.stop()
+    }
+
+    @Test
+    fun freshResponseAfterFlushRestartsSpeakingIndicatorImmediately() = runBlocking {
+        val p = player()
+        p.start()
+        val sink = sinks.single()
+        p.enqueue(pcm(1))
+        awaitWritten(sink, 480)
+        p.flush()
+        assertFalse(p.isSpeaking)
+        p.enqueue(pcm(2))
+        awaitWritten(sink, 960)
+        assertEquals(listOf(true, false, true), speaking.take(3))
+        p.stop()
+    }
+
+    @Test
+    fun inFlightPartialWriteCannotResumeInterruptedAudioAfterFlush() = runBlocking {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val writes = CopyOnWriteArrayList<Pair<Byte, Int>>()
+        val sink = object : AudioPlayer.PcmSink {
+            override fun play() = Unit
+            override fun pause() = Unit
+            override fun flush() = Unit
+            override fun release() = Unit
+            override fun write(data: ByteArray, offset: Int, size: Int): Int {
+                writes += data[0] to offset
+                if (data[0] == 9.toByte() && offset == 0) {
+                    entered.countDown()
+                    check(release.await(3, TimeUnit.SECONDS))
+                    return size / 2
+                }
+                return size
+            }
+        }
+        val p = AudioPlayer(scope, { speaking += it }, { sink }, Dispatchers.Default)
+        p.start()
+        p.enqueue(pcm(9))
+        assertTrue(entered.await(3, TimeUnit.SECONDS))
+        p.flush()
+        p.enqueue(pcm(2))
+        release.countDown()
+        withTimeout(3_000) { while (writes.none { it.first == 2.toByte() }) delay(10) }
+        assertEquals(listOf(9.toByte() to 0, 2.toByte() to 0), writes.toList())
         p.stop()
     }
 
