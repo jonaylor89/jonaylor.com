@@ -3,6 +3,7 @@ import { deleteLocalSave, readLegacySave, serializeSave, writeLocalSave, type Sa
 import type { GameState } from '../game/state';
 
 export const GUEST_SLOT = 'guest:slot1';
+export const GUEST_NEW_GAME_BACKUP = 'guest:before-new-game';
 /** No cloud identity, anonymous account, or network request is needed for a guest SAVE. */
 export class GuestSaves implements SaveBackend {
   payload: string | null = null;
@@ -23,6 +24,12 @@ export class GuestSaves implements SaveBackend {
   }
   subscribe(listener: () => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
   startPlaying(): void { /* Guests never cloud-sync. */ }
+  /** Keep the old adventure recoverable after the new game's first SAVE. */
+  async protectForNewGame(): Promise<void> {
+    const save = await this.read('slot1');
+    if (save) await writeLocalSave(GUEST_NEW_GAME_BACKUP, save.state);
+  }
+  async newGameBackup() { return readLegacySave(GUEST_NEW_GAME_BACKUP); }
   private slot(slot: string) { if (slot !== 'slot1') throw new Error('Only slot1 is supported'); }
   async read(slot: string) { this.slot(slot); return readLegacySave(GUEST_SLOT); }
   async write(slot: string, state: GameState) {

@@ -16,7 +16,7 @@ export async function resolveSaveConflicts(root: HTMLElement, saves: AccountSave
     await saves.resolve(choice);
   }
 }
-interface PanelHost { pause(paused: boolean): void; restart(): void }
+interface PanelHost { pause(paused: boolean): void; restart(): void; playing?(): boolean }
 
 export function mountAccountPanel(root: HTMLElement, saves: AccountSaves | GuestSaves, client: PlayerAuth, identity: PlayerIdentity | undefined, host: PanelHost) {
   const account = saves instanceof AccountSaves ? saves : undefined;
@@ -32,7 +32,7 @@ export function mountAccountPanel(root: HTMLElement, saves: AccountSaves | Guest
   root.append(opener, dialog, suggestion);
   const q = <T extends HTMLElement>(selector: string) => dialog.querySelector<T>(selector)!;
   q('.trainer-identity').textContent = identity ? identity.email + ' · ' + account?.device : 'Guest adventure · no account required';
-  for (const action of ['sync', 'recover', 'signout']) q('[data-action=' + action + ']').hidden = !account;
+  for (const action of ['sync', 'signout']) q('[data-action=' + action + ']').hidden = !account;
   if (account) q('[data-action=signin]').textContent = 'Sign in again / switch account';
   let handling = false; let offered = false;
   function render() {
@@ -40,6 +40,10 @@ export function mountAccountPanel(root: HTMLElement, saves: AccountSaves | Guest
       ? ({ local: 'Saved on this device', pending: 'Sync pending', syncing: 'Syncing…', synced: 'Synced', conflict: 'Choose a save', error: 'Sync unavailable' }[account.status])
       : guest?.payload ? 'Guest · saved on this device' : 'Guest · play without signing in';
     opener.textContent = saves.localSaveFailed ? 'ACCOUNT · Save failed' : 'ACCOUNT · ' + label;
+    q<HTMLButtonElement>('[data-action=signin]').disabled = !navigator.onLine;
+    q('.trainer-note').textContent = !navigator.onLine
+      ? 'Offline play and local checkpoints are available. Reconnect to sign in or use account services.'
+      : 'START → SAVE always keeps a checkpoint on this device. Sign in only when you want cloud backup and other devices.';
     q('.trainer-sync').textContent = saves.localSaveFailed ? 'Save was NOT written. Browser storage is unavailable or full.' : label + (account?.error ? '. ' + account.error : '');
     if (account?.journal.conflict && !handling) void conflict();
     if (guest?.lastEvent === 'saved' && !guest.localSaveFailed && !offered) { offered = true; suggestion.hidden = false; }
@@ -70,7 +74,7 @@ export function mountAccountPanel(root: HTMLElement, saves: AccountSaves | Guest
   const focusGame = () => root.querySelector<HTMLCanvasElement>('canvas')?.focus({ preventScroll: true });
   dialog.addEventListener('close', () => { if (!handling) { host.pause(false); focusGame(); } });
   q<HTMLButtonElement>('[data-action=signin]').onclick = () => {
-    if (confirm('Sign in or switch account? The game restarts after sign-in. Use START → SAVE first; unsaved play is not included.')) void login();
+    if (host.playing?.() === false || confirm('Sign in or switch account? The game restarts after sign-in. Use START → SAVE first; unsaved play is not included.')) void login();
   };
   suggestion.querySelector<HTMLButtonElement>('[data-action=backup]')!.onclick = () => { void login(); };
   suggestion.querySelector<HTMLButtonElement>('[data-action=dismiss]')!.onclick = () => { suggestion.hidden = true; focusGame(); };
@@ -83,7 +87,24 @@ export function mountAccountPanel(root: HTMLElement, saves: AccountSaves | Guest
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   q<HTMLButtonElement>('[data-action=recover]').onclick = async () => {
-    if (!account || handling) return; handling = true;
+    if (handling) return;
+    if (guest) {
+      handling = true;
+      try {
+        const backup = await guest.newGameBackup();
+        if (!backup) { q('.trainer-sync').textContent = 'No previous adventure backup on this device yet.'; return; }
+        dialog.close();
+        const selected = await choose(root, 'Previous guest adventure', 'This backup was kept before starting a new game. Restoring replaces your current guest checkpoint and restarts the game.', [
+          { value: 'cancel', label: 'Back without restoring' },
+          { value: 'restore', label: 'Restore previous adventure', detail: describeCheckpoint(JSON.stringify(backup)) },
+        ]);
+        if (selected === 'restore') { await guest.write('slot1', backup.state); host.restart(); }
+        else dialog.showModal();
+      } catch (error) { alert((error as Error).message); if (!dialog.open) dialog.showModal(); }
+      finally { handling = false; }
+      return;
+    }
+    if (!account) return; handling = true;
     try {
       const local = [...account.journal.backups].reverse().map((b, i) => ({ value: 'local-' + i, payload: b.payload, label: 'Device backup · ' + new Date(b.savedAt).toLocaleString(), detail: b.reason + '\n' + describeCheckpoint(b.payload) }));
       let cloud: { value: string; payload: string | null; label: string; detail: string }[] = [];
@@ -107,8 +128,8 @@ export function mountAccountPanel(root: HTMLElement, saves: AccountSaves | Guest
     } catch (error) { q('.trainer-sync').textContent = 'Sign-out could not be confirmed. Reconnect and try again. ' + (error as Error).message; }
   };
   const unsubscribe = saves.subscribe(render);
-  const sync = () => { if (navigator.onLine && !document.hidden) void account?.sync(); };
-  window.addEventListener('online', sync); document.addEventListener('visibilitychange', sync);
+  const sync = () => { render(); if (navigator.onLine && !document.hidden) void account?.sync(); };
+  window.addEventListener('online', sync); window.addEventListener('offline', render); document.addEventListener('visibilitychange', sync);
   const timer = setInterval(sync, 30_000);
   render();
   const params = new URLSearchParams(location.search);
@@ -117,7 +138,8 @@ export function mountAccountPanel(root: HTMLElement, saves: AccountSaves | Guest
     else { open(); q('.trainer-sync').textContent = 'That password-reset link is invalid or expired. Open Sign in and request a new one.'; }
   }
   return {
+    open,
     offlineReady(ready: boolean) { q('.trainer-offline-status').textContent = ready ? 'Offline ready on this device. Clearing browser data can remove guest progress and unsynced saves.' : 'Offline app-shell caching is unavailable; keep this tab open for offline play.'; },
-    dispose() { clearInterval(timer); unsubscribe(); window.removeEventListener('online', sync); document.removeEventListener('visibilitychange', sync); dialog.remove(); opener.remove(); suggestion.remove(); },
+    dispose() { clearInterval(timer); unsubscribe(); window.removeEventListener('online', sync); window.removeEventListener('offline', render); document.removeEventListener('visibilitychange', sync); dialog.remove(); opener.remove(); suggestion.remove(); },
   };
 }

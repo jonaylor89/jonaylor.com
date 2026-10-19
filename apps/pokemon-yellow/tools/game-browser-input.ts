@@ -75,14 +75,20 @@ async function settledOverworld(page: Page, templates: Record<string, string>) {
 }
 export async function enterGame(page: Page, templates: Record<string, string>) {
   await page.bringToFront();
-  const text = await until(page, templates, text => text.includes('NEW GAME') || text.includes('CONTINUE'));
-  if (text.includes('CONTINUE')) {
+  const home = await page.$('.home-screen');
+  if (home) {
+    const resume = await page.$('.home-continue');
+    if (resume) { await resume.click(); await settledOverworld(page, templates); return; }
+    await page.click('.home-menu button:first-child');
+  } else {
+    // Also supports the deployed legacy title until this change is published.
+    const text = await until(page, templates, text => text.includes('NEW GAME') || text.includes('CONTINUE'));
+    if (text.includes('CONTINUE')) {
+      await tap(page, 'z'); await settledOverworld(page, templates); return;
+    }
     await tap(page, 'z');
-    await settledOverworld(page, templates);
-    return;
   }
-  await tap(page, 'z');
-  // New Game rules: start the original game (no mods).
+  // New Game rules: preserve main's optional mod selection, defaulting to no mods.
   await page.waitForSelector('dialog.mod-picker[open]', { timeout: 25_000 });
   await page.click('dialog.mod-picker .settings-done');
   await until(page, templates, text => text.includes('NEW NAME'));

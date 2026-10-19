@@ -47,6 +47,25 @@ async function device(server: CloudTransport, storage = memory(), owner = 'playe
 afterEach(() => setSaveBackend(undefined));
 
 describe('account saves', () => {
+  it('protects a new-game checkpoint locally without clearing or uploading the slot', async () => {
+    const server = new Server(); const disk = memory(); const s = await device(server, disk);
+    await s.stage(save('OLD')); await s.sync(); server.online = false;
+    const before = structuredClone(s.journal);
+    await s.protectForNewGame();
+    expect(s.journal.payload).toBe(before.payload); expect(s.journal.pending).toEqual(before.pending);
+    expect(server.versions).toHaveLength(1);
+    const again = await device(server, disk);
+    expect(again.journal.backups.at(-1)?.payload).toBe(before.payload);
+    expect(again.journal.backups.at(-1)?.reason).toBe('Before new adventure');
+  });
+  it('refuses a new adventure until divergent saves are resolved', async () => {
+    const s = await device(new Server());
+    s.journal.conflict = { revision: 4, payload: save('OTHER'), device: 'other', updatedAt: '' };
+    // Persist the conflict as a real transport would, then test the durable guard.
+    const disk: JournalStorage = { read: async () => s.journal, update: async (_key, fn) => fn(structuredClone(s.journal)) };
+    const conflicted = new AccountSaves('player', 'phone', new Server(), disk); await conflicted.open();
+    await expect(conflicted.protectForNewGame()).rejects.toThrow('Choose a save');
+  });
   it('routes all existing save entry points through the account backend', async () => {
     const s = await device(new Server());
     setSaveBackend(s);

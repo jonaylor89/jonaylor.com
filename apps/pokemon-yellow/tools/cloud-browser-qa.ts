@@ -56,9 +56,13 @@ async function emailLink(email: string, kind: string) {
   }
   throw new Error('No ' + kind + ' email for ' + email);
 }
+async function openAccount(page: Page) {
+  await page.click(await page.$('.home-screen') ? '.home-menu button:last-child' : '.account-open');
+}
 async function openLogin(page: Page) {
-  await page.click('.account-open');
-  page.once('dialog', dialog => { void dialog.accept(); });
+  const playing = !await page.$('.home-screen');
+  await openAccount(page);
+  if (playing) page.once('dialog', dialog => { void dialog.accept(); });
   await page.click('[data-action=signin]');
   await page.waitForSelector('dialog[open] form');
 }
@@ -119,7 +123,7 @@ try {
   await synced(page, firstCloud.owner, 1);
   assert.equal((await cloud(page)).save.payload, guestPayload);
   assert.equal(await localRecord(page, 'guest:slot1'), guestPayload);
-  await page.click('.account-open');
+  await openAccount(page);
   await page.waitForFunction(() => document.querySelector('.trainer-offline-status')?.textContent?.startsWith('Offline ready'));
   await page.screenshot({ path: 'extracted/account-panel-phone.png' });
   await page.click('[data-action=close]');
@@ -158,7 +162,7 @@ try {
   const resolved = await localRecord<LocalJournal>(page, 'account:' + firstCloud.owner + ':slot1');
   assert.equal(resolved?.payload, otherJournal.payload);
   assert(resolved.backups.some(backup => backup.payload === offlinePayload));
-  await page.click('.account-open'); await page.click('[data-action=recover]');
+  await openAccount(page); await page.click('[data-action=recover]');
   await page.waitForFunction(() => document.querySelector('dialog[open] h1')?.textContent === 'Recovery history');
   await page.evaluate(() => document.querySelector<HTMLButtonElement>('dialog[open] button')!.click());
   page.once('dialog', dialog => { void dialog.accept(); });

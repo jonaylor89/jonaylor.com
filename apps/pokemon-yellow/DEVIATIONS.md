@@ -84,6 +84,13 @@ pret/pokeyellow). Anything not listed here is meant to match the original; a mis
   overrides are development-only. Cloud checks do not make client-run progress cheat-proof.
 
 ## Web controls
+- **Browser home screen.** A native, accessible menu over a presentation-only Pallet Town replaces
+  the startup movie, press-start gate and Game Boy main menu. Continue resumes directly; New Game
+  retains Oak's original introduction. The original title/movie routines remain as reference code
+  and engine tests. No gameplay frames, RNG or play time advance behind the browser home screen.
+- **New-adventure protection.** Confirmation defaults to keeping the existing save and offers
+  export. Before starting, a durable recovery copy is kept (one previous guest adventure locally,
+  bounded account recovery history). The active checkpoint stays intact until the new game's SAVE.
 - **Web settings.** The toolbar/F2 panel supplements the original OPTION menu. It pauses game
   frames, RNG and audio while open. Camera, filters, gain and keyboard bindings are device-local;
   text speed remains an original game option stored with normal game saves.

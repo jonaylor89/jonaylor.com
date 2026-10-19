@@ -73,6 +73,24 @@ export function* bootSequence(e: Engine): Co {
   yield* e.delayFrames(20); // SpecialEnterMap
 }
 
+/** Keep the original full-screen introduction and its transition back to a transparent UI. */
+export function* newAdventure(e: Engine): Co {
+  e.screen.backdrop = true;
+  yield* oakSpeech(e);
+  e.screen.backdrop = false;
+  e.screen.clear();
+  yield* e.delayFrames(20); // SpecialEnterMap
+}
+
+/** Browser Continue skips the original title and extra confirmation screen. */
+export function* continueAdventure(e: Engine): Co {
+  if ((e.state.vars.wNumHoFTeams ?? 0) && e.state.player.map === c('map', 'HALL_OF_FAME')) {
+    yield* e.specialWarp(c('map', 'PALLET_TOWN'));
+  } else e.store.dispatch({ type: 'face', facing: 'down' }, { undoable: false });
+  e.screen.backdrop = false;
+  e.screen.clear();
+}
+
 /**
  * DisplayTitleScreen: the logo drops in by scrolling the background (Pikachu sits
  * in the window meanwhile), the speech bubble, then the blinking loop until

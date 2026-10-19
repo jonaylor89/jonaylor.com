@@ -55,6 +55,20 @@ sign-in for cloud backup. The command applies migrations to local D1 and runs th
 backend; verification/reset emails go to **http://localhost:5173/__dev/mail**. Local data persists
 under ignored `.wrangler/state/local/`. No remote resources are created. See [DEPLOYMENT.md](DEPLOYMENT.md).
 
+### Home screen
+
+The browser opens directly to a Pokémon-style menu over a quiet 3D Pallet Town scene:
+**Continue** (when a checkpoint exists), **New Game**, **Settings**, and optional **Account**.
+Continue shows your trainer, location, badges and play time and resumes in one action.
+Settings and accessibility are available before play; F2 and WEB SETTINGS remain available in-game.
+Keyboard remapping, standard gamepad navigation and touch work on the home screen.
+
+New Game defaults to keeping an existing adventure. Confirmation offers a checkpoint export and
+preserves a recovery copy before starting Oak's introduction. The existing slot is not replaced
+until START → SAVE in the new adventure; restore the previous adventure via Account → Recovery
+history. Guest recovery stays local and separate from account saves. Offline status is explicit;
+local play never requires signing in or picking a ROM.
+
 ### Build
 
 ```sh

@@ -73,18 +73,7 @@ export class Input {
     for (const b of BUTTONS) if (this.keymap[b].some((k) => this.keys.has(k))) held.add(b);
     for (const b of this.touch) held.add(b);
     for (const b of this.simulated) held.add(b);
-    for (const pad of navigator.getGamepads?.() ?? []) {
-      if (!pad || pad.mapping !== 'standard') continue;
-      const btn = (i: number) => pad.buttons[i]?.pressed;
-      if (btn(12) || pad.axes[1] < -0.5) held.add('up');
-      if (btn(13) || pad.axes[1] > 0.5) held.add('down');
-      if (btn(14) || pad.axes[0] < -0.5) held.add('left');
-      if (btn(15) || pad.axes[0] > 0.5) held.add('right');
-      if (btn(0)) held.add('a');
-      if (btn(1) || btn(2)) held.add('b');
-      if (btn(9)) held.add('start');
-      if (btn(8)) held.add('select');
-    }
+    for (const b of gamepadButtons(navigator.getGamepads?.() ?? [])) held.add(b);
     if (this.resumeGuard) {
       if (!held.size) this.resumeGuard = false;
       return { held: new Set(), pressed: new Set() };
@@ -100,6 +89,24 @@ export class Input {
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('blur', this.onBlur);
   }
+}
+
+/** Shared standard mapping for gameplay and browser menus. */
+export function gamepadButtons(pads: readonly (Gamepad | null)[]): Set<Button> {
+  const held = new Set<Button>();
+  for (const pad of pads) {
+    if (!pad || pad.mapping !== 'standard') continue;
+    const btn = (i: number) => pad.buttons[i]?.pressed;
+    if (btn(12) || pad.axes[1] < -0.5) held.add('up');
+    if (btn(13) || pad.axes[1] > 0.5) held.add('down');
+    if (btn(14) || pad.axes[0] < -0.5) held.add('left');
+    if (btn(15) || pad.axes[0] > 0.5) held.add('right');
+    if (btn(0)) held.add('a');
+    if (btn(1) || btn(2)) held.add('b');
+    if (btn(9)) held.add('start');
+    if (btn(8)) held.add('select');
+  }
+  return held;
 }
 
 /** Build the on-screen touch controls (shown on touch devices). */

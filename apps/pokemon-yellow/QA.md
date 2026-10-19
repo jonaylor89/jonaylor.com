@@ -1,5 +1,26 @@
 # Validation and QA
 
+## Browser home screen
+
+Pre-publication validation after rebasing onto the current main: **323 tests / 47 suites** pass
+with `PYW_ROM` set; all **11** monorepo build tasks and root lint/format checks pass. Existing
+world themes and optional New Game rules remain intact.
+
+Run `pnpm --filter pokemon-yellow dev:ui`, then from this app run
+`pnpm exec tsx tools/title-browser-qa.ts`. This guest-only UI smoke uses hosted data and mocked
+session lookup (no ROM or backend). Desktop 1440×900, portrait 390×844, landscape 844×390 and
+small-phone 320×568 checks cover first/returning menus, paused play time, Settings/F2, focus return,
+remapped confirmation keys, standard gamepad navigation, offline status, safe overwrite cancellation,
+storage-failure refusal, recovery copies, and one-action Continue. Screenshots use a temporary
+directory removed on exit; `PYW_QA_DIR` optionally retains them for visual review.
+
+`homeScreen.test.ts`, `guestSaves.test.ts` and `cloudSaves.test.ts` cover checkpoint summaries,
+status accuracy, shared gamepad mapping, persistent new-adventure backups and conflict guards.
+The real-backend `qa:cloud` harness also passed with the new home screen: actual guest SAVE,
+registration/verification/import, two-device account saves, offline reload, conflicts/recovery,
+account isolation, password reset, logout, tab locks and uncached APIs. The browser/Oak transition
+is also regression-tested alongside the legacy boot in `menus.test.ts`.
+
 ## Accounts / hosted-data milestone
 
 Current validation: **254 tests / 39 suites**, typecheck, production build, Worker deployment

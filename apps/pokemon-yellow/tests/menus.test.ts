@@ -153,19 +153,26 @@ describe.skipIf(!HAS_ROM)('Pokédex and trainer card', () => {
 });
 
 describe.skipIf(!HAS_ROM)('Power-on', () => {
-  it('starts a new game through Oak’s speech with the default names', async () => {
-    const { bootSequence } = await import('../src/ui/titleFlow');
+  it.each(['legacy', 'browser'])('starts a %s new game through Oak’s speech with the default names', async entry => {
+    const { bootSequence, newAdventure } = await import('../src/ui/titleFlow');
     const { deleteSave } = await import('../src/game/save');
     await deleteSave('slot1'); // no save file: the menu starts at NEW GAME
     const b = await bundle();
     const h = new Harness(b, newGameState(b, 0x99));
-    h.engine.boot = bootSequence;
+    let transparentAfterBoot = false;
+    h.engine.boot = function* (e) {
+      yield* (entry === 'browser' ? newAdventure(e) : bootSequence(e));
+      transparentAfterBoot = !e.screen.backdrop && [...e.screen.cells].every(cell => cell < 0);
+    };
     h.run(5);
-    await new Promise((r) => setTimeout(r, 100)); // let the save lookup settle
-    h.run(60);
-    for (let i = 0; i < 300 && !h.screenText().includes('NEW GAME'); i++) h.press('a', 2, 10);
-    expect(h.screenText()).toContain('NEW GAME');
-    h.press('a', 2, 30); // NEW GAME
+    await new Promise(r => setTimeout(r, 0)); // settle the optional rules hook
+    if (entry === 'legacy') {
+      await new Promise((r) => setTimeout(r, 100)); // let the save lookup settle
+      h.run(60);
+      for (let i = 0; i < 300 && !h.screenText().includes('NEW GAME'); i++) h.press('a', 2, 10);
+      expect(h.screenText()).toContain('NEW GAME');
+      h.press('a', 2, 30); // NEW GAME
+    }
     // the speech: press A until the player's name menu
     for (let i = 0; i < 300 && !h.screenText().includes('NEW NAME'); i++) h.press('a', 2, 10);
     expect(h.screenText()).toContain('YELLOW');
@@ -183,6 +190,7 @@ describe.skipIf(!HAS_ROM)('Power-on', () => {
     expect(h.engine.state.player.rivalName).toBe('GARY');
     expect(h.engine.state.player.map).toBe(c('map', 'REDS_HOUSE_2F'));
     expect(h.engine.screen.backdrop).toBe(false);
+    expect(transparentAfterBoot).toBe(true);
   });
 
   it('plays the whole intro, then the title screen', async () => {

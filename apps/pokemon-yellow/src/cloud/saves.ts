@@ -52,6 +52,12 @@ export class AccountSaves implements SaveBackend {
     }
     this.status = this.journal.conflict ? 'conflict' : this.journal.pending ? 'pending' : 'local';
   }
+  async protectForNewGame(): Promise<void> {
+    await this.update(journal => {
+      if (journal.conflict) throw new Error('Choose a save before starting a new adventure.');
+      if (journal.payload) backup(journal, journal.payload, 'Before new adventure');
+    });
+  }
   /** After boot, never silently replace a running game's checkpoint with a remote save. */
   startPlaying(): void { this.live = true; }
   private slot(slot: string): void { if (slot !== 'slot1') throw new Error('Only slot1 is supported'); }

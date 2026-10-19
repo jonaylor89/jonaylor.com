@@ -13,7 +13,11 @@ import { Input, mountTouchControls } from './input/Input';
 import { newGameState, Store } from './game/state';
 import { readSave } from './game/save';
 import { mountDebugOverlay } from './ui/debug';
-import { bootSequence } from './ui/titleFlow';
+import { continueAdventure, newAdventure } from './ui/titleFlow';
+import { mountHomeScreen } from './ui/homeScreen';
+import { mountTitleScene } from './ui/titleScene';
+import { mountDomNavigation } from './ui/domNavigation';
+import { AccountSaves } from './cloud/saves';
 import { c, CONSTANTS } from './rom/constants';
 import { bootstrapPlayer } from './cloud/bootstrap';
 import { prepareOfflineShell } from './cloud/offline';
@@ -30,6 +34,7 @@ async function main(): Promise<void> {
   const ui = document.getElementById('ui')!;
   canvas.tabIndex = 0;
   canvas.setAttribute('aria-label', 'Pokémon game view');
+  mountDomNavigation(app);
 
   const player = await bootstrapPlayer(app);
   const bundle = await obtainBundle(app);
@@ -103,7 +108,7 @@ async function main(): Promise<void> {
       if (!active) ui.classList.remove('battle-stage');
     },
     battleScene: (active) => ui.classList.toggle('battle-stage', active),
-    // Init: restart from the save (there is no title screen yet)
+    // Soft reset returns to the browser home screen and the current checkpoint.
     reset: () => {
       const url = new URL(location.href);
       url.searchParams.delete('new');
@@ -119,11 +124,9 @@ async function main(): Promise<void> {
       console.warn(`[unported] ${what}`);
     },
   });
-  // Power-on: title screen and main menu, unless a debug start position or ?new was given
-  if (!(import.meta.env.DEV && params.has('new')) && !mapParam) engine.boot = bootSequence;
   const sync = attachView(engine, view);
   if (import.meta.env.DEV) mountDebugOverlay(app, bundle, store, engine, unported, () => view.diagnostics());
-  mountWebSettings(app, {
+  const webSettings = mountWebSettings(app, {
     engine, settings: () => preferences,
     apply: (next) => {
       preferences = next;
@@ -135,10 +138,31 @@ async function main(): Promise<void> {
     pause: (paused) => pause('settings', paused),
   });
   player.saves.startPlaying();
+  let home: ReturnType<typeof mountHomeScreen> | undefined;
   const panel = mountAccountPanel(app, player.saves, player.client, player.identity, {
-    pause: value => pause('account', value), restart: () => location.reload(),
+    pause: value => pause('account', value), restart: () => location.reload(), playing: () => !home,
   });
-  void offlineShell.then(ready => panel.offlineReady(ready));
+  let titleScene: ReturnType<typeof mountTitleScene> | undefined;
+  if (!(import.meta.env.DEV && params.has('new')) && !mapParam) {
+    pause('title', true);
+    titleScene = mountTitleScene(view, bundle);
+    canvas.setAttribute('aria-hidden', 'true');
+    home = mountHomeScreen(app, {
+      bundle, save, account: !!player.identity,
+      keymap: () => preferences.keymap, filter: () => preferences.view.colorFilter,
+      status: () => ({ account: !!player.identity, status: player.saves instanceof AccountSaves ? player.saves.status : undefined, failed: player.saves.localSaveFailed }),
+      subscribe: listener => player.saves.subscribe(listener),
+      settings: () => webSettings.open(), openAccount: () => panel.open(),
+      prepareNewGame: () => player.saves.protectForNewGame(),
+      start: choice => {
+        engine.boot = choice === 'continue' ? continueAdventure : newAdventure;
+        titleScene?.dispose(); titleScene = undefined; home = undefined;
+        canvas.removeAttribute('aria-hidden');
+        pause('title', false); canvas.focus({ preventScroll: true });
+      },
+    });
+  }
+  void offlineShell.then(ready => { panel.offlineReady(ready); home?.offlineReady(ready); });
 
   window.addEventListener('resize', () => view.resize());
   window.visualViewport?.addEventListener('resize', () => view.resize());
@@ -167,12 +191,15 @@ async function main(): Promise<void> {
       n++;
     }
     if (n === 4) acc = 0;
-    sync();
-    engine.screen.draw(); // filters can change while the game is paused
-    const p = engine.sprites[0];
-    if (p) {
-      const [px, py] = engine.spriteRenderPos(p);
-      view.follow(px, py, dt);
+    if (titleScene) titleScene.frame();
+    else {
+      sync();
+      engine.screen.draw(); // filters can change while the game is paused
+      const p = engine.sprites[0];
+      if (p) {
+        const [px, py] = engine.spriteRenderPos(p);
+        view.follow(px, py, dt);
+      }
     }
     view.render();
     if (!document.hidden && !settingsOpen) view.profiler.add(interval, performance.now() - cpuStart);
