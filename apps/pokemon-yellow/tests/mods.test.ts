@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { GameBundle } from '../src/data/schema';
-import { activeModNames, applyMods, formatSeed, parseSeed, randomSpeciesMap, validMods } from '../src/game/mods';
+import { activeModNames, applyMods, withComfort, formatSeed, parseSeed, randomSpeciesMap, validMods } from '../src/game/mods';
 import { checksum, deserializeSave, serializeSave } from '../src/game/save';
-import { newGameState } from '../src/game/state';
+import { newGameState, reduce } from '../src/game/state';
 import { typeMultiplier } from '../src/battle/menus';
 
 // A synthetic bundle: 151 species (internal id = dex + 100, a glitch id 0) with rising stats.
@@ -86,6 +86,21 @@ describe('mods in saves', () => {
   it.each([null, [], 'comfort', { comfort: 1 }, { randomizer: {} }, { randomizer: { seed: -1 } }, { randomizer: { seed: 2 ** 33 } }, { cheats: true }])('rejects malformed mods %j', (mods) => {
     expect(validMods(mods)).toBe(false);
     expect(() => deserializeSave(resave(mods))).toThrow('malformed');
+  });
+
+  it('switches Comfort mid-run without touching the randomizer seed', () => {
+    const s = state();
+    reduce(s, { type: 'setComfort', on: true });
+    expect(s.mods).toEqual({ comfort: true });
+    reduce(s, { type: 'setComfort', on: false });
+    expect(s.mods).toBeUndefined(); // back to an original-game save
+    s.mods = { randomizer: { seed: 9 } };
+    reduce(s, { type: 'setComfort', on: true });
+    expect(s.mods).toEqual({ comfort: true, randomizer: { seed: 9 } });
+    reduce(s, { type: 'setComfort', on: false });
+    expect(s.mods).toEqual({ randomizer: { seed: 9 } });
+    expect(deserializeSave(serializeSave(s)).state.mods).toEqual({ randomizer: { seed: 9 } });
+    expect(withComfort(undefined, false)).toBeUndefined();
   });
 
   it('names active mods for the settings panel', () => {

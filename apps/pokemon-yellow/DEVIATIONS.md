@@ -83,7 +83,9 @@ pret/pokeyellow). Anything not listed here is meant to match the original; a mis
 
 ## Optional mods
 Chosen at NEW GAME (before Oak's speech) and stored in that save; with none selected the game is
-the original. Mods cannot be changed later. Both use the same save format and validation.
+the original. Comfort can be switched on or off mid-run in WEB SETTINGS (kept when the game is
+saved, like text speed); the Randomizer is locked for the save. Both use the same save format
+and validation.
 - **Comfort.** After a won battle, Pokémon that fought gain experience as normal and the rest of
   the party (not fainted) gain half, printed as Exp. All gains (holding the real EXP.ALL keeps its
   original behavior instead). With an HM in the bag, the party menu lists its field move for any

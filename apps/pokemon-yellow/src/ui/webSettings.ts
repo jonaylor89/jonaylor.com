@@ -2,7 +2,7 @@
 import type { Engine } from '../engine/Engine';
 import { BUTTONS, type Button } from '../input/Input';
 import { COLOR_FILTERS } from '../render/palette';
-import { activeModNames } from '../game/mods';
+import { formatSeed } from '../game/mods';
 import { defaultWebSettings, keyLabel, remapKey, saveWebSettings, type WebSettings } from './webSettingsData';
 
 export interface WebSettingsHost {
@@ -33,7 +33,9 @@ export function mountWebSettings(root: HTMLElement, host: WebSettingsHost) {
         <label class="settings-field" for="web-text-speed"><span>Text speed</span>
           <select id="web-text-speed"><option value="fast">FAST</option><option value="medium">MEDIUM</option><option value="slow">SLOW</option></select></label>
         <p class="settings-hint">Applies to new messages. Stored with your game when you save.</p>
-        <p class="settings-hint settings-mods"></p>
+        <label class="settings-check" for="web-comfort"><input id="web-comfort" type="checkbox"><span>Comfort mod</span></label>
+        <p class="settings-hint">Party Exp. Share, HM field moves without teaching them, hold B to run and type hints in battle. Stored with your game when you save.</p>
+        <p class="settings-hint settings-randomizer"></p>
         <label class="settings-field" for="web-volume"><span>Volume <output id="web-volume-value"></output></span><input id="web-volume" type="range" min="0" max="100" step="1"></label>
         <p class="settings-hint">Zero mutes output, not the original sound engine.</p>
         <label class="settings-check" for="web-haptics"><input id="web-haptics" type="checkbox"><span>Touch haptics</span></label>
@@ -62,6 +64,7 @@ export function mountWebSettings(root: HTMLElement, host: WebSettingsHost) {
   const get = <T extends HTMLElement>(selector: string) => dialog.querySelector<T>(selector)!;
   const status = get<HTMLParagraphElement>('[role=status]');
   const speed = get<HTMLSelectElement>('#web-text-speed');
+  const comfort = get<HTMLInputElement>('#web-comfort');
   const volume = get<HTMLInputElement>('#web-volume');
   const distance = get<HTMLInputElement>('#web-distance');
   const haptics = get<HTMLInputElement>('#web-haptics');
@@ -96,8 +99,11 @@ export function mountWebSettings(root: HTMLElement, host: WebSettingsHost) {
   }
   function render() {
     speed.value = host.engine.state.options.textSpeed;
-    const mods = activeModNames(host.engine.state.mods);
-    get<HTMLParagraphElement>('.settings-mods').textContent = mods.length ? `Mods for this save: ${mods.join(', ')}. Chosen at New Game.` : 'No mods: the original game. Mods are chosen at New Game.';
+    comfort.checked = !!host.engine.state.mods?.comfort;
+    const random = host.engine.state.mods?.randomizer;
+    get<HTMLParagraphElement>('.settings-randomizer').textContent = random
+      ? `Randomizer #${formatSeed(random.seed)} is locked for this save.`
+      : 'Randomizer: off. It can only be chosen at New Game.';
     volume.value = String(Math.round(settings.volume * 100));
     distance.value = String(settings.view.cameraDistance);
     pitch.value = String(settings.view.cameraPitchDeg);
@@ -119,6 +125,10 @@ export function mountWebSettings(root: HTMLElement, host: WebSettingsHost) {
   speed.addEventListener('change', () => {
     host.engine.store.dispatch({ type: 'setOptions', options: { textSpeed: speed.value as 'fast' | 'medium' | 'slow' } }, { undoable: false });
     status.textContent = 'Text speed updated. Save your game to keep this game option.';
+  });
+  comfort.addEventListener('change', () => {
+    host.engine.store.dispatch({ type: 'setComfort', on: comfort.checked }, { undoable: false });
+    status.textContent = `Comfort mod ${comfort.checked ? 'on' : 'off'}. Save your game to keep it.`;
   });
   volume.addEventListener('input', () => { settings.volume = Number(volume.value) / 100; apply(); });
   distance.addEventListener('input', () => { settings.view.cameraDistance = Number(distance.value); apply(); });

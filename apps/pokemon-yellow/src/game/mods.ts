@@ -3,11 +3,13 @@
  * The unmodded game stays the default; DEVIATIONS.md lists what each changes.
  *
  * - Comfort: modern conveniences (party Exp. Share, HM field moves without
- *   teaching them, hold B to run, type-effectiveness hints).
+ *   teaching them, hold B to run, type-effectiveness hints). It only changes
+ *   behavior from then on, so it can be switched mid-run in WEB SETTINGS.
  * - Randomizer: a seeded species swap for wild Pokémon and trainer parties.
  *   Species only trade places with others of similar base stat total, so
  *   early routes stay early-game. Gifts, static encounters, trades and the
- *   starter Pikachu are unchanged.
+ *   starter Pikachu are unchanged. Locked at New Game: changing it mid-run
+ *   would swap the species of trainers and routes not yet reached.
  */
 import type { GameBundle, TrainerClassData, WildData, WildTable } from '../data/schema';
 
@@ -20,7 +22,7 @@ export const MOD_INFO = [
   {
     id: 'comfort',
     name: 'Comfort',
-    summary: 'Modern conveniences, same adventure.',
+    summary: 'Modern conveniences, same adventure. Switch it any time in WEB SETTINGS.',
     details: [
       'Exp. Share: the whole party learns from every win (half for those who sat out)',
       'Field moves without HMs: a Pokémon that can learn the HM you carry can use it',
@@ -31,7 +33,7 @@ export const MOD_INFO = [
   {
     id: 'randomizer',
     name: 'Randomizer',
-    summary: 'Every wild Pokémon and trainer team reshuffled.',
+    summary: 'Every wild Pokémon and trainer team reshuffled. Locked for this save.',
     details: [
       'Seeded: share the seed to play the same Kanto',
       'Swaps stay within a similar strength tier',
@@ -52,6 +54,14 @@ export function validMods(v: unknown): v is GameMods {
     if (!r || typeof r !== 'object' || !Number.isSafeInteger(r.seed) || (r.seed as number) < 0 || (r.seed as number) > 0xffffffff) return false;
   }
   return true;
+}
+
+/** The save's mods with Comfort switched; no mods at all is stored as none (the original game). */
+export function withComfort(mods: GameMods | undefined, on: boolean): GameMods | undefined {
+  const next: GameMods = { ...mods };
+  if (on) next.comfort = true;
+  else delete next.comfort;
+  return next.comfort || next.randomizer ? next : undefined;
 }
 
 export function activeModNames(mods: GameMods | undefined): string[] {

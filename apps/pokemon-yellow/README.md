@@ -134,7 +134,8 @@ Web preferences are saved on this device; text speed is kept with normal game sa
 
 **NEW GAME** offers optional mods, kept with that save: **Comfort** (party Exp. Share, HM field
 moves without teaching them, hold B to run, type-effectiveness hints) and a seeded
-**Randomizer** for wild Pokémon and trainer teams. See [DEVIATIONS.md](DEVIATIONS.md#optional-mods).
+**Randomizer** for wild Pokémon and trainer teams. Comfort can be switched later in WEB SETTINGS;
+the Randomizer is locked for that save. See [DEVIATIONS.md](DEVIATIONS.md#optional-mods).
 In dev builds, `?new&mods=comfort,randomizer:SEED` starts a modded game directly.
 Optional touch haptics are off by default and ignored on browsers without vibration support.
 Touch input supports multiple fingers, drag re-entry, cancellation and safe-area insets.

@@ -10,7 +10,7 @@
 import { c } from '../rom/constants';
 import type { Facing } from '../world/movement';
 import type { GameBundle } from '../data/schema';
-import type { GameMods } from './mods';
+import { withComfort, type GameMods } from './mods';
 
 export const STATE_VERSION = 2;
 
@@ -124,6 +124,7 @@ export type Action =
   | { type: 'setPokedex'; dex: number; seen?: boolean; owned?: boolean }
   | { type: 'setBadge'; badge: number; value: boolean }
   | { type: 'setOptions'; options: Partial<GameState['options']> }
+  | { type: 'setComfort'; on: boolean }
   | { type: 'rng'; seed: number; add: number; sub: number }
   | { type: 'setVar'; name: string; value: number }
   | { type: 'setParty'; party: PartyMon[] }
@@ -288,6 +289,12 @@ export function reduce(s: GameState, a: Action): void {
     case 'setOptions':
       Object.assign(s.options, a.options);
       break;
+    case 'setComfort': {
+      const mods = withComfort(s.mods, a.on);
+      if (mods) s.mods = mods;
+      else delete s.mods;
+      break;
+    }
     case 'rng':
       s.rng = { seed: a.seed, add: a.add, sub: a.sub };
       break;
