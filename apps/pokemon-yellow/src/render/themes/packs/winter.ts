@@ -8,7 +8,7 @@ const pack: TexturePack = {
   order: 40,
   ramps: {
     GROUND: ['#e9eef3', '#cfd8e2', '#9aa7b6', '#4f5a68'],
-    PATH: ['#b9ada0', '#93857a', '#6a5d52', '#3a302a'],
+    PATH: ['#cbc3ba', '#a69b90', '#766a5f', '#3e3530'],
     TALL_GRASS: ['#d6e4c8', '#8aa27a', '#4a6648', '#1e3022'],
     FLOWERS: ['#ffffff', '#e8b8d0', '#6f8a6e', '#2c3a30'],
     WATER: ['#e9fbff', '#8fd6ea', '#3f8fb8', '#173f63'],
@@ -52,13 +52,12 @@ const pack: TexturePack = {
   // Snow is painted here (not pack.snow), outdoors only, so trodden paths, tall grass and water stay readable.
   glsl: /* glsl */ `
 void packSurface(inout vec3 albedo, inout float gloss, int material, float shade, vec3 p, vec3 n) {
-  // Only outdoors: the outdoor sky ambient is the one bluer than it is red.
-  float up = smoothstep(0.45, 0.85, n.y) * step(uSkyAmb.r + 0.02, uSkyAmb.b);
+  float up = smoothstep(0.45, 0.85, n.y) * uOutdoor;
   vec3 snow = vec3(0.86, 0.9, 0.96) + (tNoise(p.xz * 18.0) - 0.5) * 0.05;
   float cover = 0.0;
   if (material == M_GROUND) {
     float trodden = smoothstep(0.56, 0.74, tFbm(p.xz * 0.21 + 3.1));
-    cover = up * mix(0.95, 0.08, trodden) * smoothstep(0.2, 0.5, tFbm(p.xz * 2.3) + 0.35);
+    cover = up * mix(0.95, 0.42, trodden) * smoothstep(0.2, 0.5, tFbm(p.xz * 2.3) + 0.35);
   } else if (material == M_TALL_GRASS) {
     // Frosted tufts poke out of the drifts; the patch floor keeps a thin crust.
     cover = p.y < 0.01 ? 0.45 * up * smoothstep(0.3, 0.7, tNoise(p.xz * 9.0)) : smoothstep(0.16, 0.26, p.y) * 0.75;

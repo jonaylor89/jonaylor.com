@@ -52,6 +52,7 @@ export function floorMaterial(tileset: string): MaterialId {
 
 /** Unclassified solid squares (extruded blocks). */
 export function solidMaterial(tileset: string): MaterialId {
+  if (tileset === 'PLATEAU') return MAT.STONE; // the Indigo Plateau's walls, not buildings
   if (OUTDOOR.has(tileset)) return MAT.FACADE;
   if (tileset === 'CAVERN') return MAT.ROCK;
   return MAT.INDOOR_WALL;

@@ -153,6 +153,7 @@ export class PackRuntime {
       uFade: { value: 0 },
       uSnow: { value: pack.snow ?? 0 },
       uThemeTime: { value: 0 },
+      uOutdoor: { value: 1 },
       uWindowGlow: { value: linear(pack.night?.windows ?? '#ffd27a') },
       uLantern: { value: new THREE.Vector4(0, 0, 0, 0) },
       uLanternColor: { value: linear(pack.night?.lantern ?? '#ffcf8a') },
@@ -184,6 +185,7 @@ export class PackRuntime {
   setLight(setting: LightSetting): void {
     this.setting = setting;
     const outdoor = setting === 'outdoor';
+    this.uniforms.uOutdoor.value = outdoor ? 1 : 0;
     const l = resolvedLight(this.pack, setting);
     (this.uniforms.uSunDir.value as THREE.Vector3).set(...l.sunDir).normalize();
     (this.uniforms.uSunColor.value as THREE.Color).setStyle(l.sun).multiplyScalar(l.sunStrength);

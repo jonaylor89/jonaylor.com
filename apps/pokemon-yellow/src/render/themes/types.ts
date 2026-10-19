@@ -128,7 +128,8 @@ export interface TexturePack {
    * any fade remap, `p` the world position (1 unit = one 16px square), `n` the face normal.
    * Available: `tHash(vec2)`, `tNoise(vec2)`, `tFbm(vec2)`, `tCell(vec2)` (voronoi distance, id),
    * `tPlanar(p, n)`, `rampAt(material, t)`, `uPalette[4]`, `uPaletteHue`, `uThemeTime` (seconds,
-   * paused with the game). Keep it cheap: no loops; it runs for every map fragment.
+   * paused with the game), `uOutdoor` (1 outdoors incl. the forest, 0 indoors and in caves).
+   * Keep it cheap: no loops; it runs for every map fragment.
    */
   glsl?: string;
 }

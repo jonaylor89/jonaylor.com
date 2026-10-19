@@ -63,6 +63,7 @@ describe('materials', () => {
     expect(floorMaterial('POKECENTER')).toBe(MAT.FLOOR_TILE);
     expect(solidMaterial('OVERWORLD')).toBe(MAT.FACADE);
     expect(solidMaterial('MART')).toBe(MAT.INDOOR_WALL);
+    expect(solidMaterial('PLATEAU')).toBe(MAT.STONE);
     expect(quadMaterial('OVERWORLD', { model: 'tree' })).toBe(MAT.FOLIAGE);
     expect(quadMaterial('OVERWORLD', { model: 'tree', role: 'ground' })).toBe(MAT.GROUND);
     expect(quadMaterial('OVERWORLD', { model: 'grass', role: 'ground' })).toBe(MAT.TALL_GRASS);

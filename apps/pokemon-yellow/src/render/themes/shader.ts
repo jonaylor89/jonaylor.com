@@ -31,6 +31,7 @@ uniform vec4 uLightParams;
 uniform float uFade;
 uniform float uSnow;
 uniform float uThemeTime;
+uniform float uOutdoor;
 uniform vec3 uWindowGlow;
 uniform vec4 uLantern;
 uniform vec3 uLanternColor;
