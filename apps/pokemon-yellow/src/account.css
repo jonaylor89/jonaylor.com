@@ -1,0 +1,61 @@
+/* Trainer service desk: warm manual paper, cartridge yellow, crisp ink rules. */
+.account-boot, .trainer-dialog {
+  --trainer-paper: #f4f1df; --trainer-ink: #232a20; --trainer-muted: #555e4c; --trainer-yellow: #f6cc2b;
+  color: var(--trainer-ink); color-scheme: light; font: 14px/1.6 'Courier New', monospace;
+  touch-action: auto;
+}
+.account-boot {
+  position: absolute; inset: 0; z-index: 30; overflow: auto; display: grid; place-items: center;
+  padding: max(24px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  background: repeating-linear-gradient(0deg, #273024 0 1px, #20281e 1px 24px);
+}
+body:has(.account-boot), html:has(.account-boot) { touch-action: auto; }
+.trainer-card {
+  width: min(520px, 100%); padding: clamp(24px, 5vw, 44px); background: var(--trainer-paper);
+  border: 2px solid var(--trainer-ink); border-top: 12px solid var(--trainer-yellow); box-shadow: 9px 9px 0 #0005;
+}
+.trainer-eyebrow { font: bold 10px/1.5 'Courier New', monospace; letter-spacing: .12em; margin: 0 0 16px; }
+.trainer-card h1, .trainer-dialog h1 { font: bold clamp(30px, 6vw, 48px)/1.05 Georgia, serif; letter-spacing: -.04em; margin: 0 0 20px; }
+.trainer-intro { font: 18px/1.45 Georgia, serif; margin-bottom: 24px; }
+.trainer-card form { display: grid; gap: 16px; }
+.trainer-card label { display: grid; gap: 6px; font-weight: bold; font-size: 12px; }
+.trainer-card input { width: 100%; min-height: 48px; font: 16px Georgia, serif; padding: 10px; border: 1px solid var(--trainer-ink); border-radius: 0; background: #fffdf1; color: var(--trainer-ink); }
+.trainer-card button, .trainer-dialog button {
+  min-height: 44px; padding: 12px 16px; border: 1px solid var(--trainer-ink); background: var(--trainer-yellow); color: var(--trainer-ink);
+  font: bold 12px/1.5 'Courier New', monospace; text-align: left; cursor: pointer;
+}
+.trainer-card button[type=submit] { background: var(--trainer-ink); color: var(--trainer-paper); text-align: center; }
+.trainer-auth-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.trainer-auth-actions button, .trainer-card .trainer-offline { background: transparent; font-size: 11px; }
+.trainer-card [role=status] { font: 14px/1.5 Georgia, serif; min-height: 1.5em; overflow-wrap: anywhere; }
+.trainer-note { color: var(--trainer-muted); font: 13px/1.5 Georgia, serif; margin-top: 20px; }
+.trainer-dialog {
+  width: min(600px, calc(100vw - 32px)); max-height: calc(100dvh - 48px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  padding: 28px; border: 2px solid var(--trainer-ink); border-top: 10px solid var(--trainer-yellow);
+  background: var(--trainer-paper); box-shadow: 9px 9px 0 #0005; overflow: auto; overscroll-behavior: contain;
+}
+.trainer-dialog::backdrop { background: #141a13d9; }
+.trainer-dialog h1 { font-size: 34px; }
+.trainer-dialog p { overflow-wrap: anywhere; }
+.trainer-choices { display: grid; gap: 10px; margin-top: 22px; }
+.trainer-choices button { display: grid; gap: 8px; background: transparent; }
+.trainer-choices span { white-space: pre-line; font: 14px/1.5 Georgia, serif; color: var(--trainer-muted); }
+.trainer-choices button:first-child { border-width: 2px; }
+.account-open {
+  position: absolute; top: max(10px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); z-index: 15;
+  min-height: 44px; max-width: calc(100vw - 178px - env(safe-area-inset-left) - env(safe-area-inset-right));
+  padding: 5px 10px; border: 2px solid #232a20; background: #f4f1df; color: #232a20;
+  font: bold 10px/1.5 'Courier New', monospace; cursor: pointer; box-shadow: 3px 3px 0 #20261b80;
+}
+.account-boot :focus-visible, .trainer-dialog :focus-visible, .account-open:focus-visible { outline: 3px solid #687f34; outline-offset: 3px; }
+.trainer-card button:hover, .trainer-dialog button:hover { background: #e6d580; color: var(--trainer-ink); }
+.trainer-card button:disabled, .trainer-dialog button:disabled { opacity: .55; cursor: wait; }
+.account-boot[hidden], .trainer-card [hidden], .trainer-dialog [hidden] { display: none; }
+.trainer-dialog label { display: grid; gap: 6px; font-weight: bold; }
+.trainer-dialog input { width: 100%; min-height: 46px; padding: 8px; color: var(--trainer-ink); background: #fffdf1; border: 1px solid var(--trainer-ink); font: 16px Georgia, serif; }
+.guest-save-suggestion { position: absolute; top: max(66px, calc(env(safe-area-inset-top) + 56px)); right: max(12px, env(safe-area-inset-right)); z-index: 16; width: min(340px, calc(100vw - 24px)); padding: 16px; border: 2px solid #232a20; border-top: 6px solid #f6cc2b; color: #232a20; background: #f4f1df; box-shadow: 5px 5px 0 #0005; font: 15px/1.5 Georgia, serif; }
+.guest-save-suggestion p { margin: 0 0 10px; }
+.guest-save-suggestion button { min-height: 44px; margin-right: 8px; padding: 8px 14px; background: #f6cc2b; color: #232a20; border: 1px solid #232a20; font: bold 12px 'Courier New', monospace; cursor: pointer; }
+.guest-save-suggestion[hidden] { display: none; }
+.guest-save-suggestion :focus-visible { outline: 3px solid #687f34; outline-offset: 3px; }
+@media (max-width: 420px) { .trainer-dialog { padding: 20px; } .trainer-dialog h1 { font-size: 30px; } }

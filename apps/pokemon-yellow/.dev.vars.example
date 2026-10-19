@@ -1,0 +1,5 @@
+# Never commit real credentials. Use Cloudflare Worker secrets for production.
+# POSTMARK_SERVER_TOKEN must be a real Postmark server token, not POSTMARK_API_TEST.
+POSTMARK_SERVER_TOKEN=
+EMAIL_FROM=
+POSTMARK_MESSAGE_STREAM=outbound

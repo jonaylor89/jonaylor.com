@@ -18,6 +18,19 @@ cd jonaylor.com
 pnpm install
 ```
 
+## Pokémon Yellow
+
+`apps/pokemon-yellow` is a browser game with guest saves and optional Better Auth accounts,
+backed by a Cloudflare Worker and D1. Its production target is `pokemon-yellow.jonaylor.com`.
+See [the app setup/deployment guide](apps/pokemon-yellow/DEPLOYMENT.md). ROMs, prepared assets
+and credentials are not part of the source checkout.
+
+```bash
+pnpm --filter pokemon-yellow dev
+pnpm --filter pokemon-yellow build
+pnpm --filter pokemon-yellow test
+```
+
 ## Development
 
 Run commands from the repository root. Apps are managed with pnpm workspaces and Turborepo.

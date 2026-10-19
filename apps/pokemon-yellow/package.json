@@ -1,0 +1,49 @@
+{
+  "name": "pokemon-yellow",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "description": "A 3D Pokémon Yellow web game with account-isolated cloud saves and offline play.",
+  "scripts": {
+    "dev": "tsx tools/dev.ts",
+    "dev:ui": "vite --host localhost --port 5173 --strictPort",
+    "dev:worker": "wrangler dev --env local --local --port 8787 --persist-to .wrangler/state/local",
+    "db:migrate:local": "wrangler d1 migrations apply DB --env local --local --persist-to .wrangler/state/local",
+    "build": "tsc --noEmit && vite build",
+    "preview": "tsx tools/dev.ts --preview",
+    "typecheck": "tsc --noEmit",
+    "deploy": "tsx tools/fetch-assets.ts --check --dist && wrangler deploy --env \"\"",
+    "db:migrate:production": "wrangler d1 migrations apply DB --remote --env \"\"",
+    "assets:fetch": "tsx tools/fetch-assets.ts",
+    "assets:check": "tsx tools/fetch-assets.ts --check",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "extract": "tsx tools/extract.ts",
+    "prepare:assets": "tsx tools/prepare-assets.ts",
+    "qa:cloud": "tsx tools/cloud-browser-qa.ts",
+    "gen:reference": "tsx tools/gen-reference.ts",
+    "smoke": "tsx tools/smoke.ts",
+    "dump-gfx": "tsx tools/dump-gfx.ts"
+  },
+  "dependencies": {
+    "@better-auth/drizzle-adapter": "^1.7.10",
+    "better-auth": "^1.7.10",
+    "drizzle-orm": "^0.45.4",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261018.1",
+    "@types/node": "^22.10.2",
+    "@types/three": "^0.170.0",
+    "fake-indexeddb": "^6.0.0",
+    "puppeteer-core": "^23.10.4",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8",
+    "wrangler": "^4.151.1"
+  }
+}

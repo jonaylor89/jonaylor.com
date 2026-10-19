@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pokemon-yellow",
+  "account_id": "812f81e0bc93b7d93960812cda865473",
+  "workers_dev": false,
+  "preview_urls": false,
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": ["/api/*", "/__dev/*"], "not_found_handling": "single-page-application" },
+  "vars": { "APP_ORIGIN": "https://pokemon-yellow.jonaylor.com", "EMAIL_FROM": "me@jonaylor.com", "POSTMARK_MESSAGE_STREAM": "outbound" },
+  "routes": [{ "pattern": "pokemon-yellow.jonaylor.com", "custom_domain": true }],
+  "triggers": { "crons": ["0 3 * * *"] },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "pokemon-yellow", "database_id": "4176dcae-78ff-4a24-b662-fb1e8bda720a", "migrations_dir": "migrations" }
+  ],
+  "env": {
+    "local": {
+      "routes": [],
+      "vars": {
+        "APP_ORIGIN": "http://localhost:5173",
+        "LOCAL_DEV": "true",
+        "BETTER_AUTH_SECRET": "local-development-only-not-for-deployment-0123456789"
+      },
+      "d1_databases": [
+        { "binding": "DB", "database_name": "pokemon-yellow-local", "database_id": "00000000-0000-0000-0000-000000000001", "migrations_dir": "migrations" }
+      ]
+    }
+  }
+}
