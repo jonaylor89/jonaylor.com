@@ -5,10 +5,12 @@ export async function postmarkTestLink(email: string, kind: string, origin: stri
   }
   const token = process.env.POSTMARK_SERVER_TOKEN;
   if (!token || token === 'POSTMARK_API_TEST') throw new Error('Production QA requires a real Postmark token in the process environment.');
-  const get = async (path: string) => {
+  const get = async (path: string, pendingDetails = false) => {
     const response = await fetch('https://api.postmarkapp.com' + path, {
       headers: { 'X-Postmark-Server-Token': token, Accept: 'application/json' }, signal: AbortSignal.timeout(15_000),
     });
+    // Search indexing can precede availability of a new message's detail record.
+    if (pendingDetails && [404, 422].includes(response.status)) { await response.body?.cancel(); return undefined; }
     if (!response.ok) throw new Error(`Postmark QA inbox failed (${response.status}).`);
     return response.json();
   };
@@ -17,11 +19,13 @@ export async function postmarkTestLink(email: string, kind: string, origin: stri
     const result = await get('/messages/outbound?' + query);
     const message = result.Messages?.find((row: { Subject: string }) => row.Subject.includes(kind));
     if (message) {
-      const detail = await get('/messages/outbound/' + encodeURIComponent(message.MessageID) + '/details');
-      if (!detail.To?.some((recipient: { Email: string }) => recipient.Email.toLowerCase() === email)) throw new Error('Unexpected QA message recipient.');
-      const links = String(detail.TextBody ?? '').match(/https:\/\/[^\s<>"']+/g) ?? [];
-      const link = links.find(value => value.startsWith(origin + '/api/auth/'));
-      if (link) return link;
+      const detail = await get('/messages/outbound/' + encodeURIComponent(message.MessageID) + '/details', true);
+      if (detail) {
+        if (!detail.To?.some((recipient: { Email: string }) => recipient.Email.toLowerCase() === email)) throw new Error('Unexpected QA message recipient.');
+        const links = String(detail.TextBody ?? '').match(/https:\/\/[^\s<>"']+/g) ?? [];
+        const link = links.find(value => value.startsWith(origin + '/api/auth/'));
+        if (link) return link;
+      }
     }
     await new Promise(resolve => setTimeout(resolve, 1000));
   }

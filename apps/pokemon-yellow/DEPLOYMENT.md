@@ -11,7 +11,8 @@ successful guest SAVE in a visit. Accounts add cloud backup, history and cross-d
 The monorepo app is `apps/pokemon-yellow`. Its only production target is
 **https://pokemon-yellow.jonaylor.com**; there is no staging environment. Workers.dev,
 version preview URLs and automatic preview builds are disabled. The ignored old
-Cloudflare/family draft was not applied.
+Cloudflare/family draft was not applied. See [PRODUCTION.md](PRODUCTION.md) for the
+live deployment verification record and remaining operational responsibilities.
 
 ## Architecture
 
