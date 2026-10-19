@@ -51,8 +51,8 @@ const pack: TexturePack = {
   glsl: /* glsl */ `
 void packSurface(inout vec3 albedo, inout float gloss, int material, float shade, vec3 p, vec3 n) {
   if (material == M_FOLIAGE && shade < 2.5) {
-    // Each tree (by its square) turns its own colour: red, amber, gold, or still green.
-    float pick = tHash(floor(p.xz * 0.5) + 0.37);
+    // Each tree turns its own colour: red, amber, gold, or still green.
+    float pick = vThemeVariant;
     vec3 tone = pick < 0.3 ? vec3(0.78, 0.13, 0.05) : pick < 0.62 ? vec3(0.95, 0.42, 0.06) : pick < 0.86 ? vec3(0.98, 0.7, 0.12) : vec3(0.32, 0.45, 0.12);
     float l = dot(albedo, vec3(0.2126, 0.7152, 0.0722));
     albedo = tone * (0.35 + l * 1.4);

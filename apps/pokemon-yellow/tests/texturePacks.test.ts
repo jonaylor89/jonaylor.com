@@ -5,7 +5,7 @@ import { floorMaterial, MAT, MATERIAL_COUNT, MATERIAL_NAMES, quadMaterial, solid
 import { DEFAULT_RAMPS, DEFAULT_SURFACE, fadeAmount, hexToRgb, PackRuntime, resolvedLantern, resolvedLight } from '../src/render/themes/runtime';
 import { installTexturePack } from '../src/render/themes/shader';
 import { installWater, WaterMotion } from '../src/render/water';
-import { buildMapMesh, installCutaway } from '../src/render/MapMesh';
+import { buildMapMesh, installCutaway, propVariant } from '../src/render/MapMesh';
 import { FADE_PALS_BGP } from '../src/render/palette';
 import { AssetManifest } from '../src/render/manifest';
 import { WorldMap } from '../src/world/WorldMap';
@@ -37,7 +37,7 @@ describe('texture pack registry', () => {
     for (const [name, s] of Object.entries(pack.surface ?? {})) {
       expect(MATERIAL_NAMES, name).toContain(name);
       if (s?.alt) expect(MATERIAL_NAMES).toContain(s.alt);
-      for (const v of [s?.pattern, s?.tint, s?.glow]) if (v !== undefined) expect(v >= 0 && v <= 1, name).toBe(true);
+      for (const v of [s?.pattern, s?.tint, s?.glow, s?.vary]) if (v !== undefined) expect(v >= 0 && v <= 1, name).toBe(true);
     }
     for (const setting of ['outdoor', 'indoor', 'cave'] as const) {
       const l = resolvedLight(pack, setting);
@@ -78,6 +78,14 @@ describe('materials', () => {
   });
 });
 
+describe('prop variants', () => {
+  it('spreads stable ids over 0-1', () => {
+    const ids = Array.from({ length: 2000 }, (_, i) => propVariant(Math.imul(i % 40, 73856093) ^ Math.imul(Math.floor(i / 40), 19349663)));
+    expect(propVariant(12345)).toBe(propVariant(12345));
+    for (const bucket of [0, 1, 2, 3]) expect(ids.filter((v) => Math.floor(v * 4) === bucket).length).toBeGreaterThan(400);
+  });
+});
+
 describe('pack fades and lights', () => {
   it('turns FadePal remaps into a fade toward black or white', () => {
     expect(fadeAmount(FADE_PALS_BGP[3])).toBe(0); // FadePal4: normal
@@ -113,6 +121,8 @@ describe('pack shader composition', () => {
     expect(f.indexOf('vec4 themeTexel')).toBeLessThan(f.indexOf('if (vWaterInfo.x > 0.5)'));
     expect(f).toContain('diffuseColor.rgb = lit;');
     expect(shader.vertexShader).toContain('vThemeMat = themeMaterial;');
+    expect(shader.vertexShader).toContain('vThemeVariant = themeVariant;');
+    expect(shader.uniforms.uSurfVary).toBe(pack.uniforms.uSurfVary);
     expect(shader.uniforms.uRamps).toBe(pack.uniforms.uRamps);
     expect(material.customProgramCacheKey()).toContain('remastered');
     material.dispose(); tex.dispose(); pack.dispose();
@@ -131,17 +141,25 @@ describe.skipIf(!HAS_ROM)('pack map geometry', () => {
     const geo = built.mesh.geometry;
     const count = geo.getAttribute('position').count;
     const mats = geo.getAttribute('themeMaterial'), normals = geo.getAttribute('themeNormal'), ao = geo.getAttribute('themeAO');
+    const variants = geo.getAttribute('themeVariant');
+    expect(variants.count).toBe(count);
     expect(mats.count).toBe(count);
     expect(normals.count).toBe(count);
     expect(ao.count).toBe(count);
     const seen = new Set<number>();
+    const trees = new Set<number>();
     for (let i = 0; i < count; i++) {
       seen.add(mats.getX(i));
+      expect(variants.getX(i)).toBeGreaterThanOrEqual(0);
+      expect(variants.getX(i)).toBeLessThan(1);
+      if (mats.getX(i) === MAT.FOLIAGE) trees.add(variants.getX(i));
       expect(Math.hypot(normals.getX(i), normals.getY(i), normals.getZ(i))).toBeCloseTo(1, 3);
       expect(ao.getX(i)).toBeGreaterThan(0.4);
       expect(ao.getX(i)).toBeLessThanOrEqual(1);
     }
     for (const m of [MAT.GROUND, MAT.FOLIAGE, MAT.ROOF, MAT.FACADE, MAT.WOOD, MAT.TALL_GRASS]) expect(seen, `material ${m}`).toContain(m);
+    // Pallet's border trees each get their own variant (one value per tree, not per face).
+    expect(trees.size).toBeGreaterThan(20);
     // The original look builds the same geometry without pack attributes.
     const plain = buildMapMesh(world, manifest, atlas, {});
     expect(plain.mesh.geometry.getAttribute('position').count).toBe(count);

@@ -4,6 +4,7 @@ import type { SaveFile } from '../game/save';
 import type { KeyMap } from '../input/Input';
 import type { SyncStatus } from '../cloud/types';
 import { applyFilter, paletteColors, type ColorFilter } from '../render/palette';
+import { WORLD_LOOKS } from '../render/themes';
 import { c } from '../rom/constants';
 
 export interface HomeSaveStatus { account: boolean; status?: SyncStatus; failed?: boolean }
@@ -27,6 +28,9 @@ interface HomeHost {
   account: boolean;
   keymap(): KeyMap;
   filter(): ColorFilter;
+  /** The World look (texture pack) id; changing it repaints the town behind the menu. */
+  look(): string;
+  setLook(id: string): void;
   status(): HomeSaveStatus;
   subscribe(listener: () => void): () => void;
   prepareNewGame(): Promise<void>;
@@ -99,6 +103,19 @@ export function mountHomeScreen(root: HTMLElement, host: HomeHost) {
     for (const line of [summary.trainer, summary.progress]) { const span = document.createElement('span'); span.textContent = line; resume.append(span); }
   }
   add('NEW GAME', () => { if (host.save) confirmNewGame(); else start('new'); }, host.save ? undefined : 'Your adventure starts here.');
+  const lookRow = add('WORLD LOOK', () => stepLook(1));
+  lookRow.classList.add('home-look');
+  lookRow.dataset.steps = '';
+  lookRow.setAttribute('aria-roledescription', 'option cycler');
+  lookRow.addEventListener('step', event => stepLook((event as CustomEvent<number>).detail));
+  const lookName = document.createElement('span'); lookName.className = 'home-look-name';
+  const lookNote = document.createElement('span'); lookNote.className = 'home-look-note';
+  lookRow.append(lookName, lookNote);
+  function stepLook(direction: number) {
+    const i = WORLD_LOOKS.findIndex(l => l.id === host.look());
+    host.setLook(WORLD_LOOKS[(Math.max(0, i) + direction + WORLD_LOOKS.length) % WORLD_LOOKS.length].id);
+    render();
+  }
   add('SETTINGS', host.settings);
   add('ACCOUNT', host.openAccount, host.account ? 'Cloud saves & recovery' : 'Optional cloud saves across devices');
   function confirmNewGame() {
@@ -135,6 +152,10 @@ export function mountHomeScreen(root: HTMLElement, host: HomeHost) {
     q('.home-status').textContent = !host.save && !host.account ? 'Progress saves in this browser via START → SAVE.' : homeSaveStatus(host.status(), navigator.onLine);
     q('.home-offline').textContent = !navigator.onLine ? 'Offline · Account services need a connection.' : offlineReady ? 'Ready to reopen offline on this device.' : 'Keep browser data to keep local saves.';
     drawLogo(q<HTMLCanvasElement>('.home-logo'), host.bundle, host.filter());
+    const look = WORLD_LOOKS.find(l => l.id === host.look()) ?? WORLD_LOOKS[0];
+    lookName.textContent = `‹ ${look.label} ›`;
+    lookNote.textContent = look.description;
+    lookRow.setAttribute('aria-label', `World look: ${look.label}. ${look.description} Press to change.`);
   }
   function onKey(event: KeyboardEvent) {
     if (disposed || root.querySelector('dialog[open]') || event.ctrlKey || event.metaKey || event.altKey) return;
@@ -143,6 +164,9 @@ export function mountHomeScreen(root: HTMLElement, host: HomeHost) {
       event.preventDefault(); event.stopImmediatePropagation();
       const direction = event.code === 'ArrowUp' || map.up.includes(event.code) ? -1 : 1;
       buttons[(buttons.indexOf(selected) + direction + buttons.length) % buttons.length].focus();
+    } else if (selected === lookRow && (event.code === 'ArrowLeft' || map.left.includes(event.code) || event.code === 'ArrowRight' || map.right.includes(event.code))) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      stepLook(event.code === 'ArrowLeft' || map.left.includes(event.code) ? -1 : 1);
     } else if (event.code === 'Enter' || map.a.includes(event.code) || map.start.includes(event.code)) {
       event.preventDefault(); event.stopImmediatePropagation(); if (!event.repeat) selected.click();
     }

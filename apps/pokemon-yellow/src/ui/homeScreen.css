@@ -24,6 +24,8 @@
 .home-menu > button:hover, .home-menu > button.is-selected { background: #f7d34455; }
 .home-menu > button.is-selected::before { content: ''; position: absolute; left: 10px; top: 17px; border: 6px solid transparent; border-left: 8px solid currentColor; }
 .home-menu > .home-continue.is-selected::before { top: 20px; }
+.home-menu > .home-look .home-look-name { font: bold 13px/1.4 'Courier New', monospace; letter-spacing: .06em; }
+.home-menu > .home-look .home-look-note { font-size: 12px; margin-top: 1px; }
 .home-menu > button:focus-visible { outline: 2px solid var(--home-ink); outline-offset: -2px; }
 .home-footer { margin: 18px 6px 0; font: 12px/1.5 Georgia, serif; }
 .home-footer p { margin: 3px 0; }
@@ -67,6 +69,7 @@
   .home-menu > button { padding-block: 7px; min-height: 40px; }
   .home-menu > button strong { font-size: 14px; }
   .home-menu > button span { font-size: 11px; line-height: 1.3; }
+  .home-menu > .home-look .home-look-note { display: none; }
   .home-menu > button.is-selected::before { top: 11px; }
   .home-footer { margin-top: 8px; font-size: 11px; }
   .home-footer p { margin: 1px 0; }

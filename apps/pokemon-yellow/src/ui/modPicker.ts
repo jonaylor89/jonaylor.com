@@ -1,7 +1,11 @@
-/** New Game rules: pick web mods (see game/mods.ts) before Oak's speech. */
+/** New Game rules: pick web mods (see game/mods.ts) and a World look before Oak's speech. */
 import { formatSeed, MOD_INFO, parseSeed, type GameMods } from '../game/mods';
+import { WORLD_LOOKS } from '../render/themes';
 
-export function chooseMods(root: HTMLElement): Promise<GameMods | undefined> {
+/** The device's World look; unlike mods it is not stored with the save and can change anytime. */
+export interface LookChoice { current(): string; set(id: string): void }
+
+export function chooseMods(root: HTMLElement, look?: LookChoice): Promise<GameMods | undefined> {
   const dialog = document.createElement('dialog');
   dialog.className = 'web-settings mod-picker';
   dialog.setAttribute('aria-labelledby', 'mod-picker-title');
@@ -23,6 +27,10 @@ export function chooseMods(root: HTMLElement): Promise<GameMods | undefined> {
           <span class="mod-seed-row"><input id="mod-seed" autocomplete="off" spellcheck="false" maxlength="7" inputmode="text"><button type="button" class="mod-reroll">Reroll</button></span></label>
         <p class="settings-hint">Letters and numbers. The same seed gives the same Kanto.</p>
       </div>
+      ${look ? `<div class="mod-look">
+        <label class="settings-field" for="mod-look"><span>World look</span><select id="mod-look">${WORLD_LOOKS.map((l) => `<option value="${l.id}">${l.label}</option>`).join('')}</select></label>
+        <p class="settings-hint mod-look-hint"></p>
+      </div>` : ''}
     </div>
     <footer class="settings-footer"><p role="status" aria-live="polite"></p><div><span></span><button type="button" class="settings-done">Start adventure</button></div></footer>`;
   root.append(dialog);
@@ -34,6 +42,15 @@ export function chooseMods(root: HTMLElement): Promise<GameMods | undefined> {
   const status = get<HTMLParagraphElement>('[role=status]');
   const start = get<HTMLButtonElement>('.settings-done');
   seedInput.value = formatSeed(seed);
+  const lookSelect = dialog.querySelector<HTMLSelectElement>('#mod-look');
+  const renderLook = () => {
+    if (!look || !lookSelect) return;
+    lookSelect.value = look.current();
+    const info = WORLD_LOOKS.find((l) => l.id === lookSelect.value);
+    get<HTMLParagraphElement>('.mod-look-hint').textContent = `${info?.description ?? ''} Change it anytime in WEB SETTINGS.`;
+  };
+  lookSelect?.addEventListener('change', () => { look!.set(lookSelect.value); renderLook(); });
+  renderLook();
   const render = () => {
     seedBox.hidden = !random.checked;
     const valid = !random.checked || parseSeed(seedInput.value) !== undefined;

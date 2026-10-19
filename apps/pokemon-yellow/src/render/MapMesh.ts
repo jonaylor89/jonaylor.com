@@ -19,6 +19,14 @@ export const VIEW_MARGIN = 8;
 
 const SHADE = { top: 1, south: 0.86, east: 0.74, west: 0.74, north: 0.62 };
 
+/** A stable 0-1 id for one prop (texture packs vary each tree's colour by it). */
+export function propVariant(seed: number): number {
+  let h = seed >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b);
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b);
+  return ((h ^ (h >>> 16)) >>> 0) / 0x100000000;
+}
+
 export interface BuiltMap {
   mesh: THREE.Mesh;
   /** Surface height at a square (for placing actors). */
@@ -125,6 +133,7 @@ export function buildMapMesh(world: WorldMap, manifest: AssetManifest, atlas: Ti
   const materials: number[] = [];
   const normals: number[] = [];
   const occlusion: number[] = [];
+  const variants: number[] = [];
   // Baked contact shadow: ground beside raised squares, and the feet of walls/props.
   const aoAt = (x: number, y: number, z: number) => {
     if (y < 0.2) {
@@ -151,6 +160,7 @@ export function buildMapMesh(world: WorldMap, manifest: AssetManifest, atlas: Ti
     pixel?: number,
     water = false,
     material: number = MAT.GENERIC,
+    variant = 0.5,
   ) => {
     const [u0, v0, u1, v1] = atlas.uv(tile);
     const base = pos.length / 3;
@@ -179,6 +189,7 @@ export function buildMapMesh(world: WorldMap, manifest: AssetManifest, atlas: Ti
         normals.push(n[0] / len, n[1] / len, n[2] / len);
         materials.push(material);
         occlusion.push(aoAt(p[0], p[1], p[2]));
+        variants.push(variant);
       }
     }
     const area = (p: number[], q: number[], r: number[]) => {
@@ -230,17 +241,18 @@ export function buildMapMesh(world: WorldMap, manifest: AssetManifest, atlas: Ti
         }
         const patch = roofs.get((sy - y0) * w + sx - x0);
         const roofY = (z: number) => patch ? 1.15 + Math.min(z - patch[0], patch[1] - z) * 0.65 : 1.15;
+        const seed = Math.imul(sx - (v.part?.[0] ?? 0), 73856093) ^ Math.imul(sy - (v.part?.[1] ?? 0), 19349663);
         const faces = sceneryFaces(v.model, {
           samples, facing: v.ledgeFacing, tiles: tiles.slice(0, 4), floor,
-          part: v.part, span: v.span, rise: v.rise, compact: compactNaturalProps,
-          seed: Math.imul(sx - (v.part?.[0] ?? 0), 73856093) ^ Math.imul(sy - (v.part?.[1] ?? 0), 19349663),
+          part: v.part, span: v.span, rise: v.rise, compact: compactNaturalProps, seed,
           joined: [[0, -1], [1, 0], [0, 1], [-1, 0]].map(([dx, dy]) => vis(sx + dx, sy + dy)?.model === v.model),
           roof: patch ? [roofY(sy), roofY(sy + 0.5), roofY(sy + 1)] : undefined,
         });
+        const variant = propVariant(seed);
         for (const f of faces) {
           const corners = f.corners.map(([x, y, z]) => [x + sx, y, z + sy] as [number, number, number]);
           const material = pack ? quadMaterial(ts.name, { model: v.model, role: f.role }) : MAT.GENERIC;
-          quad(corners[0], corners[1], corners[2], corners[3], tiles[f.tile], f.shade, 0, 1, f.pixel, false, material);
+          quad(corners[0], corners[1], corners[2], corners[3], tiles[f.tile], f.shade, 0, 1, f.pixel, false, material, f.role ? 0.5 : variant);
         }
         continue;
       }
@@ -322,6 +334,7 @@ export function buildMapMesh(world: WorldMap, manifest: AssetManifest, atlas: Ti
     geo.setAttribute('themeMaterial', new THREE.Float32BufferAttribute(materials, 1));
     geo.setAttribute('themeNormal', new THREE.Float32BufferAttribute(normals, 3));
     geo.setAttribute('themeAO', new THREE.Float32BufferAttribute(occlusion, 1));
+    geo.setAttribute('themeVariant', new THREE.Float32BufferAttribute(variants, 1));
   }
   geo.computeBoundingSphere();
   if (hasWater) geo.boundingSphere!.radius += 0.02; // Shader wave displacement is at most 0.019.

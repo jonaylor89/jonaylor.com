@@ -21,6 +21,7 @@ ${defines}
 uniform sampler2D uRamps;
 uniform vec4 uSurfA[MATS];
 uniform vec4 uSurfB[MATS];
+uniform float uSurfVary[MATS];
 uniform vec3 uPalette[4];
 uniform vec3 uPaletteHue;
 uniform vec3 uSunDir;
@@ -41,6 +42,7 @@ uniform vec2 uShadowTexel;
 varying float vThemeMat;
 varying vec3 vThemeNormal;
 varying float vThemeAO;
+varying float vThemeVariant;
 varying vec4 vShadowCoord;
 
 float tHash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
@@ -190,6 +192,14 @@ const FRAGMENT_SURFACE = /* glsl */ `
         albedo = mix(albedo, max(hued, 0.0), A.w);
       }
     }
+    // Per-prop variety: neighbouring trees (rocks, fences) differ in lightness and hue.
+    float vary = uSurfVary[m] * (vThemeVariant - 0.5) * 2.0;
+    if (vary != 0.0) {
+      vec3 axis = vec3(0.57735);
+      float ang = vary * 0.34;
+      albedo = albedo * cos(ang) + cross(axis, albedo) * sin(ang) + axis * dot(axis, albedo) * (1.0 - cos(ang));
+      albedo = max(albedo * (1.0 + vary * 0.16), 0.0);
+    }
   }
 #ifdef PACK_SURFACE
   packSurface(albedo, gloss, m, shade, vWorldPos, n);
@@ -236,15 +246,18 @@ export function installTexturePack(material: THREE.MeshBasicMaterial, uniforms: 
         attribute float themeMaterial;
         attribute vec3 themeNormal;
         attribute float themeAO;
+        attribute float themeVariant;
         uniform mat4 uShadowMatrix;
         varying float vThemeMat;
         varying vec3 vThemeNormal;
         varying float vThemeAO;
+        varying float vThemeVariant;
         varying vec4 vShadowCoord;
       `)
       .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
         vThemeMat = themeMaterial;
         vThemeAO = themeAO;
+        vThemeVariant = themeVariant;
         vThemeNormal = normalize(mat3(modelMatrix) * themeNormal);
         vShadowCoord = uShadowMatrix * (modelMatrix * vec4(transformed, 1.0));
       `);

@@ -11,24 +11,24 @@ import type { ThemeUniforms } from './shader';
 
 /** Engine defaults; a pack only overrides what it styles. */
 export const DEFAULT_SURFACE: Record<MaterialName, SurfaceParams> = {
-  GENERIC: { base: 1, pattern: 1, detail: 0.3, tint: 0.35, gloss: 0, altAmount: 0, glow: 0 },
-  GROUND: { base: 0.8, pattern: 0.45, detail: 0.55, tint: 0, gloss: 0, alt: 'PATH', altAmount: 0.65, glow: 0 },
-  TALL_GRASS: { base: 1, pattern: 0.2, detail: 0.8, tint: 0, gloss: 0.05, altAmount: 0, glow: 0 },
-  FLOWERS: { base: 1, pattern: 1, detail: 0.3, tint: 0.45, gloss: 0, altAmount: 0, glow: 0 },
-  WATER: { base: 1, pattern: 1, detail: 0, tint: 0, gloss: 0.8, altAmount: 0, glow: 0 },
-  FOLIAGE: { base: 1, pattern: 0.85, detail: 0.6, tint: 0, gloss: 0.04, altAmount: 0, glow: 0 },
-  ROOF: { base: 1, pattern: 0.6, detail: 0.6, tint: 0.65, gloss: 0.12, altAmount: 0, glow: 0 },
-  FACADE: { base: 0.6, pattern: 0.8, detail: 0.4, tint: 0.15, gloss: 0, altAmount: 0, glow: 0 },
-  ROCK: { base: 1.2, pattern: 0.45, detail: 0.6, tint: 0, gloss: 0.03, alt: 'FOLIAGE', altAmount: 0, glow: 0 },
-  WOOD: { base: 1, pattern: 0.7, detail: 0.45, tint: 0.1, gloss: 0.05, altAmount: 0, glow: 0 },
-  FLOOR_WOOD: { base: 1, pattern: 0.35, detail: 0.6, tint: 0, gloss: 0.15, altAmount: 0, glow: 0 },
-  FLOOR_TILE: { base: 0.6, pattern: 0.55, detail: 0.6, tint: 0.4, gloss: 0.3, altAmount: 0, glow: 0 },
-  CAVE_FLOOR: { base: 1.3, pattern: 0.5, detail: 0.6, tint: 0, gloss: 0, altAmount: 0, glow: 0 },
-  INDOOR_WALL: { base: 0.6, pattern: 0.75, detail: 0.4, tint: 0.45, gloss: 0, altAmount: 0, glow: 0 },
-  METAL: { base: 1, pattern: 1, detail: 0.3, tint: 0.3, gloss: 0.55, altAmount: 0, glow: 0 },
-  STONE: { base: 1, pattern: 0.6, detail: 0.5, tint: 0.1, gloss: 0.05, altAmount: 0, glow: 0 },
-  PATH: { base: 0.8, pattern: 0.5, detail: 0.5, tint: 0, gloss: 0, altAmount: 0, glow: 0 },
-  SHADOW: { base: 3, pattern: 0, detail: 0, tint: 0, gloss: 0, altAmount: 0, glow: 0 },
+  GENERIC: { base: 1, pattern: 1, detail: 0.3, tint: 0.35, gloss: 0, altAmount: 0, glow: 0, vary: 0 },
+  GROUND: { base: 0.8, pattern: 0.45, detail: 0.55, tint: 0, gloss: 0, alt: 'PATH', altAmount: 0.65, glow: 0, vary: 0 },
+  TALL_GRASS: { base: 1, pattern: 0.2, detail: 0.8, tint: 0, gloss: 0.05, altAmount: 0, glow: 0, vary: 0 },
+  FLOWERS: { base: 1, pattern: 1, detail: 0.3, tint: 0.45, gloss: 0, altAmount: 0, glow: 0, vary: 0.5 },
+  WATER: { base: 1, pattern: 1, detail: 0, tint: 0, gloss: 0.8, altAmount: 0, glow: 0, vary: 0 },
+  FOLIAGE: { base: 1, pattern: 0.85, detail: 0.6, tint: 0, gloss: 0.04, altAmount: 0, glow: 0, vary: 0.7 },
+  ROOF: { base: 1, pattern: 0.6, detail: 0.6, tint: 0.65, gloss: 0.12, altAmount: 0, glow: 0, vary: 0 },
+  FACADE: { base: 0.6, pattern: 0.8, detail: 0.4, tint: 0.15, gloss: 0, altAmount: 0, glow: 0, vary: 0 },
+  ROCK: { base: 1.2, pattern: 0.45, detail: 0.6, tint: 0, gloss: 0.03, alt: 'FOLIAGE', altAmount: 0, glow: 0, vary: 0.35 },
+  WOOD: { base: 1, pattern: 0.7, detail: 0.45, tint: 0.1, gloss: 0.05, altAmount: 0, glow: 0, vary: 0.3 },
+  FLOOR_WOOD: { base: 1, pattern: 0.35, detail: 0.6, tint: 0, gloss: 0.15, altAmount: 0, glow: 0, vary: 0 },
+  FLOOR_TILE: { base: 0.6, pattern: 0.55, detail: 0.6, tint: 0.4, gloss: 0.3, altAmount: 0, glow: 0, vary: 0 },
+  CAVE_FLOOR: { base: 1.3, pattern: 0.5, detail: 0.6, tint: 0, gloss: 0, altAmount: 0, glow: 0, vary: 0 },
+  INDOOR_WALL: { base: 0.6, pattern: 0.75, detail: 0.4, tint: 0.45, gloss: 0, altAmount: 0, glow: 0, vary: 0 },
+  METAL: { base: 1, pattern: 1, detail: 0.3, tint: 0.3, gloss: 0.55, altAmount: 0, glow: 0, vary: 0 },
+  STONE: { base: 1, pattern: 0.6, detail: 0.5, tint: 0.1, gloss: 0.05, altAmount: 0, glow: 0, vary: 0 },
+  PATH: { base: 0.8, pattern: 0.5, detail: 0.5, tint: 0, gloss: 0, altAmount: 0, glow: 0, vary: 0 },
+  SHADOW: { base: 3, pattern: 0, detail: 0, tint: 0, gloss: 0, altAmount: 0, glow: 0, vary: 0 },
 };
 
 /** Fallback ramps: a neutral, natural world. */
@@ -132,17 +132,19 @@ export class PackRuntime {
     this.rampTexture.magFilter = this.rampTexture.minFilter = THREE.LinearFilter;
     this.rampTexture.wrapS = this.rampTexture.wrapT = THREE.ClampToEdgeWrapping;
     this.rampTexture.needsUpdate = true;
-    const surfA: THREE.Vector4[] = [], surfB: THREE.Vector4[] = [];
+    const surfA: THREE.Vector4[] = [], surfB: THREE.Vector4[] = [], vary: number[] = [];
     for (const name of MATERIAL_NAMES) {
       const s = resolvedSurface(pack, name);
       surfA.push(new THREE.Vector4(s.base, s.pattern, s.detail, s.tint));
       surfB.push(new THREE.Vector4(s.gloss, s.alt ? MAT[s.alt] : -1, s.altAmount, s.glow));
+      vary.push(s.vary);
     }
     this.shadowSize = mobile ? 0 : 4096;
     this.uniforms = {
       uRamps: { value: this.rampTexture },
       uSurfA: { value: surfA },
       uSurfB: { value: surfB },
+      uSurfVary: { value: vary },
       uPalette: { value: [0, 1, 2, 3].map(() => new THREE.Color()) },
       uPaletteHue: { value: new THREE.Color() },
       uSunDir: { value: new THREE.Vector3(0, 1, 0) },

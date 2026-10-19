@@ -148,7 +148,9 @@ html:has(dialog[open]), body:has(dialog[open]) { touch-action: auto; }
 .mod-details { display: grid; gap: 4px; margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .mod-details span { padding-left: 14px; position: relative; }
 .mod-details span::before { content: '▸'; position: absolute; left: 0; }
-.mod-seed { grid-column: 1 / -1; }
+.mod-seed, .mod-look { grid-column: 1 / -1; }
+.mod-look { border-top: 1px solid var(--ink); padding-top: 4px; }
+.mod-look .settings-field { margin-top: 12px; }
 .mod-seed .settings-field { margin-top: 0; }
 .mod-seed-row { display: flex; gap: 8px; }
 .mod-seed input { flex: 1; width: 0; min-width: 0; min-height: 44px; padding: 8px 12px; border: 1px solid var(--ink); background: #fffdf1; color: var(--ink); font: bold 18px 'Courier New', monospace; letter-spacing: .2em; text-transform: uppercase; }

@@ -28,6 +28,8 @@ export interface SurfaceParams {
   altAmount: number;
   /** Emissive strength (night windows, lamps); uses the ramp's lightest colour. */
   glow: number;
+  /** Per-prop variety: each tree, rock or fence gets its own lightness and hue shift (0 none … 1 strong). */
+  vary: number;
 }
 
 export interface LightParams {
@@ -128,7 +130,8 @@ export interface TexturePack {
    * any fade remap, `p` the world position (1 unit = one 16px square), `n` the face normal.
    * Available: `tHash(vec2)`, `tNoise(vec2)`, `tFbm(vec2)`, `tCell(vec2)` (voronoi distance, id),
    * `tPlanar(p, n)`, `rampAt(material, t)`, `uPalette[4]`, `uPaletteHue`, `uThemeTime` (seconds,
-   * paused with the game), `uOutdoor` (1 outdoors incl. the forest, 0 indoors and in caves).
+   * paused with the game), `uOutdoor` (1 outdoors incl. the forest, 0 indoors and in caves),
+   * `vThemeVariant` (a stable 0-1 id per prop, the same for every face of one tree or rock; 0.5 elsewhere).
    * Keep it cheap: no loops; it runs for every map fragment.
    */
   glsl?: string;

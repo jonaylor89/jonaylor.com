@@ -25,10 +25,22 @@ try {
     await page.goto(`http://localhost:${process.env.PORT ?? 5173}/`, { waitUntil: 'networkidle0' });
     await page.waitForSelector('.home-screen');
     const labels = () => page.$$eval('.home-menu strong', nodes => nodes.map(n => n.textContent));
-    assert.deepEqual(await labels(), ['NEW GAME', 'SETTINGS', 'ACCOUNT']);
+    assert.deepEqual(await labels(), ['NEW GAME', 'WORLD LOOK', 'SETTINGS', 'ACCOUNT']);
     assert.equal(await page.$eval('.touch-controls', e => getComputedStyle(e).display), 'none');
     assert.equal(await page.evaluate(() => (window as any).pyw.store.state.frames), 0);
     await page.screenshot({ path: join(output, `${name}-first.png`) });
+    // World look cycles in place with left/right (and Enter) and repaints the town behind the menu.
+    const look = () => page.evaluate(() => (window as any).pyw.view.diagnostics().look);
+    await page.keyboard.press('ArrowDown');
+    assert.equal(await look(), 'original');
+    await page.keyboard.press('ArrowRight');
+    await page.waitForFunction(() => (window as any).pyw.view.diagnostics().look !== 'original');
+    assert.match(await page.$eval('.home-look-name', e => e.textContent!), /‹ REMASTERED ›/);
+    assert.match(await page.evaluate(() => localStorage.getItem('pokeyellow-web:web-settings')!), /"look":"remastered"/);
+    await delay(600);
+    await page.screenshot({ path: join(output, `${name}-look.png`) });
+    await page.keyboard.press('ArrowLeft');
+    await page.waitForFunction(() => (window as any).pyw.view.diagnostics().look === 'original');
     await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
     await page.waitForSelector('.web-settings[open]');
     await page.select('#web-text-speed', 'fast');
@@ -58,7 +70,7 @@ try {
       await saves.writeSave('slot1', state);
     });
     await page.reload({ waitUntil: 'networkidle0' }); await page.waitForSelector('.home-screen');
-    assert.deepEqual(await labels(), ['CONTINUE', 'NEW GAME', 'SETTINGS', 'ACCOUNT']);
+    assert.deepEqual(await labels(), ['CONTINUE', 'NEW GAME', 'WORLD LOOK', 'SETTINGS', 'ACCOUNT']);
     assert.match(await page.$eval('.home-continue', e => e.textContent!), /ASH · PALLET TOWN.*2 badges · 06:42 played/);
     await page.screenshot({ path: join(output, `${name}-returning.png`) });
     // Keyboard cancellation is non-destructive and defaults to Keep.
@@ -72,11 +84,16 @@ try {
       (window as any).qaPad = [];
       Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => [{ mapping: 'standard', axes: [0, 0], buttons: Array.from({ length: 16 }, (_, i) => ({ pressed: (window as any).qaPad.includes(i) })) }] });
     });
-    const pad = async (index: number) => { await page.evaluate(i => { (window as any).qaPad = [i]; }, index); await delay(); await page.evaluate(() => { (window as any).qaPad = []; }); await delay(); };
-    await delay(); await pad(13); // New Game -> Settings
+    // Hold longer while a texture pack renders: software GL frames can outlast a short tap.
+    const pad = async (index: number, hold = 120) => { await page.evaluate(i => { (window as any).qaPad = [i]; }, index); await delay(hold); await page.evaluate(() => { (window as any).qaPad = []; }); await delay(hold); };
+    await delay(); await pad(13); // New Game -> World look
+    await pad(15);
+    await page.waitForFunction(() => (window as any).pyw.view.diagnostics().look !== 'original');
+    await pad(14, 1500); await page.waitForFunction(() => (window as any).pyw.view.diagnostics().look === 'original');
+    await pad(13); // World look -> Settings
     await pad(0); await page.waitForSelector('.web-settings[open]');
     await pad(1); await page.waitForFunction(() => !document.querySelector('dialog[open]'));
-    await pad(12); await pad(0); await page.waitForSelector('.home-confirm[open]');
+    await pad(12); await pad(12); await pad(0); await page.waitForSelector('.home-confirm[open]');
     await pad(1); await page.waitForFunction(() => !document.querySelector('.home-confirm'));
     // Switching offline updates status without disabling local play.
     await page.evaluate(() => { Object.defineProperty(navigator, 'onLine', { configurable: true, value: false }); window.dispatchEvent(new Event('offline')); });

@@ -31,6 +31,9 @@ export function mountDomNavigation(root: HTMLElement) {
         } else if (active instanceof HTMLSelectElement) {
           active.selectedIndex = Math.max(0, Math.min(active.options.length - 1, active.selectedIndex + direction));
           active.dispatchEvent(new Event('change', { bubbles: true }));
+        } else if (active?.dataset.steps !== undefined) {
+          // Option cyclers (the home screen's World look) step left/right in place.
+          active.dispatchEvent(new CustomEvent('step', { detail: direction }));
         }
       } else if (pressed.has('a') || pressed.has('start')) {
         if (controls.includes(active)) active.click(); else controls[0]?.focus();

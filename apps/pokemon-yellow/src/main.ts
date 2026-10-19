@@ -116,7 +116,7 @@ async function main(): Promise<void> {
     },
     chooseMods: async () => {
       pause('mods', true);
-      try { return await chooseMods(app); } finally { pause('mods', false); }
+      try { return await chooseMods(app, { current: () => preferences.view.look, set: setLook }); } finally { pause('mods', false); }
     },
     unported: (what) => {
       if (unported.has(what)) return;
@@ -126,15 +126,22 @@ async function main(): Promise<void> {
   });
   const sync = attachView(engine, view);
   if (import.meta.env.DEV) mountDebugOverlay(app, bundle, store, engine, unported, () => view.diagnostics());
+  const applyPreferences = (next: typeof preferences) => {
+    preferences = next;
+    view.settings = structuredClone(next.view);
+    input.keymap = structuredClone(next.keymap);
+    audio.setVolume(next.volume);
+    sync.refreshSettings();
+  };
+  /** World looks can also be picked on the home screen and in the New Game dialog. */
+  const setLook = (look: string) => {
+    if (look === preferences.view.look) return;
+    applyPreferences({ ...preferences, view: { ...preferences.view, look } });
+    try { saveWebSettings(localStorage, preferences); } catch { /* storage disabled */ }
+  };
   const webSettings = mountWebSettings(app, {
     engine, settings: () => preferences,
-    apply: (next) => {
-      preferences = next;
-      view.settings = structuredClone(next.view);
-      input.keymap = structuredClone(next.keymap);
-      audio.setVolume(next.volume);
-      sync.refreshSettings();
-    },
+    apply: applyPreferences,
     pause: (paused) => pause('settings', paused),
   });
   player.saves.startPlaying();
@@ -150,6 +157,7 @@ async function main(): Promise<void> {
     home = mountHomeScreen(app, {
       bundle, save, account: !!player.identity,
       keymap: () => preferences.keymap, filter: () => preferences.view.colorFilter,
+      look: () => preferences.view.look, setLook,
       status: () => ({ account: !!player.identity, status: player.saves instanceof AccountSaves ? player.saves.status : undefined, failed: player.saves.localSaveFailed }),
       subscribe: listener => player.saves.subscribe(listener),
       settings: () => webSettings.open(), openAccount: () => panel.open(),
