@@ -29,7 +29,10 @@ if (production) {
 const backend = production ? { baseURL: production, logPath: undefined, async close() {} } : await startLocalBackend();
 const origin = backend.baseURL;
 const password = production ? randomBytes(24).toString('base64url') : 'Browser-test-password-123';
+const browserEnv = { ...process.env };
+for (const key of ['POSTMARK_SERVER_TOKEN', 'CLOUDFLARE_API_TOKEN', 'BETTER_AUTH_SECRET']) delete browserEnv[key];
 const browser = await puppeteer.launch({
+  env: browserEnv,
   executablePath: process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
 });

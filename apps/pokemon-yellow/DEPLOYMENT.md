@@ -231,7 +231,7 @@ pnpm --filter pokemon-yellow assets:fetch
 pnpm --filter pokemon-yellow test
 pnpm --filter pokemon-yellow build
 pnpm --filter pokemon-yellow db:migrate:production
-pnpm --filter pokemon-yellow deploy
+pnpm --filter pokemon-yellow run deploy
 ```
 
 Remote migrations are reviewed, forward-only changes and run before publishing new code;
