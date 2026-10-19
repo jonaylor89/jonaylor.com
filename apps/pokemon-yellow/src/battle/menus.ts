@@ -399,6 +399,18 @@ function printMenuItem(b: Battle, cur: number): void {
   put(b, 8, 11, String(maxPP).padStart(2, ' '));
   const md = b.bundle.moves[move - 1];
   put(b, 2, 10, b.bundle.types.names[md.type] ?? '');
+  if (b.e.comfort && md.power && !b.isGhostBattle()) {
+    const mult = typeMultiplier(b.bundle.types.chart, md.type, b.enemy.mon.types);
+    const hint = mult === 1 ? '' : mult === 0 ? 'x0' : mult >= 1 ? `x${mult}` : mult === 0.5 ? 'x.5' : 'x.25';
+    if (hint) put(b, 6, 9, hint);
+  }
+}
+
+/** The Comfort mod's hint: the product of every matching type chart entry (as damage applies them). */
+export function typeMultiplier(chart: [number, number, number][], moveType: number, defender: [number, number]): number {
+  let m = 1;
+  for (const [atk, def, mult] of chart) if (atk === moveType && (def === defender[0] || def === defender[1])) m *= mult / 10;
+  return m;
 }
 
 /** GetMaxPP for the battle mon (base PP plus PP Ups; 5 per move when transformed). */

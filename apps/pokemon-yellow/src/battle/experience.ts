@@ -25,11 +25,12 @@ export function calcLevelFromExperience(b: Battle['bundle'], growthRate: number,
 /** BoostExp: ×1.5 (16-bit) */
 const boost = (q: number) => (q + (q >> 1)) & 0xffff;
 
-export function* gainExperience(b: Battle): Co {
+/** `divide` false: each gaining mon gets the full (already scaled) amount (Comfort's Exp. Share). */
+export function* gainExperience(b: Battle, divide = true): Co {
   // DivideExpDataByNumMonsGainingExp
   let n = 0;
   for (let i = 0; i < 8; i++) if ((b.partyGainExpFlags >> i) & 1) n++;
-  if (n >= 2) {
+  if (divide && n >= 2) {
     const bs = b.enemyBaseStats;
     for (const k of ['hp', 'atk', 'def', 'spd', 'spc'] as const) bs[k] = Math.floor(bs[k] / n);
     b.enemyBaseCatchRate = Math.floor(b.enemyBaseCatchRate / n);

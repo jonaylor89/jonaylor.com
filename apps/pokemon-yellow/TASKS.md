@@ -46,7 +46,7 @@ checked off. Routine names refer to pret/pokeyellow.
 ## 3. 3D overworld
 - [x] Map mesh: tile quads, extruded solid squares with textured walls, water, ledges, counters, doors (manifest-driven)
 - [x] Asset manifest covering every tile and sprite; `MissingAssetError` on unknown ids (tested across all maps)
-- [x] Palettes chosen per `SetPal_Overworld`; color filters (GBC, DMG, Pocket, high contrast)
+- [x] Palettes chosen per `SetPal_Overworld`; color filters (GBC, vivid, pastel, dusk, night, sepia, DMG, Pocket, high contrast)
 - [x] Water and flower tile animation (`UpdateMovingBgTiles`)
 - [x] Billboard sprites with the original walk cycle and mirroring
 - [x] Third-person smoothed follow camera; camera distance setting; reduced motion (snaps camera, instant fades)
@@ -127,6 +127,7 @@ checked off. Routine names refer to pret/pokeyellow.
 - [x] Music/SFX sequencer: the sound engine ported on a byte copy of the audio WRAM (`src/audio/soundEngine.ts`: UpdateMusic, the command set, pitch slides, vibrato, duty patterns, SFX priority, cries with pitch/tempo modifiers, fade-outs, the low health alarm), its register writes fed each frame to a DMG APU emulation (`src/audio/apu.ts`) in an AudioWorklet (`src/audio/apuWorklet.ts`, `output.ts`); `PlayDefaultMusic(FadeOutCurrent)` with bank handling, `StopMusic`, `WaitForSoundToFinish`/`PlaySoundWaitForCurrent` at the original call sites, `TextCommandSounds`; tested
 - [x] Pokémon cries; Pikachu PCM samples (NR32 toggled every 180 cycles as timed APU writes while the game is frozen, as with interrupts off)
 - [x] Web settings screen (`src/ui/webSettings.ts`, toolbar / F2): text speed, camera distance/pitch, keyboard remapping with conflict protection, color filters, reduced motion and volume; live preview, validated device-local preferences with legacy migration, native modal keyboard focus and game/audio pause; tested and browser-checked at desktop/phone sizes
+- [x] Optional New Game mods (`src/game/mods.ts`, `src/ui/modPicker.ts`): Comfort (Exp. Share, HM field moves, hold-B run, type hints) and a seeded, tiered Randomizer; stored and validated in saves; unit-tested and browser-checked at desktop/phone sizes
 - [x] Mobile: responsive portrait/landscape UI, optional persisted haptics, multi-pointer ownership/drag/cancellation, safe-area controls/settings/battle panel; Chrome touch checks with real CSS inset overrides (`tools/browser-qa.ts`). Phone DPR 1.5 / margin 4 quality tier and atlas-merged scenery keep draw/resource budgets bounded (`src/render/quality.ts`, `tests/performance.test.ts`)
 - [x] 60 FPS desktop audit and phone-viewport profiling (`tools/profile.ts`): town/forest/battle on each tier, scene validation, CPU/frame/resource metrics and failing budget checks; all six pass on Apple M5 Max / Chrome 155. Phone runs emulate viewport/DPR/touch, **not physical phone GPUs**; see `QA.md`
 - [x] Debug overlay: validated real encounters, undoable/destructive story and cutscene presets, pause/frame stepping, bounded next-map-script-state stepping, 200-entry map/text/ASM trace, performance diagnostics; reload/warp cancels old coroutines and presentation/audio state (`src/dev/presets.ts`, `tests/debug.test.ts`)

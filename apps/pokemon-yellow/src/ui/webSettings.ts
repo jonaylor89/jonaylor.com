@@ -1,6 +1,8 @@
 /** Device-local web options, separate from Yellow's authentic OPTION menu. */
 import type { Engine } from '../engine/Engine';
 import { BUTTONS, type Button } from '../input/Input';
+import { COLOR_FILTERS } from '../render/palette';
+import { activeModNames } from '../game/mods';
 import { defaultWebSettings, keyLabel, remapKey, saveWebSettings, type WebSettings } from './webSettingsData';
 
 export interface WebSettingsHost {
@@ -31,6 +33,7 @@ export function mountWebSettings(root: HTMLElement, host: WebSettingsHost) {
         <label class="settings-field" for="web-text-speed"><span>Text speed</span>
           <select id="web-text-speed"><option value="fast">FAST</option><option value="medium">MEDIUM</option><option value="slow">SLOW</option></select></label>
         <p class="settings-hint">Applies to new messages. Stored with your game when you save.</p>
+        <p class="settings-hint settings-mods"></p>
         <label class="settings-field" for="web-volume"><span>Volume <output id="web-volume-value"></output></span><input id="web-volume" type="range" min="0" max="100" step="1"></label>
         <p class="settings-hint">Zero mutes output, not the original sound engine.</p>
         <label class="settings-check" for="web-haptics"><input id="web-haptics" type="checkbox"><span>Touch haptics</span></label>
@@ -43,7 +46,8 @@ export function mountWebSettings(root: HTMLElement, host: WebSettingsHost) {
       </section>
       <section aria-labelledby="settings-access-title">
         <h2 id="settings-access-title"><span>03</span> Display & motion</h2>
-        <label class="settings-field" for="web-filter"><span>Color palette</span><select id="web-filter"><option value="gbc">ORIGINAL SGB / GBC</option><option value="dmg">DMG GREEN</option><option value="pocket">POCKET GRAYSCALE</option><option value="high-contrast">HIGH CONTRAST</option></select></label>
+        <label class="settings-field" for="web-filter"><span>Color palette</span><select id="web-filter">${COLOR_FILTERS.map((f) => `<option value="${f.id}">${f.label}</option>`).join('')}</select></label>
+        <p class="settings-hint">Original matches the Super Game Boy. Vivid, pastel, dusk, night and sepia regrade each area's own colors; DMG, pocket and high contrast use one fixed ramp.</p>
         <label class="settings-check" for="web-reduced"><input id="web-reduced" type="checkbox"><span>Reduced motion</span></label>
         <p class="settings-hint">Disables camera rails and stage lunges; snaps the follow camera. ROM battle effects keep their original timing.</p>
       </section>
@@ -92,6 +96,8 @@ export function mountWebSettings(root: HTMLElement, host: WebSettingsHost) {
   }
   function render() {
     speed.value = host.engine.state.options.textSpeed;
+    const mods = activeModNames(host.engine.state.mods);
+    get<HTMLParagraphElement>('.settings-mods').textContent = mods.length ? `Mods for this save: ${mods.join(', ')}. Chosen at New Game.` : 'No mods: the original game. Mods are chosen at New Game.';
     volume.value = String(Math.round(settings.volume * 100));
     distance.value = String(settings.view.cameraDistance);
     pitch.value = String(settings.view.cameraPitchDeg);

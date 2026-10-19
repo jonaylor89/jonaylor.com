@@ -365,9 +365,11 @@ export function* oakSpeech(e: Engine): Co {
   clearScreen(e);
   // PrepareOakSpeech + InitPlayerData2: a fresh state with a random trainer ID
   const options = e.state.options;
+  const mods = yield* awaitPromise(e.hooks.chooseMods?.() ?? Promise.resolve(undefined));
   const state = newGameState(e.bundle, ((e.random() << 24) | (e.random() << 16) | (e.random() << 8) | e.random()) >>> 0);
   state.player.id = (e.hRandomAdd() << 8) | e.random();
   state.options = { ...options };
+  if (mods) state.mods = mods;
   e.adoptState(state);
   const pics = e.bundle.pics;
   introPic(e, pics.special.ProfOakPic);

@@ -883,8 +883,23 @@ export class Battle {
       this.enemyBaseCatchRate >>= 1;
       this.enemyBaseExp >>= 1;
     }
+    // Comfort mod Exp. Share: those who fought gain in full, the rest of the party half.
+    const share = !expAll && this.e.comfort;
+    const fought = this.partyGainExpFlags;
+    const base = share ? { stats: { ...this.enemyBaseStats }, catchRate: this.enemyBaseCatchRate, exp: this.enemyBaseExp } : undefined;
     this.boostExpByExpAll = 0;
     yield* gainExperience(this);
+    if (base) {
+      const rest = ((1 << this.party.length) - 1) & ~fought;
+      if (!rest) return;
+      for (const k of ['hp', 'atk', 'def', 'spd', 'spc'] as const) this.enemyBaseStats[k] = base.stats[k] >> 1;
+      this.enemyBaseCatchRate = base.catchRate >> 1;
+      this.enemyBaseExp = base.exp >> 1;
+      this.boostExpByExpAll = 1;
+      this.partyGainExpFlags = rest;
+      yield* gainExperience(this, false);
+      return;
+    }
     if (!expAll) return;
     this.boostExpByExpAll = 1;
     this.partyGainExpFlags = (1 << this.party.length) - 1;

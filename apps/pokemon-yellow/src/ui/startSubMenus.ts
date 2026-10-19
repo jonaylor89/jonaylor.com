@@ -15,7 +15,7 @@ import { PAD_A, PAD_B } from '../engine/pad';
 import { encodePlain } from './TextPrinter';
 import { handleMenuInput, restoreScreen, saveScreen } from './menus';
 import { tossItem } from './pc';
-import { goBackToPartyMenu, partyMenu, switchPartyMon } from './partyMenu';
+import { canLearnTM, goBackToPartyMenu, partyMenu, switchPartyMon } from './partyMenu';
 import { statusScreen } from './statusScreen';
 import { bagEntries, chooseQuantity, displayListMenu, entriesToBag } from './listMenu';
 import { useItem } from '../items/useItem';
@@ -125,6 +125,16 @@ function* fieldMoveMonMenu(e: Engine, pm: PartyMon): Co<FieldChoice> {
     if (!f) continue;
     fields.push(f);
     if (f.x < left) left = f.x;
+  }
+  // Comfort mod: HMs in the bag work for any Pokémon that could learn them (up to 4 entries, as the box allows).
+  if (e.comfort) {
+    for (let hm = 0; hm < 5 && fields.length < 4; hm++) {
+      const move = e.bundle.tmMoves[50 + hm];
+      const f = table.find((t) => t.move === move);
+      if (!f || fields.includes(f) || !e.state.bag.some((i) => i.item === c('item', 'HM01') + hm) || !canLearnTM(e, pm.species, move)) continue;
+      fields.push(f);
+      if (f.x < left) left = f.x;
+    }
   }
   const s = e.screen;
   let topX: number;

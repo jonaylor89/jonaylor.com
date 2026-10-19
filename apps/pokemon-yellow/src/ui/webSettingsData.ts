@@ -2,6 +2,7 @@
  * save; camera, audio gain and keyboard bindings do not alter ROM game state.
  */
 import { DEFAULT_VIEW, type ViewSettings } from '../render/OverworldView';
+import { isColorFilter } from '../render/palette';
 import { BUTTONS, DEFAULT_KEYMAP, type KeyMap, type Button } from '../input/Input';
 
 export const WEB_SETTINGS_KEY = 'pokeyellow-web:web-settings';
@@ -25,7 +26,7 @@ export function normalizeWebSettings(value: unknown, reducedMotion = false): Web
   result.view.cameraDistance = bounded(view.cameraDistance, 4, 24, result.view.cameraDistance);
   result.view.cameraPitchDeg = bounded(view.cameraPitchDeg, 25, 75, result.view.cameraPitchDeg);
   if (typeof view.reducedMotion === 'boolean') result.view.reducedMotion = view.reducedMotion;
-  if (typeof view.colorFilter === 'string' && ['gbc', 'dmg', 'pocket', 'high-contrast'].includes(view.colorFilter)) result.view.colorFilter = view.colorFilter;
+  if (isColorFilter(view.colorFilter)) result.view.colorFilter = view.colorFilter;
   result.volume = bounded(raw.volume, 0, 1, 1);
   if (typeof raw.haptics === 'boolean') result.haptics = raw.haptics;
   // Accept bindings atomically: partial/ambiguous maps fall back to safe defaults.

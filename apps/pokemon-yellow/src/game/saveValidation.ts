@@ -1,4 +1,6 @@
 /** Structural validation only: client-run gameplay is not cheat-proof. */
+import { validMods } from './mods';
+
 type Obj = Record<string, unknown>;
 const object = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.isArray(v);
 const number = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v);
@@ -39,6 +41,7 @@ export function validSaveState(value: unknown, version: number): boolean {
       !object(s.pikachu) || !number(s.pikachu.happiness) || !number(s.pikachu.mood) ||
       !object(s.rng) || !['seed', 'add', 'sub'].every(k => number((s.rng as Obj)[k]))) return false;
   if (s.daycare !== undefined && !mon(s.daycare)) return false;
+  if (!validMods(s.mods)) return false;
   if (s.hallOfFame !== undefined && (!Array.isArray(s.hallOfFame) || s.hallOfFame.length > 50 ||
       !s.hallOfFame.every(team => Array.isArray(team) && team.length <= 6 && team.every(m =>
         object(m) && number(m.species) && number(m.level) && string(m.nick))))) return false;

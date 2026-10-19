@@ -24,6 +24,11 @@ pret/pokeyellow). Anything not listed here is meant to match the original; a mis
   Reduced motion disables the rails. Warps reset framing; map connections translate it.
 - **Sprites.** Characters are billboards that lean toward the camera. The frames, mirroring and
   walk cycle are the original ones.
+- **Color palettes.** WEB SETTINGS offers optional palettes beyond the Super Game Boy colors.
+  Vivid, pastel, golden dusk, moonlit night and sepia regrade each area's own SGB palette (hue
+  kept, saturation, shadows and tint changed); DMG green, pocket grayscale and high contrast
+  replace every palette with one 4-shade ramp. All keep the shade order, so FadePal fades,
+  flashes and text behave as with the original palette, which stays the default.
 - **Fades.** Fades step through FadePal1–8 like the original; in 3D the rBGP remap recolors the
   tile textures and the sky, and rOBP0 the sprite sheets, so lighting and fog still shade the
   remapped colors.
@@ -75,6 +80,22 @@ pret/pokeyellow). Anything not listed here is meant to match the original; a mis
 - **Touch controls/haptics.** On-screen controls support multiple pointers and drag re-entry.
   Optional device-local vibration is off by default; unsupported browsers ignore it.
   Safe-area layouts keep controls, settings and the battle panel clear of cutouts.
+
+## Optional mods
+Chosen at NEW GAME (before Oak's speech) and stored in that save; with none selected the game is
+the original. Mods cannot be changed later. Both use the same save format and validation.
+- **Comfort.** After a won battle, Pokémon that fought gain experience as normal and the rest of
+  the party (not fainted) gain half, printed as Exp. All gains (holding the real EXP.ALL keeps its
+  original behavior instead). With an HM in the bag, the party menu lists its field move for any
+  Pokémon whose TM/HM list allows it (at most four field moves, as the menu fits); badge checks
+  still apply. Holding B while walking moves at bike speed (not during scripted movement, ledges
+  or fishing). The move menu's TYPE box shows the damage multiplier (x0, x.25, x.5, x2, x4)
+  against the current opponent for damaging moves, except against the unidentified GHOST.
+- **Randomizer.** A seed builds a permutation of the 151 species within tiers of 16 by base stat
+  total. Wild grass/water tables, the three rods and every trainer party use it; levels,
+  encounter rates and trainer movesets/AI are unchanged. Gifts, in-game trades, static
+  encounters (Snorlax, legendaries, fossils), the starter Pikachu and the rival's Eevee gift are
+  not randomized. The seed is independent of the game's RNG.
 
 ## Timing
 - Logic runs at the Game Boy's 59.73 Hz from a fixed-step accumulator. When the browser stalls,

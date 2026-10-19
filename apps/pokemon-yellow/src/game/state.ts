@@ -10,6 +10,7 @@
 import { c } from '../rom/constants';
 import type { Facing } from '../world/movement';
 import type { GameBundle } from '../data/schema';
+import type { GameMods } from './mods';
 
 export const STATE_VERSION = 2;
 
@@ -96,6 +97,8 @@ export interface GameState {
   daycare?: PartyMon;
   /** sHallOfFame: up to HOF_TEAM_CAPACITY teams, oldest first (wNumHoFTeams is a var). */
   hallOfFame?: HallOfFameMon[][];
+  /** Web mods chosen at New Game (absent: the original game). */
+  mods?: GameMods;
   /** Player's party nickname/OT data lives in PartyMon; this is wPlayerStarter etc. */
 }
 

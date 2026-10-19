@@ -129,3 +129,34 @@ html:has(dialog[open]), body:has(dialog[open]) { touch-action: auto; }
     height: min(var(--phone-stage-height), 94vw * 9 / 10);
   }
 }
+
+/* New Game mod picker (shares the web-settings dialog language) */
+.mod-picker { width: min(720px, calc(100vw - 24px)); }
+.mod-cards { padding: 24px; overflow-y: auto; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.mod-card { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 18px 18px 14px; border: 2px solid var(--line); background: #fffdf1; cursor: pointer; transition: border-color .12s, box-shadow .12s, transform .12s; }
+.mod-card:hover { border-color: var(--ink); }
+.mod-card input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.mod-card:has(input:checked) { border-color: var(--ink); background: #fff8d2; box-shadow: 5px 5px 0 var(--ink); transform: translate(-2px, -2px); }
+.mod-card:has(input:focus-visible) { outline: 3px solid #687f34; outline-offset: 3px; }
+.mod-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.mod-card-head strong { font: bold 24px/1.1 Georgia, serif; letter-spacing: -.02em; }
+.mod-badge { font-size: 10px; font-weight: bold; letter-spacing: .12em; padding: 3px 7px; border: 1px solid var(--line); color: var(--muted); }
+.mod-badge::before { content: 'OFF'; }
+.mod-card:has(input:checked) .mod-badge { background: var(--yellow); border-color: var(--ink); color: var(--ink); }
+.mod-card:has(input:checked) .mod-badge::before { content: 'ON'; }
+.mod-summary { font: 14px/1.4 Georgia, serif; }
+.mod-details { display: grid; gap: 4px; margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.mod-details span { padding-left: 14px; position: relative; }
+.mod-details span::before { content: '▸'; position: absolute; left: 0; }
+.mod-seed { grid-column: 1 / -1; }
+.mod-seed .settings-field { margin-top: 0; }
+.mod-seed-row { display: flex; gap: 8px; }
+.mod-seed input { flex: 1; width: 0; min-width: 0; min-height: 44px; padding: 8px 12px; border: 1px solid var(--ink); background: #fffdf1; color: var(--ink); font: bold 18px 'Courier New', monospace; letter-spacing: .2em; text-transform: uppercase; }
+.mod-seed input[aria-invalid=true] { border-color: #a3312a; }
+.mod-seed button { min-height: 44px; padding: 8px 16px; border: 1px solid var(--ink); background: transparent; font-size: 11px; }
+.mod-picker .settings-done:disabled { opacity: .4; cursor: not-allowed; }
+@media (max-width: 640px) {
+  .mod-cards { grid-template-columns: minmax(0, 1fr); padding: 18px; gap: 14px; }
+  .mod-card:has(input:checked) { box-shadow: 4px 4px 0 var(--ink); transform: none; }
+  .mod-card strong { font-size: 20px; }
+}

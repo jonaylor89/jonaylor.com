@@ -82,6 +82,9 @@ export async function enterGame(page: Page, templates: Record<string, string>) {
     return;
   }
   await tap(page, 'z');
+  // New Game rules: start the original game (no mods).
+  await page.waitForSelector('dialog.mod-picker[open]', { timeout: 25_000 });
+  await page.click('dialog.mod-picker .settings-done');
   await until(page, templates, text => text.includes('NEW NAME'));
   await tap(page, 'ArrowDown'); await tap(page, 'ArrowDown'); await tap(page, 'z');
   await sleep(500);

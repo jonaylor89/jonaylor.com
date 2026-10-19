@@ -18,6 +18,7 @@ import { applyOutOfBattlePoisonDamage } from './poison';
 import type { GameBundle, MapTextEntry, TextOp } from '../data/schema';
 import type { GameState, Store } from '../game/state';
 import { getBit } from '../game/state';
+import { applyMods, type GameMods } from '../game/mods';
 import type { Button, InputFrame } from '../input/Input';
 import { c, CONSTANTS, constName } from '../rom/constants';
 import { WorldMap } from '../world/WorldMap';
@@ -306,6 +307,8 @@ export interface EngineHooks {
   /** Init (a soft reset): back to the title screen. */
   reset?(): void;
   onMapChanged?(world: WorldMap): void;
+  /** New Game: let the player choose web mods before Oak's speech (none: the original game). */
+  chooseMods?(): Promise<GameMods | undefined>;
   /** A ported routine was missing (text_asm/map script); shown in the debug overlay. */
   unported?(what: string): void;
 }
@@ -349,14 +352,32 @@ export class Engine implements SpriteHost {
   }
   readonly env: ScriptEnv;
 
+  /** The ROM data; `bundle` is it with the save's mods applied. */
+  readonly baseBundle: GameBundle;
+  private moddedBundle: GameBundle;
+  private modsKey = -1;
+  get bundle(): GameBundle {
+    const seed = this.store.state.mods?.randomizer?.seed ?? -1;
+    if (seed !== this.modsKey) {
+      this.modsKey = seed;
+      this.moddedBundle = applyMods(this.baseBundle, this.store.state.mods);
+    }
+    return this.moddedBundle;
+  }
+  /** The save's Comfort mod. */
+  get comfort(): boolean {
+    return !!this.store.state.mods?.comfort;
+  }
+
   constructor(
-    readonly bundle: GameBundle,
+    bundle: GameBundle,
     readonly store: Store,
     uiRoot: HTMLElement | TileScreen | null,
     readonly scripts: ScriptRegistry,
     readonly battleHost: BattleHost,
     readonly hooks: EngineHooks = {},
   ) {
+    this.baseBundle = this.moddedBundle = bundle;
     this.screen = uiRoot instanceof TileScreen ? uiRoot : new TileScreen(uiRoot ?? null, bundle);
     this.rng = new GbRandom(store.state.rng);
     this.scripted = {
@@ -976,8 +997,10 @@ export class Engine implements SpriteHost {
     }
     this.ram.turning = false;
     this.ram.pikachuCollisionCounter = 0;
-    // DoBikeSpeedup
-    if (
+    // DoBikeSpeedup; the Comfort mod also runs at bike speed while B is held
+    const running = this.comfort && this.state.player.mode === 'walk' && !!(this.ram.joyHeld & PAD_B) && !this.ram.npcMovementScriptTable && !this.ram.ledgeOrFishing && !this.scripted.active && !this.ram.simulatedIndex;
+    if (running) this.advancePlayerSprite();
+    else if (
       this.state.player.mode === 'bike' &&
       !this.ram.ledgeOrFishing &&
       !this.ram.npcMovementScriptTable &&

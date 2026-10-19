@@ -18,6 +18,8 @@ import { c, CONSTANTS } from './rom/constants';
 import { bootstrapPlayer } from './cloud/bootstrap';
 import { prepareOfflineShell } from './cloud/offline';
 import { mountAccountPanel } from './ui/accountPanel';
+import { chooseMods } from './ui/modPicker';
+import { parseSeed } from './game/mods';
 
 /** Game Boy frame rate. */
 const GB_FPS = 59.7275;
@@ -41,6 +43,17 @@ async function main(): Promise<void> {
       });
   const seedParam = import.meta.env.DEV ? params.get('seed') : null;
   const state = save?.state ?? newGameState(bundle, seedParam ? Number(seedParam) : (Math.random() * 0xffffffff) >>> 0);
+
+  // Debug mods: ?mods=comfort,randomizer:SEED (dev builds)
+  const modsParam = import.meta.env.DEV ? params.get('mods') : null;
+  if (modsParam) {
+    state.mods = {};
+    for (const m of modsParam.split(',')) {
+      const [name, seed] = m.split(':');
+      if (name === 'comfort') state.mods.comfort = true;
+      if (name === 'randomizer') state.mods.randomizer = { seed: parseSeed(seed ?? '') ?? 1 };
+    }
+  }
 
   // Debug start position: ?map=PALLET_TOWN&x=5&y=6
   const mapParam = import.meta.env.DEV ? params.get('map') : null;
@@ -95,6 +108,10 @@ async function main(): Promise<void> {
       const url = new URL(location.href);
       url.searchParams.delete('new');
       location.href = url.toString();
+    },
+    chooseMods: async () => {
+      pause('mods', true);
+      try { return await chooseMods(app); } finally { pause('mods', false); }
     },
     unported: (what) => {
       if (unported.has(what)) return;
