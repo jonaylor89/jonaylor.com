@@ -68,15 +68,17 @@ const MODEL: Partial<Record<SceneryKind, MaterialId>> = {
   statue: MAT.STONE, gravestone: MAT.STONE,
 };
 
-/** Material of one map quad. `role` marks a prop's own ground or its fake shadow disc. */
-export function quadMaterial(tileset: string, opts: { model?: SceneryKind; kind?: TileKind; water?: boolean; role?: 'ground' | 'shadow' }): MaterialId {
+/** Material of one map quad. `role` marks a prop's own ground or its fake shadow disc; `shore` a square beside water. */
+export function quadMaterial(tileset: string, opts: { model?: SceneryKind; kind?: TileKind; water?: boolean; role?: 'ground' | 'shadow'; shore?: boolean }): MaterialId {
   if (opts.water) return MAT.WATER;
   if (opts.role === 'shadow') return MAT.SHADOW;
   if (opts.role === 'ground') return opts.model === 'grass' ? MAT.TALL_GRASS : floorMaterial(tileset);
   if (opts.model) return MODEL[opts.model] ?? MAT.GENERIC;
   switch (opts.kind) {
-    case 'water': return MAT.WATER;
-    case 'solid': return solidMaterial(tileset);
+    // The non-water tiles of a shoreline square are its edging (water tiles returned above).
+    case 'water': return OUTDOOR.has(tileset) ? MAT.ROCK : MAT.STONE;
+    // Unclassified walls around ponds and seas are stone edging, not buildings.
+    case 'solid': return opts.shore && OUTDOOR.has(tileset) ? MAT.ROCK : solidMaterial(tileset);
     case 'counter': return MAT.WOOD;
     case 'ledge': return MAT.GROUND;
     default: return floorMaterial(tileset);

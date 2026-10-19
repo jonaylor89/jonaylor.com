@@ -26,6 +26,7 @@ import { INDEX_GRAYS } from './themes/shader';
 import { SkyDome } from './themes/sky';
 import { Weather } from './themes/weather';
 import { PostPass } from './themes/post';
+import { floorMaterial, MATERIAL_NAMES, outdoorTileset } from './themes/materials';
 
 export interface ViewSettings {
   cameraDistance: number;
@@ -80,8 +81,19 @@ export class OverworldView {
   private cutscene?: { shot?: CameraShot; focus: { x: number; z: number }; frame: number };
   private battleStage?: BattleStage;
   setBattleScene(active: boolean): void {
-    if (active) this.battleStage ??= new BattleStage();
-    else { this.battleStage?.dispose(); this.battleStage = undefined; }
+    if (active && !this.battleStage) {
+      this.battleStage = new BattleStage();
+      const pack = this.pack?.pack;
+      if (pack && this.world) {
+        const ground = MATERIAL_NAMES[floorMaterial(this.world.tileset.name)];
+        const [r, g, b] = this.pack!.ramp(ground)[1];
+        const platform = new THREE.Color().setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace);
+        const voidColor = new THREE.Color().setStyle(pack.indoorVoid);
+        this.battleStage.setLook(this.packOutside
+          ? { top: new THREE.Color().setStyle(pack.sky.zenith), bottom: new THREE.Color().setStyle(pack.sky.horizon), platform }
+          : { top: voidColor, bottom: voidColor.clone().lerp(platform, 0.35), platform });
+      }
+    } else if (!active) { this.battleStage?.dispose(); this.battleStage = undefined; }
   }
   syncBattleScene(screen: TileScreen, frame: number): void { this.battleStage?.update(screen, frame, this.settings.reducedMotion); }
   battleAnimation(id: number, turn: number, frame: number): void { this.battleStage?.animation(id, turn, frame); }
@@ -133,7 +145,9 @@ export class OverworldView {
     this.outside = outside;
     if (this.pack) {
       this.pack.setPalette(this.basePalette);
-      this.pack.setLight(outside ? 'outdoor' : world.tileset.name === 'CAVERN' ? 'cave' : 'indoor');
+      // Packs treat the forest as outdoors too (sun, sky and shadows), unlike the GB backdrop.
+      this.packOutside = outside || outdoorTileset(world.tileset.name);
+      this.pack.setLight(this.packOutside ? 'outdoor' : world.tileset.name === 'CAVERN' ? 'cave' : 'indoor');
       this.pack.setFade(this.bgRemap);
       this.bakePackShadows();
     }
@@ -192,8 +206,9 @@ export class OverworldView {
       this.weather = new Weather(want.weather, this.pack.uniforms, this.quality.mobile, this.quality.pixelRatio);
       this.scene.add(this.weather.points);
     }
+    // Phones keep the grade and vignette (one cheap pass), without blur, outline or bloom taps.
     const post = resolvedPost(want);
-    if (post && !this.quality.mobile) this.post = new PostPass(post);
+    if (post) this.post = new PostPass(this.quality.mobile ? { ...post, tiltShift: 0, outline: 0, bloom: 0 } : post);
   }
   /** The map atlas's four colours before rBGP: ROM shade indices in a pack. */
   private atlasPalette(): RGB[] {
@@ -262,13 +277,15 @@ export class OverworldView {
   }
 
   private outside = false;
+  private packOutside = false;
   private applySky(): void {
     if (this.pack) {
+      const outside = this.packOutside;
       const fade = this.pack.uniforms.uFade.value as number;
       const toward = (c: THREE.Color) => c.clone().lerp(new THREE.Color(fade < 0 ? 0xffffff : 0x000000), Math.abs(fade));
-      this.sky!.mesh.visible = this.outside;
-      if (this.weather) this.weather.points.visible = (this.outside || !!this.weather.params.indoor) && !this.settings.reducedMotion;
-      if (this.outside) {
+      this.sky!.mesh.visible = outside;
+      if (this.weather) this.weather.points.visible = (outside || !!this.weather.params.indoor) && !this.settings.reducedMotion;
+      if (outside) {
         this.scene.background = null;
         const fog = this.pack.pack.fog ?? { near: 26, far: 60 };
         this.scene.fog = new THREE.Fog(toward(this.sky!.horizon()), fog.near, fog.far);

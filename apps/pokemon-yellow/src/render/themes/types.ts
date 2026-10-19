@@ -122,8 +122,13 @@ export interface TexturePack {
   /** Night packs: glowing windows (FACADE shade 3) and a light carried by the player. */
   night?: { windows: Hex; lantern: Hex; lanternRadius: number };
   /**
-   * Optional GLSL run after the engine's surface model, before lighting:
+   * Optional GLSL run after the engine's surface model, before snow and lighting:
    * `void packSurface(inout vec3 albedo, inout float gloss, int material, float shade, vec3 p, vec3 n)`.
+   * `material` is an `M_<NAME>` define (M_GROUND, M_FOLIAGE, …), `shade` the ROM shade 0-3 after
+   * any fade remap, `p` the world position (1 unit = one 16px square), `n` the face normal.
+   * Available: `tHash(vec2)`, `tNoise(vec2)`, `tFbm(vec2)`, `tCell(vec2)` (voronoi distance, id),
+   * `tPlanar(p, n)`, `rampAt(material, t)`, `uPalette[4]`, `uPaletteHue`, `uThemeTime` (seconds,
+   * paused with the game). Keep it cheap: no loops; it runs for every map fragment.
    */
   glsl?: string;
 }

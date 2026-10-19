@@ -157,10 +157,10 @@ const FRAGMENT_SURFACE = /* glsl */ `
   if (m == M_SHADOW) discard;
   vec3 n = normalize(vThemeNormal);
   // Building volumes: flat tops read as roofing, roof gables/supports as walls;
-  // the vertical banks of lawns and ledges as dirt.
+  // the sloped/vertical banks of lawns and ledges as dirt.
   if (m == M_FACADE && n.y > 0.7 && vWorldPos.y > 0.9) m = M_ROOF;
   else if (m == M_ROOF && abs(n.y) < 0.35) m = M_FACADE;
-  else if (m == M_GROUND && n.y < 0.6) m = M_PATH;
+  else if (m == M_GROUND && n.y < 0.97) m = M_PATH;
   float shade = decodeShade(themeTexel.r);
   vec4 A = uSurfA[m];
   vec4 B = uSurfB[m];

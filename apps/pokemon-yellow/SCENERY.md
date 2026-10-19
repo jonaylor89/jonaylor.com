@@ -87,6 +87,24 @@ shader errors and budgets. It also compares rendered water animation versus
 reduced-motion freezing, colour filters and palette-black/white fades. Screenshots
 and the report are written under the ignored `extracted/water/` directory.
 
+## Texture packs
+
+`src/render/themes/` adds optional world looks on top of this geometry. A pack is one file in
+`themes/packs/` (auto-discovered): colour ramps per material, surface tuning, light, sky,
+weather, snow, night lighting and an optional final pass. `materials.ts` tags every map quad
+with a material from the tileset and the manifest's kind/model (prop ground and painted shadow
+discs are marked by `SceneryFace.role`); MapMesh adds material, flat-normal and baked
+contact-shadow attributes only when a pack is active, so the Original look is unchanged.
+`shader.ts` chains after the cutaway and water shaders in the same single map material.
+
+Invariants: the atlas keeps ROM shade indices (`INDEX_GRAYS`), so tile animations, spinner
+arrows and every FadePal/rBGP remap behave exactly as in the GB look; the shadow map is
+rendered once per map build, never per frame; phones get no shadow map and only the grade/vignette
+part of the final pass. Check a
+pack with `PORT=5173 npx tsx tools/theme-qa.ts --looks <id>` (screenshots, contact sheets,
+shader errors and budgets under `extracted/themes/`); `tests/texturePacks.test.ts` validates
+every pack's ramps, lights and surface parameters.
+
 ## Deliberate limits
 
 This is not an all-assets replacement: characters and Pokémon retain their

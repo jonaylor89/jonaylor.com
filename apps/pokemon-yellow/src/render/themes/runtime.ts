@@ -95,8 +95,9 @@ export function resolvedLight(pack: TexturePack, setting: LightSetting): LightPa
 }
 /** The light carried by the player: night packs everywhere, other packs in caves. */
 export function resolvedLantern(pack: TexturePack, setting: LightSetting): { color: string; radius: number } | undefined {
-  if (pack.night) return { color: pack.night.lantern, radius: pack.night.lanternRadius };
-  if (setting === 'cave') return { color: pack.caveLight?.lantern ?? '#ffc982', radius: pack.caveLight?.lanternRadius ?? 5.5 };
+  const cave = setting === 'cave' ? pack.caveLight : undefined;
+  if (pack.night) return { color: cave?.lantern ?? pack.night.lantern, radius: cave?.lanternRadius ?? pack.night.lanternRadius };
+  if (setting === 'cave') return { color: cave?.lantern ?? '#ffc982', radius: cave?.lanternRadius ?? 5.5 };
   return undefined;
 }
 export function resolvedPost(pack: TexturePack): PostParams | undefined {

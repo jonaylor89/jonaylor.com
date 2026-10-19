@@ -129,7 +129,7 @@ Extra keys: `+` / `-` change the camera distance; `` ` `` (backquote) toggles th
 Touch controls appear automatically on touch devices.
 
 Use **WEB SETTINGS** (top left) or **F2** for text speed, camera distance/pitch, keyboard
-remapping, color filters, reduced motion and volume. The panel pauses game frames and audio.
+remapping, color filters, world looks (texture packs), reduced motion and volume. The panel pauses game frames and audio.
 Web preferences are saved on this device; text speed is kept with normal game saves.
 
 **NEW GAME** offers optional mods, kept with that save: **Comfort** (party Exp. Share, HM field

@@ -246,6 +246,7 @@ export function buildMapMesh(world: WorldMap, manifest: AssetManifest, atlas: Ti
       }
       // top: four tiles, each 0.5 x 0.5; world x = sx, world z = sy (south is +z)
       const squareSet = pack ? world.tilesetForBlock(Math.floor(sx / 2), Math.floor(sy / 2)) : undefined;
+      const shore = !!pack && v.kind === 'solid' && [[0, 1], [1, 0], [0, -1], [-1, 0]].some(([dx, dy]) => vis(sx + dx, sy + dy)?.waterTile !== undefined);
       for (let ty = 0; ty < 2; ty++)
         for (let tx = 0; tx < 2; tx++) {
           const tile = world.tileAt(sx * 2 + tx, sy * 2 + ty);
@@ -256,7 +257,7 @@ export function buildMapMesh(world: WorldMap, manifest: AssetManifest, atlas: Ti
           // Offshore ripples are fragment-shaded, so oceans remain cheap quads.
           const divisions = water && Math.min(shoreAt!(xa, za), shoreAt!(xa + 0.5, za), shoreAt!(xa, za + 0.5), shoreAt!(xa + 0.5, za + 0.5)) < 0.6 ? 2 : 1;
           const size = 0.5 / divisions, y = water ? WATER_LEVEL : top;
-          const material = squareSet ? quadMaterial(squareSet.name, { kind: v.kind, water }) : MAT.GENERIC;
+          const material = squareSet ? quadMaterial(squareSet.name, { kind: v.kind, water, shore }) : MAT.GENERIC;
           for (let j = 0; j < divisions; j++) for (let i = 0; i < divisions; i++) {
             const x = xa + i * size, z = za + j * size;
             quad([x, y, z + size], [x + size, y, z + size], [x + size, y, z], [x, y, z], tile, SHADE.top, 0, 1, undefined, water, material);
@@ -304,7 +305,7 @@ export function buildMapMesh(world: WorldMap, manifest: AssetManifest, atlas: Ti
             const y1 = bottom + (span * r) / reps;
             const y2 = bottom + (span * (r + 1)) / reps;
             quad([a[0], y1, a[2]], [b[0], y1, b[2]], [c[0], y2, c[2]], [d[0], y2, d[2]], tile, SHADE[side], 0, 1, undefined, false,
-              squareSet ? quadMaterial(squareSet.name, { kind: v.kind }) : MAT.GENERIC);
+              squareSet ? quadMaterial(squareSet.name, { kind: v.kind, shore }) : MAT.GENERIC);
           }
         }
       }

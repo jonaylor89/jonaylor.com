@@ -228,6 +228,11 @@ export function sceneryFaces(kind: SceneryKind, opts: SceneryOptions): SceneryFa
       const start = out.length;
       face([0, 0.12, 0.72], [1, 0.12, 0.72], [1, 0.12, 0], [0, 0.12, 0], 0);
       face([0, 0, 1], [1, 0, 1], [1, 0.12, 0.72], [0, 0.12, 0.72], 2, 0.74);
+      // Close the bank where the ledge row ends, so the open end never shows the background.
+      // Local x=0/x=1 are the row's ends; after rotation they face west/east, north/south or south/north.
+      const [westSide, eastSide] = opts.facing === 8 ? [0, 2] : opts.facing === 12 ? [2, 0] : [3, 1];
+      if (!opts.joined?.[westSide]) face([0, 0, 0], [0, 0, 1], [0, 0.12, 0.72], [0, 0.12, 0], 2, 0.8);
+      if (!opts.joined?.[eastSide]) face([1, 0, 1], [1, 0, 0], [1, 0.12, 0], [1, 0.12, 0.72], 2, 0.8);
       for (const f of out.slice(start)) f.corners = f.corners.map(rotate) as SceneryFace['corners'];
       break;
     }

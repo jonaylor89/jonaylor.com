@@ -29,6 +29,16 @@ pret/pokeyellow). Anything not listed here is meant to match the original; a mis
   kept, saturation, shadows and tint changed); DMG green, pocket grayscale and high contrast
   replace every palette with one 4-shade ramp. All keep the shade order, so FadePal fades,
   flashes and text behave as with the original palette, which stays the default.
+- **World looks (texture packs).** WEB SETTINGS → World look can replace the GB tile colours with a
+  texture pack (default: Original GB). In a pack, the atlas still holds the ROM tiles, but as shade
+  indices; each surface (lawn, path, tall grass, foliage and bark, roofs, facades, rock, wood,
+  floors, water, metal, stone) is painted from the pack's colour ramps with procedural detail
+  and lit by a sun/sky model with contact shadows, a shadow map baked once per map (desktop),
+  an optional sky dome, weather particles and a final image pass. Roofs and signs keep each
+  area's SGB hue. Characters keep their ROM art but are dressed in fixed palettes (red player,
+  yellow Pikachu, varied NPCs) instead of the area palette. FadePal/rBGP remaps still remap the
+  shades exactly; packs add a matching fade toward black/white for the lighting, sky and fog.
+  Packs are device-local presentation only: no collision, script, timing or RNG change.
 - **Fades.** Fades step through FadePal1–8 like the original; in 3D the rBGP remap recolors the
   tile textures and the sky, and rOBP0 the sprite sheets, so lighting and fog still shade the
   remapped colors.

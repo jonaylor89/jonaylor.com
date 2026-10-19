@@ -19,6 +19,26 @@ export class BattleStage {
   private readonly geometry = new THREE.PlaneGeometry(3.8, 3.8);
   private readonly platformGeometry = new THREE.CylinderGeometry(1.9, 2.1, 0.18, 12);
   private attack?: { turn: number; start: number };
+  /** Texture packs: a sky-gradient backdrop and platforms of the area's ground. */
+  private look?: { platform: THREE.Color; backdrop: THREE.DataTexture };
+  setLook(look: { top: THREE.Color; bottom: THREE.Color; platform: THREE.Color } | undefined): void {
+    this.look?.backdrop.dispose();
+    this.look = undefined;
+    this.scene.background = null;
+    if (!look) return;
+    const rows = 64, data = new Uint8Array(rows * 4);
+    for (let y = 0; y < rows; y++) {
+      const c = look.bottom.clone().lerp(look.top, Math.pow(y / (rows - 1), 0.8)).convertLinearToSRGB();
+      data.set([c.r * 255, c.g * 255, c.b * 255, 255].map(Math.round), y * 4);
+    }
+    const backdrop = new THREE.DataTexture(data, 1, rows, THREE.RGBAFormat);
+    backdrop.colorSpace = THREE.SRGBColorSpace;
+    backdrop.magFilter = backdrop.minFilter = THREE.LinearFilter;
+    backdrop.needsUpdate = true;
+    this.look = { platform: look.platform.clone(), backdrop };
+    this.scene.background = backdrop;
+    for (const p of this.platforms) p.material.color.copy(look.platform);
+  }
 
   constructor() {
     this.camera.position.set(0, 5, 12);
@@ -89,8 +109,10 @@ export class BattleStage {
       }
       if (changed) this.textures[side].needsUpdate = true;
       this.actors[side].visible = visible;
-      const pc = screen.colorAt(ox, oy, 1);
-      this.platforms[side].material.color.setRGB(pc[0] / 255, pc[1] / 255, pc[2] / 255, THREE.SRGBColorSpace).multiplyScalar(0.8);
+      if (!this.look) {
+        const pc = screen.colorAt(ox, oy, 1);
+        this.platforms[side].material.color.setRGB(pc[0] / 255, pc[1] / 255, pc[2] / 255, THREE.SRGBColorSpace).multiplyScalar(0.8);
+      }
       const elapsed = this.attack ? frame - this.attack.start : 100;
       const lunge = !reducedMotion && this.attack?.turn === side && elapsed >= 0 && elapsed < 24 ? Math.sin(elapsed / 24 * Math.PI) * 0.6 : 0;
       this.actors[side].position.x = (side ? 3 : -3) + (side ? -lunge : lunge);
@@ -123,6 +145,7 @@ export class BattleStage {
   }
 
   dispose(): void {
+    this.look?.backdrop.dispose();
     this.geometry.dispose(); this.platformGeometry.dispose();
     this.actors.forEach((a) => a.material.dispose());
     this.platforms.forEach((a) => a.material.dispose());

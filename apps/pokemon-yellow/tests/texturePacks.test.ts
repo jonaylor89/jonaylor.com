@@ -68,6 +68,10 @@ describe('materials', () => {
     expect(quadMaterial('OVERWORLD', { model: 'grass', role: 'ground' })).toBe(MAT.TALL_GRASS);
     expect(quadMaterial('OVERWORLD', { model: 'tree', role: 'shadow' })).toBe(MAT.SHADOW);
     expect(quadMaterial('OVERWORLD', { kind: 'floor', water: true })).toBe(MAT.WATER);
+    // A shoreline square's non-water tiles are edging, never the water material.
+    expect(quadMaterial('OVERWORLD', { kind: 'water' })).toBe(MAT.ROCK);
+    expect(quadMaterial('GYM', { kind: 'water' })).toBe(MAT.STONE);
+    expect(quadMaterial('OVERWORLD', { kind: 'solid', shore: true })).toBe(MAT.ROCK);
     expect(Object.keys(DEFAULT_RAMPS)).toHaveLength(MATERIAL_COUNT);
     expect(Object.keys(DEFAULT_SURFACE)).toHaveLength(MATERIAL_COUNT);
   });
