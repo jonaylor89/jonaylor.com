@@ -72,7 +72,8 @@ describe('continuous diorama water', () => {
     expect(shader.uniforms.uWaterTime).toBe(motion.time);
     expect(shader.uniforms.uWaterOrigin).toBe(motion.origin);
     // Recolouring the atlas is sufficient for filters/fades: no fixed RGB water palette.
-    expect(shader.fragmentShader).toContain('texture2D(map, uWaterMid)');
+    expect(shader.fragmentShader).toContain('waterTone(uWaterMid)');
+    expect(shader.fragmentShader).toContain('vec3 waterTone(vec2 uv) { return texture2D(map, uv).rgb; }');
     expect(material.transparent).toBe(false);
     material.dispose(); a.texture.dispose();
   });

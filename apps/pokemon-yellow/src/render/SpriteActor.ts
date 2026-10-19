@@ -116,6 +116,11 @@ export class SpriteActor {
     this.overlay.visible = true;
   }
 
+  /** Texture packs: light the ROM art to match the scene. */
+  setTint(color: THREE.Color): void {
+    (this.mesh.material as THREE.MeshBasicMaterial).color.copy(color);
+  }
+
   setVisible(v: boolean): void {
     this.object.visible = v;
   }

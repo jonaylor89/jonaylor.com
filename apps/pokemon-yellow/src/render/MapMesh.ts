@@ -10,6 +10,9 @@ import type { AssetManifest, TileVisual } from './manifest';
 import type { TileAtlas } from './textures';
 import { sceneryFaces } from './scenery';
 import { buildShoreField, installWater, WaterMotion, WATER_LEVEL } from './water';
+import { quadMaterial, MAT } from './themes/materials';
+import { installTexturePack } from './themes/shader';
+import type { PackRuntime } from './themes/runtime';
 
 /** Squares of scenery drawn around the map (connected maps / border blocks). */
 export const VIEW_MARGIN = 8;
@@ -33,6 +36,8 @@ export interface MapMeshOptions {
   flatBorder?: boolean;
   /** Shared across this view's main, connected and cutscene map batches. */
   waterMotion?: WaterMotion;
+  /** Texture pack: adds material/normal/contact-shadow attributes and the pack shader. */
+  pack?: PackRuntime;
 }
 
 /** Shared uniforms for the camera-to-player cutaway. */
@@ -116,6 +121,22 @@ export function buildMapMesh(world: WorldMap, manifest: AssetManifest, atlas: Ti
   const col: number[] = [];
   const idx: number[] = [];
   const waterInfo: number[] = [];
+  const pack = opts.pack;
+  const materials: number[] = [];
+  const normals: number[] = [];
+  const occlusion: number[] = [];
+  // Baked contact shadow: ground beside raised squares, and the feet of walls/props.
+  const aoAt = (x: number, y: number, z: number) => {
+    if (y < 0.2) {
+      let raised = 0;
+      for (const dx of [-0.01, 0.01]) for (const dz of [-0.01, 0.01]) {
+        const n = vis(Math.floor(x + dx), Math.floor(z + dz));
+        if (n && n.height >= 0.5) raised++;
+      }
+      return 1 - 0.13 * raised;
+    }
+    return 0.72 + 0.28 * Math.min(1, Math.max(0, (y - 0.2) / 0.8));
+  };
 
   // Quad with corners a,b,c,d (counter-clockwise when seen from outside) and tile UVs.
   const quad = (
@@ -129,6 +150,7 @@ export function buildMapMesh(world: WorldMap, manifest: AssetManifest, atlas: Ti
     vTo = 1,
     pixel?: number,
     water = false,
+    material: number = MAT.GENERIC,
   ) => {
     const [u0, v0, u1, v1] = atlas.uv(tile);
     const base = pos.length / 3;
@@ -143,6 +165,22 @@ export function buildMapMesh(world: WorldMap, manifest: AssetManifest, atlas: Ti
     }
     for (let k = 0; k < 4; k++) col.push(shade, shade, shade);
     if (hasWater) for (const p of [a, b, c, d]) waterInfo.push(water ? 1 : 0, water ? shoreAt!(p[0], p[2]) : 0);
+    if (pack) {
+      // Flat face normal; triangles are stored as quads with a repeated corner.
+      const nrm = (p: number[], q: number[], r: number[]) => {
+        const ux = q[0] - p[0], uy = q[1] - p[1], uz = q[2] - p[2];
+        const vx = r[0] - p[0], vy = r[1] - p[1], vz = r[2] - p[2];
+        return [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx];
+      };
+      let n = nrm(a, b, c);
+      if (Math.hypot(n[0], n[1], n[2]) < 1e-10) n = nrm(a, c, d);
+      const len = Math.hypot(n[0], n[1], n[2]) || 1;
+      for (const p of [a, b, c, d]) {
+        normals.push(n[0] / len, n[1] / len, n[2] / len);
+        materials.push(material);
+        occlusion.push(aoAt(p[0], p[1], p[2]));
+      }
+    }
     const area = (p: number[], q: number[], r: number[]) => {
       const ux = q[0] - p[0], uy = q[1] - p[1], uz = q[2] - p[2];
       const vx = r[0] - p[0], vy = r[1] - p[1], vz = r[2] - p[2];
@@ -201,11 +239,13 @@ export function buildMapMesh(world: WorldMap, manifest: AssetManifest, atlas: Ti
         });
         for (const f of faces) {
           const corners = f.corners.map(([x, y, z]) => [x + sx, y, z + sy] as [number, number, number]);
-          quad(corners[0], corners[1], corners[2], corners[3], tiles[f.tile], f.shade, 0, 1, f.pixel);
+          const material = pack ? quadMaterial(ts.name, { model: v.model, role: f.role }) : MAT.GENERIC;
+          quad(corners[0], corners[1], corners[2], corners[3], tiles[f.tile], f.shade, 0, 1, f.pixel, false, material);
         }
         continue;
       }
       // top: four tiles, each 0.5 x 0.5; world x = sx, world z = sy (south is +z)
+      const squareSet = pack ? world.tilesetForBlock(Math.floor(sx / 2), Math.floor(sy / 2)) : undefined;
       for (let ty = 0; ty < 2; ty++)
         for (let tx = 0; tx < 2; tx++) {
           const tile = world.tileAt(sx * 2 + tx, sy * 2 + ty);
@@ -216,9 +256,10 @@ export function buildMapMesh(world: WorldMap, manifest: AssetManifest, atlas: Ti
           // Offshore ripples are fragment-shaded, so oceans remain cheap quads.
           const divisions = water && Math.min(shoreAt!(xa, za), shoreAt!(xa + 0.5, za), shoreAt!(xa, za + 0.5), shoreAt!(xa + 0.5, za + 0.5)) < 0.6 ? 2 : 1;
           const size = 0.5 / divisions, y = water ? WATER_LEVEL : top;
+          const material = squareSet ? quadMaterial(squareSet.name, { kind: v.kind, water }) : MAT.GENERIC;
           for (let j = 0; j < divisions; j++) for (let i = 0; i < divisions; i++) {
             const x = xa + i * size, z = za + j * size;
-            quad([x, y, z + size], [x + size, y, z + size], [x + size, y, z], [x, y, z], tile, SHADE.top, 0, 1, undefined, water);
+            quad([x, y, z + size], [x + size, y, z + size], [x + size, y, z], [x, y, z], tile, SHADE.top, 0, 1, undefined, water, material);
           }
         }
       // side walls toward lower neighbours
@@ -262,7 +303,8 @@ export function buildMapMesh(world: WorldMap, manifest: AssetManifest, atlas: Ti
           for (let r = 0; r < reps; r++) {
             const y1 = bottom + (span * r) / reps;
             const y2 = bottom + (span * (r + 1)) / reps;
-            quad([a[0], y1, a[2]], [b[0], y1, b[2]], [c[0], y2, c[2]], [d[0], y2, d[2]], tile, SHADE[side]);
+            quad([a[0], y1, a[2]], [b[0], y1, b[2]], [c[0], y2, c[2]], [d[0], y2, d[2]], tile, SHADE[side], 0, 1, undefined, false,
+              squareSet ? quadMaterial(squareSet.name, { kind: v.kind }) : MAT.GENERIC);
           }
         }
       }
@@ -275,11 +317,17 @@ export function buildMapMesh(world: WorldMap, manifest: AssetManifest, atlas: Ti
   geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   geo.setIndex(idx);
   if (hasWater) geo.setAttribute('waterInfo', new THREE.Float32BufferAttribute(waterInfo, 2));
+  if (pack) {
+    geo.setAttribute('themeMaterial', new THREE.Float32BufferAttribute(materials, 1));
+    geo.setAttribute('themeNormal', new THREE.Float32BufferAttribute(normals, 3));
+    geo.setAttribute('themeAO', new THREE.Float32BufferAttribute(occlusion, 1));
+  }
   geo.computeBoundingSphere();
   if (hasWater) geo.boundingSphere!.radius += 0.02; // Shader wave displacement is at most 0.019.
   const mat = new THREE.MeshBasicMaterial({ map: atlas.texture, vertexColors: true });
   installCutaway(mat);
   if (hasWater) installWater(mat, world.tileset, atlas, opts.waterMotion ?? new WaterMotion());
+  if (pack) installTexturePack(mat, pack.uniforms, pack.pack.glsl, pack.cacheKey(hasWater));
   const mesh = new THREE.Mesh(geo, mat);
   mesh.name = `map:${world.data.constName}`;
   return {

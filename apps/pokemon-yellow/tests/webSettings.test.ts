@@ -35,7 +35,9 @@ describe('web preferences', () => {
     const storage = new MemoryStorage();
     storage.setItem(LEGACY_VIEW_KEY, JSON.stringify({ cameraDistance: 999, cameraPitchDeg: -10, colorFilter: 'invalid', reducedMotion: true }));
     const result = loadWebSettings(storage);
-    expect(result.view).toEqual({ cameraDistance: 24, cameraPitchDeg: 25, colorFilter: 'gbc', reducedMotion: true });
+    expect(result.view).toEqual({ cameraDistance: 24, cameraPitchDeg: 25, colorFilter: 'gbc', reducedMotion: true, look: 'original' });
+    expect(normalizeWebSettings({ version: 1, view: { look: 'remastered' } }).view.look).toBe('remastered');
+    expect(normalizeWebSettings({ version: 1, view: { look: 'not-a-pack' } }).view.look).toBe('original');
     expect(normalizeWebSettings({ version: 1, volume: Infinity }).volume).toBe(1);
     expect(normalizeWebSettings({ version: 1, volume: -1 }).volume).toBe(0);
     expect(normalizeWebSettings({ version: 99 })).toEqual(defaultWebSettings());

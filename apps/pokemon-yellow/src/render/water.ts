@@ -121,14 +121,19 @@ export function installWater(
         uniform vec2 uWaterMid;
         uniform vec2 uWaterDark;
       `)
+      .replace('#include <map_pars_fragment>', `#include <map_pars_fragment>
+        #ifndef THEMED
+        vec3 waterTone(vec2 uv) { return texture2D(map, uv).rgb; }
+        #endif
+      `)
       .replace('#include <map_fragment>', `#include <map_fragment>
         if (vWaterInfo.x > 0.5) {
           vec2 p = vWorldPos.xz + uWaterOrigin;
           float t = uWaterTime;
           float shore = max(0.0, vWaterInfo.y);
-          vec3 lightWater = texture2D(map, uWaterLight).rgb;
-          vec3 midWater = texture2D(map, uWaterMid).rgb;
-          vec3 darkWater = texture2D(map, uWaterDark).rgb;
+          vec3 lightWater = waterTone(uWaterLight);
+          vec3 midWater = waterTone(uWaterMid);
+          vec3 darkWater = waterTone(uWaterDark);
 
           // Broad, slow depth bands beneath finer wind-driven wavelets.
           float swell = 0.5 + 0.5 * sin(p.x * 0.63 + p.y * 0.41 + t * 0.38);

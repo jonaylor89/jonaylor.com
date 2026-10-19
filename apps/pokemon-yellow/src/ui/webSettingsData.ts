@@ -3,6 +3,7 @@
  */
 import { DEFAULT_VIEW, type ViewSettings } from '../render/OverworldView';
 import { isColorFilter } from '../render/palette';
+import { isWorldLook } from '../render/themes';
 import { BUTTONS, DEFAULT_KEYMAP, type KeyMap, type Button } from '../input/Input';
 
 export const WEB_SETTINGS_KEY = 'pokeyellow-web:web-settings';
@@ -27,6 +28,7 @@ export function normalizeWebSettings(value: unknown, reducedMotion = false): Web
   result.view.cameraPitchDeg = bounded(view.cameraPitchDeg, 25, 75, result.view.cameraPitchDeg);
   if (typeof view.reducedMotion === 'boolean') result.view.reducedMotion = view.reducedMotion;
   if (isColorFilter(view.colorFilter)) result.view.colorFilter = view.colorFilter;
+  if (isWorldLook(view.look)) result.view.look = view.look;
   result.volume = bounded(raw.volume, 0, 1, 1);
   if (typeof raw.haptics === 'boolean') result.haptics = raw.haptics;
   // Accept bindings atomically: partial/ambiguous maps fall back to safe defaults.

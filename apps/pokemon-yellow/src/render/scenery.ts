@@ -13,6 +13,8 @@ export interface SceneryFace {
   tile: number;
   shade: number;
   pixel?: number;
+  /** A prop's own ground, or its painted contact-shadow disc (texture packs restyle both). */
+  role?: 'ground' | 'shadow';
 }
 export interface SceneryOptions {
   samples: { tile: number; pixel: number }[];
@@ -82,13 +84,14 @@ export function sceneryFaces(kind: SceneryKind, opts: SceneryOptions): SceneryFa
     for (let row = 0; row < 2; row++) for (let col = 0; col < 2; col++) {
       const x = col / 2, z = row / 2;
       face([x, 0, z + 0.5], [x + 0.5, 0, z + 0.5], [x + 0.5, 0, z], [x, 0, z], row * 2 + col);
+      out[out.length - 1].role = 'ground';
     }
   };
   const shadow = (radius: number, depth = 1) => {
     if (opts.ground !== false) {
       const start = out.length;
       lathe(0.5, 0.5, [[0.003, radius]], 0, 10, depth);
-      for (const f of out.slice(start)) f.shade = 0.86;
+      for (const f of out.slice(start)) { f.shade = 0.86; f.role = 'shadow'; }
     }
   };
   const legs = (bottom: number, top: number, inset = 0.15) => {
@@ -117,6 +120,7 @@ export function sceneryFaces(kind: SceneryKind, opts: SceneryOptions): SceneryFa
     else face([0, 0, 1], [1, 0, 1], [1, 0, 0], [0, 0, 0], 0, 1, 0);
   }
   const groundFaces = out.length;
+  for (const f of out) f.role = 'ground';
   switch (kind) {
     case 'tree':
     case 'grove': {

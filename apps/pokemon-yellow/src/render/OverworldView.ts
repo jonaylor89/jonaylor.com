@@ -19,15 +19,24 @@ import { CameraDirector, type CameraShot } from './camera';
 import { BattleStage } from './BattleStage';
 import { FrameProfiler, renderQuality } from './quality';
 import type { TileScreen } from '../ui/TileScreen';
+import { ORIGINAL_LOOK, texturePack } from './themes';
+import { DEFAULT_CHARACTERS, hexToRgb, PackRuntime, resolvedPost } from './themes/runtime';
+import { extraSheetId } from '../engine/sprites';
+import { INDEX_GRAYS } from './themes/shader';
+import { SkyDome } from './themes/sky';
+import { Weather } from './themes/weather';
+import { PostPass } from './themes/post';
 
 export interface ViewSettings {
   cameraDistance: number;
   cameraPitchDeg: number;
   reducedMotion: boolean;
   colorFilter: ColorFilter;
+  /** World look: 'original' or a texture pack id (see render/themes). */
+  look: string;
 }
 
-export const DEFAULT_VIEW: ViewSettings = { cameraDistance: 15, cameraPitchDeg: 50, reducedMotion: false, colorFilter: 'gbc' };
+export const DEFAULT_VIEW: ViewSettings = { cameraDistance: 15, cameraPitchDeg: 50, reducedMotion: false, colorFilter: 'gbc', look: ORIGINAL_LOOK };
 
 export interface ActorState {
   key: string;
@@ -52,7 +61,8 @@ export class OverworldView {
   readonly quality = renderQuality(matchMedia('(pointer: coarse)').matches, window.devicePixelRatio);
   diagnostics() {
     const info = this.renderer.info;
-    return { ...this.profiler.snapshot(), ...this.quality, drawCalls: info.render.calls, triangles: info.render.triangles, geometries: info.memory.geometries, textures: info.memory.textures };
+    const scene = this.post?.sceneInfo ?? info.render;
+    return { ...this.profiler.snapshot(), ...this.quality, look: this.pack?.pack.id ?? ORIGINAL_LOOK, drawCalls: scene.calls, triangles: scene.triangles, geometries: info.memory.geometries, textures: info.memory.textures };
   }
   private built?: BuiltMap;
   /** Meshes for connected maps that use a different tileset. */
@@ -107,19 +117,26 @@ export class OverworldView {
     this.waterMotion.relocate(shift);
     this.world = world;
     this.paletteId = paletteId;
-    this.basePalette = applyFilter(paletteColors(this.bundle, paletteId), this.settings.colorFilter);
+    this.syncPack();
+    this.updatePalettes();
     this.bgRemap = FADE_PALS_BGP[fadePal - 1];
     this.objRemap = FADE_PALS_OBP0[fadePal - 1];
-    this.colors = remapColors(this.basePalette, this.bgRemap);
+    this.colors = remapColors(this.atlasPalette(), this.bgRemap);
     this.atlas = buildTileAtlas(world.tileset, this.colors);
     this.spinnerShown = undefined;
     const outside = isOutsideMap(world);
     const foreign = (sx: number, sy: number) => world.tilesetForBlock(Math.floor(sx / 2), Math.floor(sy / 2)) !== world.tileset;
-    this.built = buildMapMesh(world, this.manifest, this.atlas, { margin: this.quality.margin, flatBorder: !outside, skip: foreign, waterMotion: this.waterMotion });
+    this.built = buildMapMesh(world, this.manifest, this.atlas, { margin: this.quality.margin, flatBorder: !outside, skip: foreign, waterMotion: this.waterMotion, pack: this.pack });
     this.scene.add(this.built.mesh);
     this.buildForeignConnections(world);
     this.animator = new TileAnimator(world.tileset, this.atlas, this.bundle.tileTables.flowerTiles);
     this.outside = outside;
+    if (this.pack) {
+      this.pack.setPalette(this.basePalette);
+      this.pack.setLight(outside ? 'outdoor' : world.tileset.name === 'CAVERN' ? 'cave' : 'indoor');
+      this.pack.setFade(this.bgRemap);
+      this.bakePackShadows();
+    }
     this.applySky();
     if (shift) {
       this.camTarget.add(new THREE.Vector3(shift.dx, 0, shift.dy));
@@ -134,15 +151,133 @@ export class OverworldView {
   }
 
   private paletteId = 0;
-  /** Reapply filters to the loaded atlases/sprites without rebuilding geometry. */
+  /** Reapply filters to the loaded atlases/sprites without rebuilding geometry; a new look rebuilds the map. */
   refreshSettings(): void {
     if (!this.world) return;
-    this.basePalette = applyFilter(paletteColors(this.bundle, this.paletteId), this.settings.colorFilter);
+    if ((this.pack?.pack.id ?? ORIGINAL_LOOK) !== (texturePack(this.settings.look)?.id ?? ORIGINAL_LOOK)) {
+      const [bg, obj] = [this.bgRemap, this.objRemap];
+      this.loadMap(this.world, this.paletteId, undefined, 4);
+      this.camInit = true;
+      this.setPaletteRemap(bg, obj);
+      return;
+    }
+    this.updatePalettes();
+    this.pack?.setPalette(this.basePalette);
     this.recolorTextures();
+  }
+
+  // ------------------------------------------------------------ texture packs
+  private pack?: PackRuntime;
+  private sky?: SkyDome;
+  private weather?: Weather;
+  private post?: PostPass;
+  private packTime = 0;
+  private readonly blobs = new Map<string, THREE.Mesh>();
+  private blobTexture?: THREE.Texture;
+  /** The pack selected in settings, created/disposed to match (before building meshes). */
+  private syncPack(): void {
+    const want = texturePack(this.settings.look);
+    if (this.pack?.pack === want) return;
+    this.pack?.dispose();
+    for (const o of [this.sky?.mesh, this.weather?.points]) if (o) this.scene.remove(o);
+    this.sky?.dispose(); this.weather?.dispose(); this.post?.dispose();
+    this.pack = this.sky = this.weather = this.post = undefined;
+    for (const k of [...this.blobs.keys()]) this.removeBlob(k);
+    if (!want) return;
+    this.pack = new PackRuntime(want, this.quality.mobile);
+    this.pack.setTime(this.packTime);
+    this.sky = new SkyDome(want.sky, this.pack.uniforms);
+    this.scene.add(this.sky.mesh);
+    if (want.weather) {
+      this.weather = new Weather(want.weather, this.pack.uniforms, this.quality.mobile, this.quality.pixelRatio);
+      this.scene.add(this.weather.points);
+    }
+    const post = resolvedPost(want);
+    if (post && !this.quality.mobile) this.post = new PostPass(post);
+  }
+  /** The map atlas's four colours before rBGP: ROM shade indices in a pack. */
+  private atlasPalette(): RGB[] {
+    return this.pack ? INDEX_GRAYS : this.basePalette;
+  }
+  /** The area palette for still props (and every sprite without a pack). */
+  private spritePalette: RGB[] = [];
+  private updatePalettes(): void {
+    const raw = paletteColors(this.bundle, this.paletteId);
+    this.basePalette = applyFilter(raw, this.settings.colorFilter);
+    this.spritePalette = this.pack?.pack.sprites?.filter ? applyFilter(raw, this.pack.pack.sprites.filter) : this.basePalette;
+  }
+  /** Texture packs dress characters in their own colours; the GB look uses the area palette. */
+  private spritePaletteFor(id: number): RGB[] {
+    const sprites = this.pack?.pack.sprites;
+    if (!this.pack || id < 0 || this.bundle.sprites.find((s) => s.id === id) && this.manifest.sprite(id).kind === 'model') return this.spritePalette;
+    const player = [c('sprite', 'SPRITE_RED'), extraSheetId('RedBikeSprite'), extraSheetId('RedFishingSprite')];
+    const pikachu = [c('sprite', 'SPRITE_PIKACHU'), extraSheetId('SurfingPikachuSprite')];
+    const people = sprites?.people ?? DEFAULT_CHARACTERS.people;
+    const ramp = player.includes(id) ? sprites?.player ?? DEFAULT_CHARACTERS.player
+      : pikachu.includes(id) ? sprites?.pikachu ?? DEFAULT_CHARACTERS.pikachu
+      : people[(id * 7) % people.length];
+    return ramp.map(hexToRgb);
+  }
+  private bakePackShadows(): void {
+    if (!this.pack || !this.built) return;
+    this.pack.bakeShadows(this.renderer, this.scene, [this.built.mesh, ...this.extra.map((e) => e.built.mesh)]);
+  }
+  private grassColors(): RGB[] {
+    return this.pack ? remapColors(this.pack.ramp('TALL_GRASS'), this.bgRemap) : this.colors;
+  }
+  private bubbleColors(): RGB[] {
+    return this.pack ? remapColors(this.spritePaletteFor(c('sprite', 'SPRITE_RED')), this.bgRemap) : this.colors;
+  }
+  private syncBlob(key: string, x: number, y: number, h: number, visible: boolean): void {
+    let m = this.blobs.get(key);
+    if (!m) {
+      if (!visible) return;
+      if (!this.blobTexture) {
+        const size = 64, data = new Uint8Array(size * size * 4);
+        for (let j = 0; j < size; j++) for (let i = 0; i < size; i++) {
+          const d = Math.hypot(i - size / 2 + 0.5, j - size / 2 + 0.5) / (size / 2);
+          data[(j * size + i) * 4 + 3] = Math.round(255 * Math.max(0, 1 - d) ** 1.6);
+        }
+        this.blobTexture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+        this.blobTexture.magFilter = this.blobTexture.minFilter = THREE.LinearFilter;
+        this.blobTexture.needsUpdate = true;
+      }
+      const geo = new THREE.PlaneGeometry(0.8, 0.5);
+      geo.rotateX(-Math.PI / 2);
+      m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x000000, map: this.blobTexture, transparent: true, opacity: 0.38, depthWrite: false }));
+      m.renderOrder = 1;
+      this.blobs.set(key, m);
+      this.scene.add(m);
+    }
+    m.visible = visible;
+    if (visible) m.position.set(x + 0.5, h + 0.015, y + 0.6);
+  }
+  private removeBlob(key: string): void {
+    const m = this.blobs.get(key);
+    if (!m) return;
+    this.scene.remove(m);
+    m.geometry.dispose();
+    (m.material as THREE.Material).dispose();
+    this.blobs.delete(key);
   }
 
   private outside = false;
   private applySky(): void {
+    if (this.pack) {
+      const fade = this.pack.uniforms.uFade.value as number;
+      const toward = (c: THREE.Color) => c.clone().lerp(new THREE.Color(fade < 0 ? 0xffffff : 0x000000), Math.abs(fade));
+      this.sky!.mesh.visible = this.outside;
+      if (this.weather) this.weather.points.visible = (this.outside || !!this.weather.params.indoor) && !this.settings.reducedMotion;
+      if (this.outside) {
+        this.scene.background = null;
+        const fog = this.pack.pack.fog ?? { near: 26, far: 60 };
+        this.scene.fog = new THREE.Fog(toward(this.sky!.horizon()), fog.near, fog.far);
+      } else {
+        this.scene.background = toward(new THREE.Color().setStyle(this.pack.pack.indoorVoid));
+        this.scene.fog = null;
+      }
+      return;
+    }
     const sky = this.outside ? this.colors[0] : this.colors[3];
     const skyColor = new THREE.Color(`rgb(${sky[0]},${sky[1]},${sky[2]})`);
     this.scene.background = skyColor;
@@ -166,12 +301,13 @@ export class OverworldView {
     this.recolorTextures();
   }
   private recolorTextures(): void {
-    this.colors = remapColors(this.basePalette, this.bgRemap);
+    this.colors = remapColors(this.atlasPalette(), this.bgRemap);
+    this.pack?.setFade(this.bgRemap);
     this.atlas?.recolor(this.colors);
     for (const e of this.extra) e.atlas.recolor(this.colors);
-    for (const t of this.spriteTextures.values()) t.recolor(this.basePalette, this.objRemap);
-    for (const t of this.bubbleTextures.values()) t.recolor(this.colors, [0, 1, 2, 3]);
-    this.grassTex?.recolor(this.colors, [0, 1, 2, 3]);
+    for (const [id, t] of this.spriteTextures) t.recolor(this.spritePaletteFor(id), this.objRemap);
+    for (const t of this.bubbleTextures.values()) t.recolor(this.bubbleColors(), [0, 1, 2, 3]);
+    this.grassTex?.recolor(this.grassColors(), [0, 1, 2, 3]);
     for (const a of this.actors.values()) a.refreshTexture();
     this.applySky();
   }
@@ -184,8 +320,9 @@ export class OverworldView {
     this.built.dispose();
     const outside = isOutsideMap(world);
     const foreign = (sx: number, sy: number) => world.tilesetForBlock(Math.floor(sx / 2), Math.floor(sy / 2)) !== world.tileset;
-    this.built = buildMapMesh(world, this.manifest, this.atlas, { margin: this.quality.margin, flatBorder: !outside, skip: foreign, waterMotion: this.waterMotion });
+    this.built = buildMapMesh(world, this.manifest, this.atlas, { margin: this.quality.margin, flatBorder: !outside, skip: foreign, waterMotion: this.waterMotion, pack: this.pack });
     this.scene.add(this.built.mesh);
+    this.bakePackShadows();
   }
 
   /** Connected maps with their own tileset get their own mesh, translated into place. */
@@ -211,7 +348,7 @@ export class OverworldView {
       ];
       if (region[0] >= region[2] || region[1] >= region[3]) continue;
       const atlas = buildTileAtlas(other.tileset, this.colors);
-      const built = buildMapMesh(other, this.manifest, atlas, { region, waterMotion: this.waterMotion });
+      const built = buildMapMesh(other, this.manifest, atlas, { region, waterMotion: this.waterMotion, pack: this.pack });
       built.mesh.position.set(ox, 0, oy);
       this.scene.add(built.mesh);
       this.extra.push({ built, atlas });
@@ -235,6 +372,7 @@ export class OverworldView {
       a.dispose();
     }
     this.actors.clear();
+    for (const k of [...this.blobs.keys()]) this.removeBlob(k);
     for (const t of this.spriteTextures.values()) t.dispose();
     this.spriteTextures.clear();
     for (const m of this.shadows.values()) {
@@ -254,7 +392,7 @@ export class OverworldView {
     if (!t) {
       const sp = this.bundle.sprites.find((s) => s.id === id);
       if (!sp) throw new MissingAssetError(`sprite ${id} not in bundle`);
-      t = buildSpriteTexture(sp, this.basePalette, this.objRemap);
+      t = buildSpriteTexture(sp, this.spritePaletteFor(id), this.objRemap);
       this.spriteTextures.set(id, t);
     }
     return t;
@@ -271,6 +409,7 @@ export class OverworldView {
     }
     if (!a) {
       a = new SpriteActor(this.spriteTexture(s.sprite), this.manifest.sprite(s.sprite), s.sprite);
+      if (this.pack?.pack.sprites?.tint) a.setTint(new THREE.Color().setStyle(this.pack.pack.sprites.tint));
       this.actors.set(s.key, a);
       this.scene.add(a.object);
     }
@@ -278,6 +417,7 @@ export class OverworldView {
     a.animFrame = s.animFrame;
     const h = this.surfaceHeight(s.x, s.y);
     a.setPosition(s.x, s.y, h + s.lift);
+    if (this.pack) this.syncBlob(s.key, s.x, s.y, h, s.visible && this.manifest.sprite(s.sprite).kind === 'billboard');
     a.setVisible(s.visible);
     a.setGrassOverlay(s.grass ? this.grassTexture() : undefined);
     a.updateFrame();
@@ -292,7 +432,7 @@ export class OverworldView {
     const px = new Array<number>(256).fill(0);
     for (let yy = 0; yy < 8; yy++)
       for (let xx = 0; xx < 16; xx++) px[(yy + 8) * 16 + xx] = ts.tilePixels[ts.grassTile * 64 + yy * 8 + (xx & 7)];
-    this.grassTex = buildSpriteTexture({ id: -1, name: 'grass', tileCount: 4, pixels: px, frames: 1 }, this.colors, [0, 1, 2, 3]);
+    this.grassTex = buildSpriteTexture({ id: -1, name: 'grass', tileCount: 4, pixels: px, frames: 1 }, this.grassColors(), [0, 1, 2, 3]);
     return this.grassTex;
   }
 
@@ -312,7 +452,7 @@ export class OverworldView {
             px[(yy + 4) * 16 + xx] = tile[yy * 8 + xx];
             px[(yy + 4) * 16 + 15 - xx] = tile[yy * 8 + xx];
           }
-        this.shadowTexture = buildSpriteTexture({ id: -1, name: 'shadow', tileCount: 4, pixels: px, frames: 1 }, this.basePalette, this.objRemap);
+        this.shadowTexture = buildSpriteTexture({ id: -1, name: 'shadow', tileCount: 4, pixels: px, frames: 1 }, this.spritePalette, this.objRemap);
         this.spriteTextures.set(-2, this.shadowTexture);
       }
       const geo = new THREE.PlaneGeometry(1, 1);
@@ -330,7 +470,7 @@ export class OverworldView {
   private slides = new Map<string, BuiltMap>();
   addSlide(key: string, world: WorldMap, region: [number, number, number, number]): void {
     if (!this.atlas || this.slides.has(key)) return;
-    const built = buildMapMesh(world, this.manifest, this.atlas, { region, waterMotion: this.waterMotion });
+    const built = buildMapMesh(world, this.manifest, this.atlas, { region, waterMotion: this.waterMotion, pack: this.pack });
     this.scene.add(built.mesh);
     this.slides.set(key, built);
   }
@@ -363,7 +503,7 @@ export class OverworldView {
         for (let y = 0; y < 8; y++)
           for (let x = 0; x < 8; x++)
             px[((q >> 1) * 8 + y) * 16 + (q & 1) * 8 + x] = sheet.pixels[(index * 4 + q) * 64 + y * 8 + x];
-      tex = buildSpriteTexture({ id: -1, name: 'bubble', tileCount: 4, pixels: px, frames: 1 }, this.colors, [0, 1, 2, 3]);
+      tex = buildSpriteTexture({ id: -1, name: 'bubble', tileCount: 4, pixels: px, frames: 1 }, this.bubbleColors(), [0, 1, 2, 3]);
       this.bubbleTextures.set(index, tex);
     }
     if (!this.bubble) {
@@ -386,6 +526,7 @@ export class OverworldView {
   }
 
   removeActor(key: string): void {
+    this.removeBlob(key);
     const a = this.actors.get(key);
     if (!a) return;
     this.scene.remove(a.object);
@@ -425,6 +566,8 @@ export class OverworldView {
     this.camera.lookAt(this.camTarget.x, 0.4 + this.shakeY, this.camTarget.z - 0.6);
     cutawayUniforms.uFocus.value.set(x + 0.5, 0.5, y + 0.5);
     cutawayUniforms.uCamPos.value.copy(this.camera.position);
+    this.pack?.setPlayer(x + 0.5, 0.7, y + 0.5);
+    this.weather?.follow(this.camTarget.x, this.camTarget.z);
   }
 
   private spinnerShown?: boolean;
@@ -448,12 +591,18 @@ export class OverworldView {
   tickFrames(frames: number): void {
     this.animator?.tick(frames);
     this.waterMotion.advance(frames, this.settings.reducedMotion);
+    if (this.pack && !this.settings.reducedMotion) {
+      this.packTime = (this.packTime + frames / 59.7275) % 3600;
+      this.pack.setTime(this.packTime);
+    }
   }
 
   render(): void {
     if (this.battleStage) return this.battleStage.render(this.renderer);
     for (const a of this.actors.values()) a.faceCamera(this.camera);
-    this.renderer.render(this.scene, this.camera);
+    this.sky?.follow(this.camera);
+    if (this.post) this.post.render(this.renderer, this.scene, this.camera);
+    else this.renderer.render(this.scene, this.camera);
   }
 
   get currentWorld(): WorldMap | undefined {

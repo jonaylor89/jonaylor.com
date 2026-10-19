@@ -2,6 +2,7 @@
 import type { Engine } from '../engine/Engine';
 import { BUTTONS, type Button } from '../input/Input';
 import { COLOR_FILTERS } from '../render/palette';
+import { WORLD_LOOKS } from '../render/themes';
 import { formatSeed } from '../game/mods';
 import { defaultWebSettings, keyLabel, remapKey, saveWebSettings, type WebSettings } from './webSettingsData';
 
@@ -48,8 +49,10 @@ export function mountWebSettings(root: HTMLElement, host: WebSettingsHost) {
       </section>
       <section aria-labelledby="settings-access-title">
         <h2 id="settings-access-title"><span>03</span> Display & motion</h2>
+        <label class="settings-field" for="web-look"><span>World look</span><select id="web-look">${WORLD_LOOKS.map((l) => `<option value="${l.id}">${l.label}</option>`).join('')}</select></label>
+        <p class="settings-hint settings-look-hint"></p>
         <label class="settings-field" for="web-filter"><span>Color palette</span><select id="web-filter">${COLOR_FILTERS.map((f) => `<option value="${f.id}">${f.label}</option>`).join('')}</select></label>
-        <p class="settings-hint">Original matches the Super Game Boy. Vivid, pastel, dusk, night and sepia regrade each area's own colors; DMG, pocket and high contrast use one fixed ramp.</p>
+        <p class="settings-hint">Recolors the GB screen and the Original look. Texture packs keep each town's palette hue on roofs and signs.</p>
         <label class="settings-check" for="web-reduced"><input id="web-reduced" type="checkbox"><span>Reduced motion</span></label>
         <p class="settings-hint">Disables camera rails and stage lunges; snaps the follow camera. ROM battle effects keep their original timing.</p>
       </section>
@@ -70,6 +73,7 @@ export function mountWebSettings(root: HTMLElement, host: WebSettingsHost) {
   const haptics = get<HTMLInputElement>('#web-haptics');
   const pitch = get<HTMLInputElement>('#web-pitch');
   const filter = get<HTMLSelectElement>('#web-filter');
+  const look = get<HTMLSelectElement>('#web-look');
   const reduced = get<HTMLInputElement>('#web-reduced');
   const keymap = get<HTMLDivElement>('.settings-keymap');
   const bindingButtons = new Map<Button, HTMLButtonElement>();
@@ -108,6 +112,8 @@ export function mountWebSettings(root: HTMLElement, host: WebSettingsHost) {
     distance.value = String(settings.view.cameraDistance);
     pitch.value = String(settings.view.cameraPitchDeg);
     filter.value = settings.view.colorFilter;
+    look.value = settings.view.look;
+    get<HTMLParagraphElement>('.settings-look-hint').textContent = WORLD_LOOKS.find((l) => l.id === settings.view.look)?.description ?? '';
     reduced.checked = settings.view.reducedMotion;
     haptics.checked = settings.haptics;
     get<HTMLOutputElement>('#web-volume-value').value = `${volume.value}%`;
@@ -134,6 +140,7 @@ export function mountWebSettings(root: HTMLElement, host: WebSettingsHost) {
   distance.addEventListener('input', () => { settings.view.cameraDistance = Number(distance.value); apply(); });
   pitch.addEventListener('input', () => { settings.view.cameraPitchDeg = Number(pitch.value); apply(); });
   filter.addEventListener('change', () => { settings.view.colorFilter = filter.value as WebSettings['view']['colorFilter']; apply(); });
+  look.addEventListener('change', () => { settings.view.look = look.value; apply(); });
   reduced.addEventListener('change', () => { settings.view.reducedMotion = reduced.checked; apply(); });
   haptics.addEventListener('change', () => { settings.haptics = haptics.checked; apply(); });
   const close = () => dialog.close();
