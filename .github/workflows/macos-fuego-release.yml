@@ -22,13 +22,10 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
 
-# Releases stay on jonaylor89/Fuego: shipped apps read their Sparkle appcast from
-# that repo's releases/latest, and the Homebrew cask downloads from it.
-# FUEGO_RELEASE_TOKEN needs contents: write on jonaylor89/Fuego.
-env:
-  RELEASE_REPO: jonaylor89/Fuego
+# Releases are tagged fuego-v<version>. downloads.jonaylor.com/fuego.dmg and
+# /fuego/appcast.xml (apps/redirects) point at the newest one.
 
 defaults:
   run:
@@ -49,16 +46,18 @@ jobs:
       - name: Resolve next version
         id: version
         env:
-          GH_TOKEN: ${{ secrets.FUEGO_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           REQUESTED_VERSION: ${{ inputs.version }}
           BUMP: ${{ inputs.bump }}
         run: |
-          [[ -n "$GH_TOKEN" ]] || { echo "Missing release secret: FUEGO_RELEASE_TOKEN" >&2; exit 2; }
-          LATEST_TAG="$(gh api "repos/$RELEASE_REPO/releases?per_page=100" --jq '[.[] | select(.draft == false and .prerelease == false) | .tag_name][0] // ""' 2>/dev/null || true)"
-          CURRENT="${LATEST_TAG#v}"
+          LATEST_TAG="$(gh release list --limit 1000 --exclude-drafts --exclude-pre-releases --json tagName \
+            --jq '[.[].tagName | select(startswith("fuego-v"))][0] // ""')"
+          # 1.0.0 was the last release from the standalone jonaylor89/Fuego repo.
+          CURRENT="${LATEST_TAG#fuego-v}"
+          CURRENT="${CURRENT:-1.0.0}"
           SEMVER_RE='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
 
-          if [[ -n "$CURRENT" && ! "$CURRENT" =~ $SEMVER_RE ]]; then
+          if [[ ! "$CURRENT" =~ $SEMVER_RE ]]; then
             echo "Latest release tag is not a supported semantic version: $LATEST_TAG" >&2
             exit 2
           fi
@@ -69,19 +68,14 @@ jobs:
               echo "Exact version must use X.Y.Z format; got $REQUESTED_VERSION" >&2
               exit 2
             fi
-            if [[ -n "$CURRENT" ]]; then
-              IFS=. read -r CURRENT_MAJOR CURRENT_MINOR CURRENT_PATCH <<< "$CURRENT"
-              IFS=. read -r NEXT_MAJOR NEXT_MINOR NEXT_PATCH <<< "$VERSION"
-              if (( NEXT_MAJOR < CURRENT_MAJOR ||
-                    (NEXT_MAJOR == CURRENT_MAJOR && NEXT_MINOR < CURRENT_MINOR) ||
-                    (NEXT_MAJOR == CURRENT_MAJOR && NEXT_MINOR == CURRENT_MINOR && NEXT_PATCH <= CURRENT_PATCH) )); then
-                echo "Exact version $VERSION must be newer than the latest release $CURRENT" >&2
-                exit 2
-              fi
+            IFS=. read -r CURRENT_MAJOR CURRENT_MINOR CURRENT_PATCH <<< "$CURRENT"
+            IFS=. read -r NEXT_MAJOR NEXT_MINOR NEXT_PATCH <<< "$VERSION"
+            if (( NEXT_MAJOR < CURRENT_MAJOR ||
+                  (NEXT_MAJOR == CURRENT_MAJOR && NEXT_MINOR < CURRENT_MINOR) ||
+                  (NEXT_MAJOR == CURRENT_MAJOR && NEXT_MINOR == CURRENT_MINOR && NEXT_PATCH <= CURRENT_PATCH) )); then
+              echo "Exact version $VERSION must be newer than the latest release $CURRENT" >&2
+              exit 2
             fi
-          elif [[ -z "$CURRENT" ]]; then
-            # First release: use the version in the project as-is
-            VERSION="$(grep -m1 -oE 'MARKETING_VERSION = [0-9.]+' Fuego.xcodeproj/project.pbxproj | cut -d' ' -f3)"
           else
             IFS=. read -r MAJOR MINOR PATCH <<< "$CURRENT"
             case "$BUMP" in
@@ -93,8 +87,8 @@ jobs:
             VERSION="$MAJOR.$MINOR.$PATCH"
           fi
 
-          if gh release view "v$VERSION" --repo "$RELEASE_REPO" >/dev/null 2>&1; then
-            echo "Release v$VERSION already exists." >&2
+          if gh release view "fuego-v$VERSION" >/dev/null 2>&1; then
+            echo "Release fuego-v$VERSION already exists." >&2
             exit 2
           fi
 
@@ -132,19 +126,13 @@ jobs:
 
       - name: Draft release notes
         env:
-          GH_TOKEN: ${{ secrets.FUEGO_RELEASE_TOKEN }}
-          VERSION: ${{ steps.version.outputs.version }}
           PREVIOUS_TAG: ${{ steps.version.outputs.previous_tag }}
         run: |
-          # The source lives in this repo, so list its Fuego commits since the previous release.
-          SINCE=""
-          [[ -n "$PREVIOUS_TAG" ]] && SINCE="$(gh release view "$PREVIOUS_TAG" --repo "$RELEASE_REPO" --json publishedAt --jq .publishedAt)"
+          # Generated notes would list every change in the monorepo, so only list Fuego's.
           {
             echo "## What's changed"
             echo
-            git log ${SINCE:+--since="$SINCE"} --no-merges --format="- %s ([%h]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/%H))" -- . ../../.github/workflows/macos-fuego*.yml
-            echo
-            echo "Built from $GITHUB_REPOSITORY@$GITHUB_SHA"
+            git log "${PREVIOUS_TAG:+$PREVIOUS_TAG..}HEAD" --no-merges --format="- %s ([%h]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/%H))" -- . ../../.github/workflows/macos-fuego*.yml
           } > "$RUNNER_TEMP/release-notes.md"
           cat "$RUNNER_TEMP/release-notes.md"
 
@@ -216,21 +204,21 @@ jobs:
 
       - name: Publish GitHub release
         env:
-          GH_TOKEN: ${{ secrets.FUEGO_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          TAG="v$VERSION"
+          TAG="fuego-v$VERSION"
           cd build/release
           (shasum -a 256 -c SHA256SUMS.txt)
           # Upload everything to a draft first, then publish, so the appcast that
-          # releases/latest/download serves never points at a missing DMG.
+          # downloads.jonaylor.com serves never points at a missing DMG.
           gh release create "$TAG" \
             "Fuego-$VERSION.dmg" Fuego.dmg appcast.xml SHA256SUMS.txt "Fuego-$VERSION-dSYMs.zip" \
-            --repo "$RELEASE_REPO" \
+            --target "$GITHUB_SHA" \
             --title "Fuego $VERSION" \
             --notes-file "$RUNNER_TEMP/release-notes.md" \
             --draft
-          gh release edit "$TAG" --repo "$RELEASE_REPO" --draft=false --latest
+          gh release edit "$TAG" --draft=false
 
       - name: Update Homebrew tap
         env:

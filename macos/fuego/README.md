@@ -11,7 +11,7 @@ Requires macOS 15.5 or later.
 
 ## Install
 
-[Download the latest release](https://github.com/jonaylor89/Fuego/releases/latest), or:
+[Download the latest release](https://downloads.jonaylor.com/fuego.dmg), or:
 
 ```bash
 brew install --cask jonaylor89/tap/fuego
@@ -25,7 +25,7 @@ Blocked pages show the browser's connection error. Traffic through a VPN or prox
 
 Open `Fuego.xcodeproj` in Xcode. Building needs an Apple Developer account with the Network Extension capability. macOS only activates the filter for apps in `/Applications`, so copy the build there to test website blocking. Check the filter with `systemextensionsctl list` and `log stream --info --predicate 'subsystem BEGINSWITH "dev.getfuego"'`.
 
-CI runs [`macos-fuego.yml`](../../.github/workflows/macos-fuego.yml) on changes under `macos/fuego`. Releases are built by the **Fuego macOS Release** workflow (Actions → Fuego macOS Release), which runs `scripts/release.sh` to sign, notarize, and publish the DMG and Sparkle appcast, then updates the [Homebrew tap](https://github.com/jonaylor89/homebrew-tap). Releases are still published to [jonaylor89/Fuego](https://github.com/jonaylor89/Fuego/releases), where installed copies look for updates. The secrets it needs are listed in [`macos-fuego-release.yml`](../../.github/workflows/macos-fuego-release.yml).
+CI runs [`macos-fuego.yml`](../../.github/workflows/macos-fuego.yml) on changes under `macos/fuego`. Releases are built by the **Fuego macOS Release** workflow (Actions → Fuego macOS Release), which runs `scripts/release.sh` to sign, notarize, and publish the DMG and Sparkle appcast, then updates the [Homebrew tap](https://github.com/jonaylor89/homebrew-tap). Releases are tagged `fuego-v<version>`; installed copies check for updates at `https://downloads.jonaylor.com/fuego/appcast.xml`, which redirects to the newest release's appcast. The secrets it needs are listed in [`macos-fuego-release.yml`](../../.github/workflows/macos-fuego-release.yml).
 
 The website lives in [`apps/fuego`](../../apps/fuego) and deploys with `pnpm --filter fuego-site deploy`.
 

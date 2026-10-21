@@ -9,6 +9,8 @@ const REDIRECTS: Record<string, string> = {
 };
 
 const GITHUB_RELEASES_API = "https://api.github.com/repos/jonaylor89/jonaylor.com/releases?per_page=100";
+// Android apps publish a release on every build, so an app's latest can be past the first page.
+const MAX_RELEASE_PAGES = 5;
 const RELEASE_CACHE_SECONDS = 600;
 const RELEASE_CACHE_NAME = "github-release-cache";
 
@@ -16,14 +18,28 @@ const INSTALLS = {
 	"/paperclock.apk": {
 		name: "Paper Clock",
 		tagPrefix: "paperclock-v",
+		isAsset: (name: string) => name.endsWith(".apk"),
 	},
 	"/saintjohn.apk": {
 		name: "Saint John",
 		tagPrefix: "saintjohn-v",
+		isAsset: (name: string) => name.endsWith(".apk"),
 	},
 	"/parlo.apk": {
 		name: "Parlo",
 		tagPrefix: "parlo-v",
+		isAsset: (name: string) => name.endsWith(".apk"),
+	},
+	"/fuego.dmg": {
+		name: "Fuego",
+		tagPrefix: "fuego-v",
+		isAsset: (name: string) => name === "Fuego.dmg",
+	},
+	// Fuego's Sparkle feed (SPARKLE_FEED_URL); installed apps check it for updates.
+	"/fuego/appcast.xml": {
+		name: "Fuego",
+		tagPrefix: "fuego-v",
+		isAsset: (name: string) => name === "appcast.xml",
 	},
 } as const;
 
@@ -44,28 +60,34 @@ type ReleaseAsset = {
 	downloadUrl: string;
 };
 
-async function getLatestApk(install: Install): Promise<ReleaseAsset | null> {
+async function findLatestRelease(tagPrefix: string): Promise<GitHubRelease | undefined> {
+	for (let page = 1; page <= MAX_RELEASE_PAGES; page++) {
+		const response = await fetch(`${GITHUB_RELEASES_API}&page=${page}`, {
+			headers: {
+				Accept: "application/vnd.github+json",
+				"User-Agent": "jonaylor-downloads-worker",
+			},
+		});
+		if (!response.ok) throw new Error(`GitHub Releases API returned ${response.status}`);
+
+		const releases = (await response.json()) as GitHubRelease[];
+		const release = releases.find(
+			(candidate) =>
+				!candidate.draft && !candidate.prerelease && candidate.tag_name.startsWith(tagPrefix),
+		);
+		if (release || releases.length < 100) return release;
+	}
+	return undefined;
+}
+
+async function getLatestAsset(path: string, install: Install): Promise<ReleaseAsset | null> {
 	const cache = await caches.open(RELEASE_CACHE_NAME);
-	const cacheKey = new Request(`https://downloads.jonaylor.com/__release-cache/${install.tagPrefix}`);
+	const cacheKey = new Request(`https://downloads.jonaylor.com/__release-cache${path}`);
 	const cached = await cache.match(cacheKey);
 	if (cached) return (await cached.json()) as ReleaseAsset;
 
-	const response = await fetch(GITHUB_RELEASES_API, {
-		headers: {
-			Accept: "application/vnd.github+json",
-			"User-Agent": "jonaylor-downloads-worker",
-		},
-	});
-	if (!response.ok) throw new Error(`GitHub Releases API returned ${response.status}`);
-
-	const releases = (await response.json()) as GitHubRelease[];
-	const release = releases.find(
-		(candidate) =>
-			!candidate.draft &&
-			!candidate.prerelease &&
-			candidate.tag_name.startsWith(install.tagPrefix),
-	);
-	const asset = release?.assets.find((candidate) => candidate.name.endsWith(".apk"));
+	const release = await findLatestRelease(install.tagPrefix);
+	const asset = release?.assets.find((candidate) => install.isAsset(candidate.name));
 	if (!asset) return null;
 
 	const latest = { name: asset.name, downloadUrl: asset.browser_download_url };
@@ -80,7 +102,7 @@ async function getLatestApk(install: Install): Promise<ReleaseAsset | null> {
 
 function downloadHelp(): Response {
 	return new Response(
-		"Use /paperclock.apk, /saintjohn.apk, or /parlo.apk to download the latest Android release.",
+		"Use /paperclock.apk, /saintjohn.apk, or /parlo.apk to download the latest Android release, or /fuego.dmg for Fuego for macOS.",
 		{
 			headers: { "Content-Type": "text/plain; charset=utf-8" },
 		},
@@ -90,12 +112,12 @@ function downloadHelp(): Response {
 export default {
 	async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url);
-		const install = INSTALLS[url.pathname as keyof typeof INSTALLS];
+		const install: Install | undefined = INSTALLS[url.pathname as keyof typeof INSTALLS];
 
 		if (install) {
 			try {
-				const asset = await getLatestApk(install);
-				if (!asset) return new Response(`${install.name} has no published APK yet.`, { status: 404 });
+				const asset = await getLatestAsset(url.pathname, install);
+				if (!asset) return new Response(`${install.name} has no published release yet.`, { status: 404 });
 
 				return Response.redirect(asset.downloadUrl, 302);
 			} catch (error) {

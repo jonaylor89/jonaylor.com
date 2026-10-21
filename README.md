@@ -70,7 +70,7 @@ Their GitHub Actions workflows build and publish app-specific releases with `pap
 pnpm macos:fuego:build
 ```
 
-[`macos-fuego.yml`](.github/workflows/macos-fuego.yml) runs its unit tests and an unsigned Release build. The manually dispatched [`macos-fuego-release.yml`](.github/workflows/macos-fuego-release.yml) signs, notarizes, and publishes releases to [jonaylor89/Fuego](https://github.com/jonaylor89/Fuego/releases), where installed copies check for Sparkle updates. Its website is [`apps/fuego`](apps/fuego).
+[`macos-fuego.yml`](.github/workflows/macos-fuego.yml) runs its unit tests and an unsigned Release build. The manually dispatched [`macos-fuego-release.yml`](.github/workflows/macos-fuego-release.yml) signs, notarizes, and publishes `fuego-v*` releases; installed copies check for Sparkle updates at `downloads.jonaylor.com/fuego/appcast.xml`. Its website is [`apps/fuego`](apps/fuego).
 
 ## Quality checks
 

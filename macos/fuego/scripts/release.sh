@@ -24,7 +24,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 TEAM_ID=9HNXYM86C6
-REPO=jonaylor89/Fuego
+REPO=jonaylor89/jonaylor.com
 OUT=build/release
 ARCHIVE=$OUT/Fuego.xcarchive
 EXTENSION_ID=dev.getfuego.FuegoFocus.FuegoContentFilter
@@ -165,8 +165,8 @@ fi
 KEY_ARGS=(--account fuego)
 [[ -n "${SPARKLE_KEY_FILE:-}" ]] && KEY_ARGS=(--ed-key-file "$SPARKLE_KEY_FILE")
 "$GENERATE_APPCAST" "${KEY_ARGS[@]}" \
-    --download-url-prefix "${DOWNLOAD_URL_PREFIX:-https://github.com/$REPO/releases/download/v$VERSION/}" \
-    --link "https://github.com/$REPO/releases/tag/v$VERSION" \
+    --download-url-prefix "${DOWNLOAD_URL_PREFIX:-https://github.com/$REPO/releases/download/fuego-v$VERSION/}" \
+    --link "https://github.com/$REPO/releases/tag/fuego-v$VERSION" \
     --maximum-versions 1 \
     --embed-release-notes \
     -o "$OUT/appcast.xml" \

@@ -31,4 +31,4 @@
 ## macOS apps (macos/*)
 - Fuego (`macos/fuego`) is an Xcode project; run `xcodebuild` from its directory. Its static website is `apps/fuego`.
 - QA: `xcodebuild -project Fuego.xcodeproj -scheme Fuego -configuration Debug -only-testing:FuegoTests CODE_SIGNING_ALLOWED=NO test`.
-- Releases are published to the jonaylor89/Fuego repo because shipped apps read their Sparkle appcast from there; don't change `SPARKLE_FEED_URL` or the cask URL without a migration plan.
+- Releases are tagged `fuego-v*`. Installed apps read their Sparkle appcast from `downloads.jonaylor.com/fuego/appcast.xml` (served by `apps/redirects`); don't change `SPARKLE_FEED_URL` or that route without a migration plan.

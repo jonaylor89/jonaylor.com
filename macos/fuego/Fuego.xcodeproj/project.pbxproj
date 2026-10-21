@@ -584,7 +584,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Fuego;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_FILE = Fuego/Info.plist;
-				SPARKLE_FEED_URL = "https://github.com/jonaylor89/Fuego/releases/latest/download/appcast.xml";
+				SPARKLE_FEED_URL = "https://downloads.jonaylor.com/fuego/appcast.xml";
 				SPARKLE_PUBLIC_ED_KEY = "kzHoL7po1sCTaK8whZ83LT4kl2QEO93MNB0ATOcvJTM=";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Fuego quits the apps you've blocked during a focus session.";
