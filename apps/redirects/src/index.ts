@@ -9,12 +9,21 @@ const REDIRECTS: Record<string, string> = {
 };
 
 const GITHUB_RELEASES_API = "https://api.github.com/repos/jonaylor89/jonaylor.com/releases?per_page=100";
+const GITHUB_RELEASE_DOWNLOADS = "https://github.com/jonaylor89/jonaylor.com/releases/download";
+// Git's ref advertisement isn't subject to the REST API's 60 requests/hour limit for
+// unauthenticated callers, which Cloudflare's shared egress IPs regularly hit.
+const GIT_REFS_URL = "https://github.com/jonaylor89/jonaylor.com.git/info/refs?service=git-upload-pack";
 // Android apps publish a release on every build, so an app's latest can be past the first page.
 const MAX_RELEASE_PAGES = 5;
 const RELEASE_CACHE_SECONDS = 600;
 const RELEASE_CACHE_NAME = "github-release-cache";
 
-const INSTALLS = {
+type Install =
+	| { name: string; tagPrefix: string; isAsset: (name: string) => boolean }
+	// Assets with the same name in every release resolve from tags alone, without the API.
+	| { name: string; tagPrefix: string; assetName: string };
+
+const INSTALLS: Record<string, Install> = {
 	"/paperclock.apk": {
 		name: "Paper Clock",
 		tagPrefix: "paperclock-v",
@@ -33,17 +42,15 @@ const INSTALLS = {
 	"/fuego.dmg": {
 		name: "Fuego",
 		tagPrefix: "fuego-v",
-		isAsset: (name: string) => name === "Fuego.dmg",
+		assetName: "Fuego.dmg",
 	},
 	// Fuego's Sparkle feed (SPARKLE_FEED_URL); installed apps check it for updates.
 	"/fuego/appcast.xml": {
 		name: "Fuego",
 		tagPrefix: "fuego-v",
-		isAsset: (name: string) => name === "appcast.xml",
+		assetName: "appcast.xml",
 	},
-} as const;
-
-type Install = (typeof INSTALLS)[keyof typeof INSTALLS];
+};
 
 type GitHubRelease = {
 	draft: boolean;
@@ -80,17 +87,51 @@ async function findLatestRelease(tagPrefix: string): Promise<GitHubRelease | und
 	return undefined;
 }
 
+function compareVersions(a: string, b: string): number {
+	const left = a.match(/\d+/g)?.map(Number) ?? [];
+	const right = b.match(/\d+/g)?.map(Number) ?? [];
+	for (let i = 0; i < Math.max(left.length, right.length); i++) {
+		const difference = (left[i] ?? 0) - (right[i] ?? 0);
+		if (difference !== 0) return difference;
+	}
+	return 0;
+}
+
+// Tags only exist once a release is published, since the release workflows publish drafts last.
+async function findLatestTag(tagPrefix: string): Promise<string | undefined> {
+	const response = await fetch(GIT_REFS_URL, {
+		headers: { "User-Agent": "jonaylor-downloads-worker" },
+	});
+	if (!response.ok) throw new Error(`GitHub ref advertisement returned ${response.status}`);
+
+	const refs = await response.text();
+	const tags = [...refs.matchAll(/refs\/tags\/([^\s^]+)/g)]
+		.map((match) => match[1])
+		.filter((tag) => tag.startsWith(tagPrefix));
+	return tags.sort((a, b) => compareVersions(b.slice(tagPrefix.length), a.slice(tagPrefix.length)))[0];
+}
+
+async function findLatestAsset(install: Install): Promise<ReleaseAsset | null> {
+	if ("assetName" in install) {
+		const tag = await findLatestTag(install.tagPrefix);
+		if (!tag) return null;
+		return { name: install.assetName, downloadUrl: `${GITHUB_RELEASE_DOWNLOADS}/${tag}/${install.assetName}` };
+	}
+
+	const release = await findLatestRelease(install.tagPrefix);
+	const asset = release?.assets.find((candidate) => install.isAsset(candidate.name));
+	return asset ? { name: asset.name, downloadUrl: asset.browser_download_url } : null;
+}
+
 async function getLatestAsset(path: string, install: Install): Promise<ReleaseAsset | null> {
 	const cache = await caches.open(RELEASE_CACHE_NAME);
 	const cacheKey = new Request(`https://downloads.jonaylor.com/__release-cache${path}`);
 	const cached = await cache.match(cacheKey);
 	if (cached) return (await cached.json()) as ReleaseAsset;
 
-	const release = await findLatestRelease(install.tagPrefix);
-	const asset = release?.assets.find((candidate) => install.isAsset(candidate.name));
-	if (!asset) return null;
+	const latest = await findLatestAsset(install);
+	if (!latest) return null;
 
-	const latest = { name: asset.name, downloadUrl: asset.browser_download_url };
 	await cache.put(
 		cacheKey,
 		new Response(JSON.stringify(latest), {
@@ -112,7 +153,7 @@ function downloadHelp(): Response {
 export default {
 	async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url);
-		const install: Install | undefined = INSTALLS[url.pathname as keyof typeof INSTALLS];
+		const install: Install | undefined = INSTALLS[url.pathname];
 
 		if (install) {
 			try {
