@@ -1,0 +1,8 @@
+{
+  "name": "fuego",
+  "compatibility_date": "2025-03-15",
+  "assets": {
+    "directory": "./public"
+  },
+  "routes": [{ "pattern": "getfuego.dev", "custom_domain": true }]
+}

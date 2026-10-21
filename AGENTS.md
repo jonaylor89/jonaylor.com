@@ -27,3 +27,8 @@
 - Each app (`paperclock`, `saintjohn`, `parlo`) is an independent Gradle project with its own wrapper, version catalog, and JDK; run `./gradlew` from the app directory.
 - Paper Clock and Parlo CI call the reusable `.github/workflows/android-apk.yml`; Saint John has its own signed release workflow.
 - Parlo QA: `./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug` (JDK 17, SDK platform 35).
+
+## macOS apps (macos/*)
+- Fuego (`macos/fuego`) is an Xcode project; run `xcodebuild` from its directory. Its static website is `apps/fuego`.
+- QA: `xcodebuild -project Fuego.xcodeproj -scheme Fuego -configuration Debug -only-testing:FuegoTests CODE_SIGNING_ALLOWED=NO test`.
+- Releases are published to the jonaylor89/Fuego repo because shipped apps read their Sparkle appcast from there; don't change `SPARKLE_FEED_URL` or the cask URL without a migration plan.

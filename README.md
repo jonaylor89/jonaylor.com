@@ -2,7 +2,7 @@
 
 Personal websites, experiments, and self-hosted services maintained by [Johannes Naylor](https://jonaylor.com).
 
-JavaScript apps live in [`apps`](apps), native Android apps in [`android`](android), and self-contained Rust services in [`services`](services).
+JavaScript apps live in [`apps`](apps), native Android apps in [`android`](android), native macOS apps in [`macos`](macos), and self-contained Rust services in [`services`](services).
 
 ## Getting started
 
@@ -61,6 +61,16 @@ pnpm android:parlo:build
 ```
 
 Their GitHub Actions workflows build and publish app-specific releases with `paperclock-v*`, `saintjohn-v*`, and `parlo-v*` tags. Paper Clock and Parlo share the reusable [`android-apk.yml`](.github/workflows/android-apk.yml) workflow, which builds a debug APK on pull requests and publishes it as a GitHub Release on `main`.
+
+### macOS
+
+[Fuego](macos/fuego) is an Xcode project and is not a pnpm workspace. It requires Xcode on macOS 15.5 or later.
+
+```bash
+pnpm macos:fuego:build
+```
+
+[`macos-fuego.yml`](.github/workflows/macos-fuego.yml) runs its unit tests and an unsigned Release build. The manually dispatched [`macos-fuego-release.yml`](.github/workflows/macos-fuego-release.yml) signs, notarizes, and publishes releases to [jonaylor89/Fuego](https://github.com/jonaylor89/Fuego/releases), where installed copies check for Sparkle updates. Its website is [`apps/fuego`](apps/fuego).
 
 ## Quality checks
 
