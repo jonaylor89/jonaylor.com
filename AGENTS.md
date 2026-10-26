@@ -23,6 +23,12 @@
   2. `pnpm --filter linktree build` - Ensure build passes
   3. `pnpm --filter linktree test` - Run Playwright tests (if applicable)
 
+## Flutter apps (flutter/*)
+- Independent Flutter projects, outside pnpm/Turbo workspaces. Use the SDK pinned in each app's `.flutter-version`.
+- Prego QA from the repo root: `pnpm prego:check`, then `pnpm prego:build`. Android requires JDK 21 and the Android SDK.
+- Prego's scoped workflow checks Android and unsigned iOS builds, then signs/publishes the tested Android release on `main`. Never commit keystores or generated Flutter/platform build files.
+- Use Dart formatting and Flutter analysis, not Biome, for Flutter source.
+
 ## Android apps (android/*)
 - Each app (`paperclock`, `saintjohn`, `parlo`) is an independent Gradle project with its own wrapper, version catalog, and JDK; run `./gradlew` from the app directory.
 - Paper Clock and Parlo CI call the reusable `.github/workflows/android-apk.yml`; Saint John has its own signed release workflow.

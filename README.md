@@ -2,7 +2,7 @@
 
 Personal websites, experiments, and self-hosted services maintained by [Johannes Naylor](https://jonaylor.com).
 
-JavaScript apps live in [`apps`](apps), native Android apps in [`android`](android), native macOS apps in [`macos`](macos), and self-contained Rust services in [`services`](services).
+JavaScript apps live in [`apps`](apps), native Android apps in [`android`](android), native macOS apps in [`macos`](macos), Flutter apps in [`flutter`](flutter), and self-contained Rust services in [`services`](services).
 
 ## Getting started
 
@@ -71,6 +71,24 @@ pnpm macos:fuego:build
 ```
 
 [`macos-fuego.yml`](.github/workflows/macos-fuego.yml) runs its unit tests and an unsigned Release build. The manually dispatched [`macos-fuego-release.yml`](.github/workflows/macos-fuego-release.yml) signs, notarizes, and publishes `fuego-v*` releases; installed copies check for Sparkle updates at `downloads.jonaylor.com/fuego/appcast.xml`. Its website is [`apps/fuego`](apps/fuego).
+
+### Flutter
+
+[Prego](flutter/prego) is an independent Flutter project, not a pnpm workspace.
+Install the SDK pinned in `flutter/prego/.flutter-version` and JDK 21 for Android.
+
+```bash
+pnpm prego:check
+pnpm prego:build
+# Or: cd flutter/prego && flutter run
+```
+
+The scoped [Prego workflow](.github/workflows/flutter-prego.yml) checks formatting,
+analysis, tests, Android debug/release builds, and an unsigned iOS build on pull
+requests and `main`. Successful `main` builds publish a signed Android APK and
+checksum in `prego-v*` GitHub Releases using the existing repository Android
+signing secrets. iOS is compile-checked only; there is no App Store deployment.
+See [Prego's README](flutter/prego/README.md) for signing and release details.
 
 ## Quality checks
 

@@ -11,6 +11,8 @@
 		"android:saintjohn:build": "cd android/saintjohn && ./gradlew assembleDebug",
 		"android:parlo:build": "cd android/parlo && ./gradlew assembleDebug",
 		"macos:fuego:build": "cd macos/fuego && xcodebuild -project Fuego.xcodeproj -scheme Fuego -configuration Debug CODE_SIGNING_ALLOWED=NO build",
+		"prego:check": "cd flutter/prego && flutter pub get --enforce-lockfile && dart format --output=none --set-exit-if-changed lib test && flutter analyze --no-pub && flutter test --no-pub",
+		"prego:build": "cd flutter/prego && flutter build apk --debug",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
 		"format": "biome format --write .",
