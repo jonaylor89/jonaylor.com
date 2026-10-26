@@ -22,7 +22,12 @@ flutter:
   assets:
     - assets/fonts/DMSans-OFL.txt
     - assets/fonts/Fraunces-OFL.txt
+    - assets/fonts/DMMono-OFL.txt
   fonts:
+    - family: DM Mono
+      fonts:
+        - asset: assets/fonts/DMMono-500.ttf
+          weight: 500
     - family: DM Sans
       fonts:
         - asset: assets/fonts/DMSans-400.ttf

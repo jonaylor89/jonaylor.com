@@ -10,7 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   LicenseRegistry.addLicense(() async* {
-    for (final font in ['DMSans', 'Fraunces']) {
+    for (final font in ['DMSans', 'Fraunces', 'DMMono']) {
       yield LicenseEntryWithLineBreaks([
         font,
       ], await rootBundle.loadString('assets/fonts/$font-OFL.txt'));
@@ -289,6 +289,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 key: const ValueKey('elapsed-time'),
                 style: TextStyle(
                   color: colors.ink,
+                  fontFamily: 'DM Mono',
                   fontSize: 52,
                   fontWeight: FontWeight.w500,
                   letterSpacing: -2,

@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:prego/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -56,6 +57,35 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'timer digits keep a fixed width with the bundled monospace font',
+    (tester) async {
+      final font = FontLoader('DM Mono')
+        ..addFont(rootBundle.load('assets/fonts/DMMono-500.ttf'));
+      await font.load();
+      await tester.pumpWidget(MyApp(preferences: preferences));
+      final timer = tester.widget<Text>(
+        find.byKey(const ValueKey('elapsed-time')),
+      );
+      expect(timer.style!.fontFamily, 'DM Mono');
+
+      double width(String value) {
+        final painter = TextPainter(
+          text: TextSpan(text: value, style: timer.style),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        final result = painter.width;
+        painter.dispose();
+        return result;
+      }
+
+      final initialWidth = width('00:00.00');
+      for (final value in ['11:11.11', '23:45.67', '88:88.88', '59:59.99']) {
+        expect(width(value), closeTo(initialWidth, 0.001));
+      }
+    },
+  );
 
   for (final value in [0, 9, 99]) {
     final pregnant = value < 25;
