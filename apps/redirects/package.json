@@ -6,6 +6,7 @@
 	"scripts": {
 		"dev": "wrangler dev",
 		"build": "echo 'No build step needed'",
+		"test": "node --experimental-strip-types --test src/index.test.mjs",
 		"deploy": "wrangler deploy"
 	},
 	"devDependencies": {

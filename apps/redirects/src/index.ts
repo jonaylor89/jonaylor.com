@@ -38,6 +38,11 @@ const INSTALLS: Record<string, Install> = {
 		tagPrefix: "parlo-v",
 		assetName: (tag) => `Parlo-v${tag.slice("parlo-v".length)}.apk`,
 	},
+	"/prego.apk": {
+		name: "Prego",
+		tagPrefix: "prego-v",
+		assetName: (tag) => `Prego-v${tag.slice("prego-v".length)}.apk`,
+	},
 	"/fuego.dmg": {
 		name: "Fuego",
 		tagPrefix: "fuego-v",
@@ -109,7 +114,7 @@ async function getLatestAsset(path: string, install: Install): Promise<ReleaseAs
 
 function downloadHelp(): Response {
 	return new Response(
-		"Use /paperclock.apk, /saintjohn.apk, or /parlo.apk to download the latest Android release, or /fuego.dmg for Fuego for macOS.",
+		"Use /paperclock.apk, /saintjohn.apk, /parlo.apk, or /prego.apk to download the latest Android release, or /fuego.dmg for Fuego for macOS.",
 		{
 			headers: { "Content-Type": "text/plain; charset=utf-8" },
 		},

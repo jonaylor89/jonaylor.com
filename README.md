@@ -88,6 +88,7 @@ analysis, tests, Android debug/release builds, and an unsigned iOS build on pull
 requests and `main`. Successful `main` builds publish a signed Android APK and
 checksum in `prego-v*` GitHub Releases using the existing repository Android
 signing secrets. iOS is compile-checked only; there is no App Store deployment.
+Download the latest signed Android APK at [downloads.jonaylor.com/prego.apk](https://downloads.jonaylor.com/prego.apk).
 See [Prego's README](flutter/prego/README.md) for signing and release details.
 
 ## Quality checks
