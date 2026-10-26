@@ -13,6 +13,20 @@ The original Android ID (`dev.vcuram.prego`) and iOS ID (`com.example.prego`)
 are preserved. Minimum OS versions now follow the modern Flutter toolchain
 (Android API 24 and iOS 15).
 
+## Using the app
+
+The refreshed interface keeps the original joke, with cream/coral colors,
+bundled Fraunces and DM Sans type, a drawn test-stick illustration, and matching
+light/dark themes. Fonts work offline; their OFL licenses are in `assets/fonts/`.
+
+The screen is deliberately minimal: illustration, timer, one action.
+**Start** runs the timer; **Reveal** stops it and plays a three-second pause.
+The result and baby count stay visible until **Try again** resets them.
+Results are random; no health data is collected or inferred.
+
+The moon/sun button remembers the theme. Tap the wordmark for licenses.
+Short screens and large text scroll; reduced-motion settings disable animation.
+
 ## Develop
 
 Use the exact Flutter SDK in [`.flutter-version`](.flutter-version) (currently

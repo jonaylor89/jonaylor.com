@@ -19,3 +19,21 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/fonts/DMSans-OFL.txt
+    - assets/fonts/Fraunces-OFL.txt
+  fonts:
+    - family: DM Sans
+      fonts:
+        - asset: assets/fonts/DMSans-400.ttf
+          weight: 400
+        - asset: assets/fonts/DMSans-500.ttf
+          weight: 500
+        - asset: assets/fonts/DMSans-600.ttf
+          weight: 600
+        - asset: assets/fonts/DMSans-700.ttf
+          weight: 700
+    - family: Fraunces
+      fonts:
+        - asset: assets/fonts/Fraunces-600.ttf
+          weight: 600
