@@ -62,6 +62,23 @@ Or open the project in Android Studio (Ladybug or newer) and press Run.
 
 Lint: `./gradlew :app:lintDebug`
 
+## Developer / beta app (side-by-side)
+
+Use the **dev** build for local testing on a phone that already has Parlo installed:
+
+```bash
+# from android/parlo, with JDK 17 and the Android SDK configured
+./gradlew :app:assembleDev
+adb install -r app/build/outputs/apk/dev/app-dev.apk
+adb shell am start -n com.parlo.app.dev/com.parlo.app.MainActivity
+```
+
+- **Parlo Dev** uses application ID `com.parlo.app.dev`, a coral **DEV** badge on both adaptive and legacy launcher icons, and a `-dev` version suffix.
+- The welcome screen explicitly labels it a developer build; Settings shows its version, package ID and build type. Service actions and the startup provider are application-scoped.
+- Conversations, vocabulary, settings, Android Keystore credentials, widgets and permissions are separate from regular Parlo. Add a Gemini key to the dev app; it does not read or modify the installed app's data.
+- `install -r` updates the dev app in place on subsequent local builds. Keep the same local debug keystore to preserve update compatibility; never commit it. `assembleDebug` and `assembleRelease` retain the existing `com.parlo.app` identity, so CI downloads do not unexpectedly become developer builds.
+- Run `./gradlew :app:testDebugUnitTest :app:testDevUnitTest :app:lintDebug :app:lintDev :app:assembleDebug :app:assembleDev` to validate both identities. Launcher assets are committed; regenerate after changing the original art with `python3 scripts/generate-dev-icons.py` (Pillow required only for regeneration).
+
 ## Tests
 
 None of the tests need a Gemini API key or network access.

@@ -75,6 +75,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import com.parlo.app.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -179,7 +181,7 @@ fun MainScreen(
         topBar = {
             if (firstRun) return@Scaffold
             TopAppBar(
-                title = { Text("Parlo", style = MaterialTheme.typography.headlineMedium) },
+                title = { Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium) },
                 actions = {
                     IconButton(onClick = onOpenVocab) {
                         BadgedBox(badge = { if (ui.suggestedVocab > 0) Badge { Text(ui.suggestedVocab.toString()) } }) {

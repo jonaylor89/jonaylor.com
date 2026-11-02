@@ -67,6 +67,7 @@ import com.parlo.app.ui.MainViewModel
 import com.parlo.app.ui.SetupStatus
 import com.parlo.app.ui.VoicePreview
 import com.parlo.app.ui.main.ComboBox
+import com.parlo.app.ui.components.BuildDetails
 
 private const val AI_STUDIO_KEYS = "https://aistudio.google.com/app/apikey"
 
@@ -195,6 +196,8 @@ fun SettingsSheet(viewModel: MainViewModel, onDismiss: () -> Unit) {
                     }
                 }
             }
+            HorizontalDivider()
+            BuildDetails()
             Spacer(Modifier.height(8.dp))
         }
     }

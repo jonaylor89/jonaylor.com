@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.parlo.app.ui.SetupStatus
 import com.parlo.app.ui.components.StepRow
+import com.parlo.app.ui.components.DevelopmentBuildNotice
 import com.parlo.app.ui.theme.ParloShape
 import com.parlo.app.ui.theme.ParloSpacing
 
@@ -60,6 +61,7 @@ fun WelcomeScreen(status: SetupStatus, maskedKey: String, onPasteKey: (String) -
                 Icon(Icons.Filled.Headphones, null, Modifier.size(44.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
             }
         }
+        DevelopmentBuildNotice()
         Text("Learn a language on your walk.", style = MaterialTheme.typography.displaySmall)
         Text(
             "Parlo is a voice tutor you talk to, with earbuds or out loud. It runs on your own free Gemini key, so there's no account, and nothing leaves your phone except calls to Gemini.",

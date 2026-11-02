@@ -20,6 +20,7 @@ import androidx.core.app.ServiceCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import androidx.media.session.MediaButtonReceiver
+import com.parlo.app.BuildConfig
 import com.parlo.app.MainActivity
 import com.parlo.app.ParloApp
 import com.parlo.app.R
@@ -789,10 +790,10 @@ class LiveSessionService : LifecycleService() {
     companion object {
         private const val TAG = "LiveSessionService"
         const val NOTIFICATION_ID = 1001
-        const val ACTION_START = "com.parlo.app.action.START"
-        const val ACTION_TOGGLE_MUTE = "com.parlo.app.action.TOGGLE_MUTE"
-        const val ACTION_END = "com.parlo.app.action.END"
-        const val ACTION_END_NOW = "com.parlo.app.action.END_NOW"
+        const val ACTION_START = BuildConfig.APPLICATION_ID + ".action.START"
+        const val ACTION_TOGGLE_MUTE = BuildConfig.APPLICATION_ID + ".action.TOGGLE_MUTE"
+        const val ACTION_END = BuildConfig.APPLICATION_ID + ".action.END"
+        const val ACTION_END_NOW = BuildConfig.APPLICATION_ID + ".action.END_NOW"
         private const val RECAP_TIMEOUT_MS = 75_000L
         private const val END_WALK_DELAY_MS = 300L
 
