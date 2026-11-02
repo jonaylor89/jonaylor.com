@@ -78,7 +78,7 @@ internal fun NextWalkContent(data: WidgetData) {
     val size = LocalSize.current
     val live = data.live
     val small = size.width < NextWalkWidget.MEDIUM.width || size.height < NextWalkWidget.MEDIUM.height
-    val bg = if (live != null) GlanceTheme.colors.primaryContainer else GlanceTheme.colors.surface
+    val bg = GlanceTheme.colors.primaryContainer
     Box(
         GlanceModifier.fillMaxSize().appWidgetBackground().background(bg).cornerRadius(android.R.dimen.system_app_widget_background_radius)
             .clickable(openApp(context)),
@@ -99,17 +99,17 @@ private fun IdleLayout(data: WidgetData, large: Boolean) {
     Column(GlanceModifier.fillMaxSize().padding(16.dp)) {
         Text(
             if (data.next.suggested) "YOUR TUTOR SUGGESTS" else "YOUR NEXT WALK",
-            style = TextStyle(color = GlanceTheme.colors.primary, fontSize = 11.sp, fontWeight = FontWeight.Medium),
+            style = TextStyle(color = GlanceTheme.colors.onPrimaryContainer, fontSize = 11.sp, fontWeight = FontWeight.Bold),
         )
         Spacer(GlanceModifier.height(4.dp))
         Text(
             data.next.title,
             maxLines = if (large) 3 else 2,
-            style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = if (large) 22.sp else 17.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif),
+            style = TextStyle(color = GlanceTheme.colors.onPrimaryContainer, fontSize = if (large) 22.sp else 17.sp, fontWeight = FontWeight.Bold),
         )
         if (large && data.next.subtitle.isNotBlank()) {
             Spacer(GlanceModifier.height(4.dp))
-            Text(data.next.subtitle, maxLines = 2, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 13.sp))
+            Text(data.next.subtitle, maxLines = 2, style = TextStyle(color = GlanceTheme.colors.onPrimaryContainer, fontSize = 13.sp))
         }
         Spacer(GlanceModifier.defaultWeight())
         PillButton("Start walk", R.drawable.ic_widget_play, startWalk(context, data))
@@ -160,7 +160,7 @@ internal fun PillButton(label: String, icon: Int, onClick: Action, modifier: Gla
     ) {
         Image(ImageProvider(icon), null, GlanceModifier.size(20.dp), colorFilter = ColorFilter.tint(GlanceTheme.colors.onPrimary))
         Spacer(GlanceModifier.width(8.dp))
-        Text(label, style = TextStyle(color = GlanceTheme.colors.onPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium))
+        Text(label, style = TextStyle(color = GlanceTheme.colors.onPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold))
     }
 }
 

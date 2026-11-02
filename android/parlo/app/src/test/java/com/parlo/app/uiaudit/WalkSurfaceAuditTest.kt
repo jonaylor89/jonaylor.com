@@ -23,12 +23,11 @@ import androidx.compose.ui.unit.dp
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /** Tool-driven walk states (update_learner_profile, show_phrase) that a live socket can't reach deterministically. */
-@RunWith(RobolectricTestRunner::class)
+@RunWith(KeystoreRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w412dp-h915dp-xxhdpi")
 class WalkSurfaceAuditTest {

@@ -1,0 +1,4 @@
+<resources>
+    <!-- Parlo design system "surface" (Paper neutral); matches the Compose theme so launch has no flash. -->
+    <color name="parlo_surface">#FFF8F2</color>
+</resources>

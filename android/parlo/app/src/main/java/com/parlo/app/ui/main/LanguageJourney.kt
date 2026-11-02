@@ -10,11 +10,24 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
+import com.parlo.app.ui.components.LanguageSegment
+import com.parlo.app.ui.components.Overline
+import com.parlo.app.ui.components.nativeNameOf
+import com.parlo.app.ui.theme.ParloShape
+import com.parlo.app.ui.theme.ParloSpacing
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -49,42 +62,65 @@ internal fun LanguageJourneyPicker(
         .distinctBy(LearningRepository::key)
     val rowState = rememberLazyListState()
     LaunchedEffect(config.language) { rowState.scrollToItem(0) }
-    Column(Modifier.fillMaxWidth().testTag("language_journeys")) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Which language today?", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            TextButton(onClick = onMore) { Text("Add language") }
-        }
-        LazyRow(state = rowState, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.testTag("your_languages")) {
-            items(choices, key = LearningRepository::key) { language ->
-                FilterChip(
-                    selected = language.equals(config.language, true),
+    Column(Modifier.fillMaxWidth().padding(top = ParloSpacing.space6).testTag("language_journeys"), verticalArrangement = Arrangement.spacedBy(ParloSpacing.space4)) {
+        Text("Which language today?", style = MaterialTheme.typography.displaySmall)
+        LazyRow(
+            state = rowState,
+            horizontalArrangement = Arrangement.spacedBy(ParloSpacing.hair),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().selectableGroup().testTag("your_languages"),
+        ) {
+            itemsIndexed(choices, key = { _, l -> LearningRepository.key(l) }) { i, language ->
+                val selected = language.equals(config.language, true)
+                val saved = if (selected) config else languages.firstOrNull { it.language.equals(language, true) }
+                LanguageSegment(
+                    language = language,
+                    detail = saved?.let { listOfNotNull(it.dialect.takeIf { d -> d.isNotBlank() && !d.equals(language, true) }, it.level.label).joinToString(" · ") }.orEmpty(),
+                    selected = selected,
+                    index = i,
+                    count = choices.size,
                     onClick = { onSelect(language) },
-                    label = { Text(language) },
                     modifier = Modifier.testTag("journey_${LearningRepository.key(language)}"),
                 )
             }
         }
-        Text(if (choices.size > 1) "Switch freely. Each language keeps its own progress." else
-            "Learning more than one? Add another whenever you like.", style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(if (choices.size > 1) "Switch freely. Each language keeps its own progress." else
+                "Learning more than one? Add another whenever you like.", style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+            TextButton(onClick = onMore) {
+                Icon(Icons.Rounded.Add, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(ParloSpacing.space1))
+                Text("Add language")
+            }
+        }
     }
 }
 
+/** The journey for the current language: the learner's goal in their words and the latest dated checkpoint. */
 @Composable
 internal fun JourneyStatus(ui: MainUiState, onOpen: () -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(if (ui.lastPractisedAt == null) "A new chapter in ${ui.config.language}" else
-                    "${ui.config.language} · ${ui.walkCount} completed walk${if (ui.walkCount == 1) "" else "s"}",
-                    style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                Text(ui.goal.ifBlank { "What would you like to be able to do?" }, style = MaterialTheme.typography.bodyMedium)
+    val scheme = MaterialTheme.colorScheme
+    Surface(shape = ParloShape.large, color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(ParloSpacing.space4), verticalArrangement = Arrangement.spacedBy(ParloSpacing.space2)) {
+            Overline(
+                "Your goal · ${nativeNameOf(ui.config.language)}",
+                color = scheme.secondary, icon = Icons.Rounded.Flag,
+            )
+            Text(ui.goal.ifBlank { "What would you like to be able to do?" }, style = MaterialTheme.typography.titleLarge,
+                color = if (ui.goal.isBlank()) scheme.onSurfaceVariant else scheme.onSurface)
+            Text(if (ui.lastPractisedAt == null) "A new chapter in ${ui.config.language}" else
+                "${ui.walkCount} completed walk${if (ui.walkCount == 1) "" else "s"} in ${ui.config.language}",
+                style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+            ui.learningEpisodes.firstOrNull { it.demonstrated.isNotBlank() }?.let {
+                Row(horizontalArrangement = Arrangement.spacedBy(ParloSpacing.space3)) {
+                    Text(LearningRepository.date(it.occurredAt), style = MaterialTheme.typography.labelMedium, color = scheme.secondary, modifier = Modifier.padding(top = 2.dp))
+                    Text(it.demonstrated, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                }
             }
-            TextButton(onClick = onOpen, modifier = Modifier.testTag("learning_journal")) { Text("Your journey") }
-        }
-        ui.learningEpisodes.firstOrNull { it.demonstrated.isNotBlank() }?.let {
-            Text("Last observed: ${it.demonstrated}", style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onOpen, modifier = Modifier.testTag("learning_journal")) { Text("Your journey") }
+            }
         }
     }
 }
@@ -100,7 +136,7 @@ internal fun LearningJournalSheet(
 ) {
     var goal by remember(ui.config.language, ui.goal) { mutableStateOf(ui.goal) }
     var forget by remember { mutableStateOf<Long?>(null) }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
         LazyColumn(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item {
                 Text("Your ${ui.config.language} journey", style = MaterialTheme.typography.headlineSmall)
@@ -127,7 +163,7 @@ internal fun LearningJournalSheet(
             items(ui.learningEpisodes, key = { it.id }) { episode ->
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("${LearningRepository.date(episode.occurredAt)} · Walk ${episode.sessionId} · Turns ${episode.fromTurnId}–${episode.throughTurnId}",
-                        style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                        style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
                     Text(episode.summary)
                     if (episode.demonstrated.isNotBlank()) Text("Observed: ${episode.demonstrated}", style = MaterialTheme.typography.bodyMedium)
                     if (episode.practise.isNotBlank()) Text("Try again later: ${episode.practise}", style = MaterialTheme.typography.bodyMedium)

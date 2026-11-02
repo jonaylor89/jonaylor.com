@@ -45,6 +45,10 @@ import com.parlo.app.ui.SetupStatus
 import com.parlo.app.ui.components.StepRow
 import com.parlo.app.ui.components.DevelopmentBuildNotice
 import com.parlo.app.ui.theme.ParloShape
+import com.parlo.app.ui.theme.ParloSize
+import com.parlo.app.ui.components.OrbState
+import com.parlo.app.ui.components.VoiceOrb
+import androidx.compose.material.icons.automirrored.rounded.DirectionsWalk
 import com.parlo.app.ui.theme.ParloSpacing
 
 private const val AI_STUDIO_KEYS = "https://aistudio.google.com/app/apikey"
@@ -54,13 +58,10 @@ private const val AI_STUDIO_KEYS = "https://aistudio.google.com/app/apikey"
 fun WelcomeScreen(status: SetupStatus, maskedKey: String, onPasteKey: (String) -> Unit, onStart: () -> Unit, modifier: Modifier = Modifier, languageChoice: (@Composable () -> Unit)? = null) {
     val context = LocalContext.current
     val connected = status == SetupStatus.READY
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp).testTag("welcome"), verticalArrangement = Arrangement.spacedBy(ParloSpacing.lg)) {
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp).testTag("welcome"), verticalArrangement = Arrangement.spacedBy(ParloSpacing.space4)) {
         Spacer(Modifier.height(12.dp))
-        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(96.dp)) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Headphones, null, Modifier.size(44.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
-            }
-        }
+        // The voice orb is Parlo's only character: here it is listening, waiting for you.
+        VoiceOrb(OrbState.LISTENING, size = 96.dp)
         DevelopmentBuildNotice()
         Text("Learn a language on your walk.", style = MaterialTheme.typography.displaySmall)
         Text(
@@ -69,40 +70,44 @@ fun WelcomeScreen(status: SetupStatus, maskedKey: String, onPasteKey: (String) -
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         languageChoice?.invoke()
-        StepRow(
-            done = status != SetupStatus.NO_KEY,
-            icon = Icons.AutoMirrored.Filled.OpenInNew,
-            title = "Get a free key",
-            body = "Opens Google AI Studio. Copy the key it gives you.",
-            modifier = Modifier.testTag("step_get_key"),
-            onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AI_STUDIO_KEYS)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) },
-        )
-        StepRow(
-            done = connected,
-            icon = Icons.Filled.ContentPaste,
-            title = when (status) {
-                SetupStatus.READY -> "Connected"
-                SetupStatus.CHECKING -> "Checking your key…"
-                SetupStatus.BAD_KEY -> "That key didn't work. Paste it again"
-                SetupStatus.OFFLINE -> "Couldn't reach Gemini. Paste again to retry"
-                SetupStatus.NO_MODEL -> "No voice model found for this key"
-                SetupStatus.NO_KEY -> "Paste your key"
-            },
-            body = if (maskedKey.isNotBlank()) "$maskedKey · Parlo picks the voice model for you" else "Reads it from your clipboard.",
-            modifier = Modifier.testTag("step_paste_key"),
-            busy = status == SetupStatus.CHECKING,
-            onClick = { clipboardText(context)?.let(onPasteKey) },
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(ParloSpacing.hair)) {
+            StepRow(
+                done = status != SetupStatus.NO_KEY,
+                icon = Icons.AutoMirrored.Filled.OpenInNew,
+                title = "Get a free key",
+                body = "Opens Google AI Studio. Copy the key it gives you.",
+                modifier = Modifier.testTag("step_get_key"),
+                shape = ParloShape.grouped(0, 2),
+                onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AI_STUDIO_KEYS)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) },
+            )
+            StepRow(
+                done = connected,
+                icon = Icons.Filled.ContentPaste,
+                title = when (status) {
+                    SetupStatus.READY -> "Connected"
+                    SetupStatus.CHECKING -> "Checking your key…"
+                    SetupStatus.BAD_KEY -> "That key didn't work. Paste it again"
+                    SetupStatus.OFFLINE -> "Couldn't reach Gemini. Paste again to retry"
+                    SetupStatus.NO_MODEL -> "No voice model found for this key"
+                    SetupStatus.NO_KEY -> "Paste your key"
+                },
+                body = if (maskedKey.isNotBlank()) "$maskedKey · Parlo picks the voice model for you" else "Reads it from your clipboard.",
+                modifier = Modifier.testTag("step_paste_key"),
+                shape = ParloShape.grouped(1, 2),
+                busy = status == SetupStatus.CHECKING,
+                onClick = { clipboardText(context)?.let(onPasteKey) },
+            )
+        }
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Lock, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.width(6.dp))
             Text("Stored encrypted on this phone", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Button(onClick = onStart, enabled = connected, modifier = Modifier.fillMaxWidth().height(60.dp).testTag("start_first_walk"), shape = ParloShape.pill) {
-            Icon(Icons.Filled.Headphones, null)
-            Spacer(Modifier.width(10.dp))
-            Text("Start your first walk", style = MaterialTheme.typography.titleMedium)
+        Button(onClick = onStart, enabled = connected, modifier = Modifier.fillMaxWidth().height(ParloSize.targetWalk).testTag("start_first_walk"), shape = ParloShape.extraLarge) {
+            Icon(Icons.AutoMirrored.Rounded.DirectionsWalk, null, Modifier.size(28.dp))
+            Spacer(Modifier.width(ParloSpacing.space3))
+            Text("Start your first walk", style = MaterialTheme.typography.titleLarge)
         }
         Text(
             "Your tutor will help you find your level in your chosen language. Earbuds are optional.",

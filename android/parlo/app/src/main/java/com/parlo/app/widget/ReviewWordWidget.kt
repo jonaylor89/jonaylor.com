@@ -101,14 +101,14 @@ internal fun ReviewWordContent(words: List<ReviewWord>, wordId: Long?, revealed:
     val context = LocalContext.current
     val word = ReviewWordWidget.current(words, wordId)
     Box(
-        GlanceModifier.fillMaxSize().appWidgetBackground().background(GlanceTheme.colors.surface)
+        GlanceModifier.fillMaxSize().appWidgetBackground().background(GlanceTheme.colors.tertiaryContainer)
             .cornerRadius(android.R.dimen.system_app_widget_background_radius).padding(16.dp),
     ) {
         if (word == null) {
             Column(GlanceModifier.fillMaxSize().clickable(openApp(context))) {
                 Label()
                 Spacer(GlanceModifier.height(6.dp))
-                Text("Words you save on walks show up here.", style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 15.sp))
+                Text("Words you save on walks show up here.", style = TextStyle(color = GlanceTheme.colors.onTertiaryContainer, fontSize = 15.sp))
             }
             return@Box
         }
@@ -116,28 +116,28 @@ internal fun ReviewWordContent(words: List<ReviewWord>, wordId: Long?, revealed:
             Label()
             Spacer(GlanceModifier.height(4.dp))
             Column(GlanceModifier.defaultWeight().clickable(actionRunCallback<RevealWordAction>()).semantics { contentDescription = if (revealed) "Hide translation" else "Reveal translation" }) {
-                Text(word.word, maxLines = 2, style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 22.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif))
+                Text(word.word, maxLines = 2, style = TextStyle(color = GlanceTheme.colors.onTertiaryContainer, fontSize = 22.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif))
                 Text(
                     if (revealed) word.translation.ifBlank { "No translation saved" } else "Tap to reveal",
                     maxLines = 2,
-                    style = TextStyle(color = if (revealed) GlanceTheme.colors.onSurface else GlanceTheme.colors.onSurfaceVariant, fontSize = 14.sp),
+                    style = TextStyle(color = GlanceTheme.colors.onTertiaryContainer, fontSize = 14.sp),
                 )
                 if (revealed && word.example.isNotBlank()) {
-                    Text(word.example, maxLines = 1, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp))
+                    Text(word.example, maxLines = 1, style = TextStyle(color = GlanceTheme.colors.onTertiaryContainer, fontSize = 12.sp))
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    GlanceModifier.height(40.dp).cornerRadius(20.dp).background(GlanceTheme.colors.secondaryContainer).padding(horizontal = 16.dp)
+                    GlanceModifier.height(40.dp).cornerRadius(20.dp).background(GlanceTheme.colors.surface).padding(horizontal = 16.dp)
                         .clickable(actionRunCallback<NextWordAction>()).semantics { contentDescription = "Next word" },
                     contentAlignment = Alignment.Center,
-                ) { Text("Next", style = TextStyle(color = GlanceTheme.colors.onSecondaryContainer, fontSize = 14.sp, fontWeight = FontWeight.Medium)) }
+                ) { Text("Next", style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)) }
                 Spacer(GlanceModifier.width(8.dp))
-                Text("${words.size} saved", style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp))
+                Text("${words.size} saved", style = TextStyle(color = GlanceTheme.colors.onTertiaryContainer, fontSize = 12.sp))
             }
         }
     }
 }
 
 @Composable
-private fun Label() = Text("REVIEW A WORD", style = TextStyle(color = GlanceTheme.colors.primary, fontSize = 11.sp, fontWeight = FontWeight.Medium))
+private fun Label() = Text("REVIEW A WORD", style = TextStyle(color = GlanceTheme.colors.onTertiaryContainer, fontSize = 11.sp, fontWeight = FontWeight.Bold))

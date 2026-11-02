@@ -13,6 +13,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,41 +29,48 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Forum
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Key
+import androidx.compose.material.icons.rounded.Place
+import androidx.compose.material.icons.rounded.Route
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.InputChipDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -76,45 +85,38 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import com.parlo.app.R
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.parlo.app.R
+import com.parlo.app.data.db.VocabEntity
 import com.parlo.app.model.ConnectionState
 import com.parlo.app.model.CorrectionStyle
 import com.parlo.app.model.ErrorAction
-import com.parlo.app.model.LanguageCatalog
 import com.parlo.app.model.Level
+import com.parlo.app.model.Scenario
 import com.parlo.app.model.SessionConfig
 import com.parlo.app.model.SessionError
 import com.parlo.app.model.Speaker
 import com.parlo.app.model.TranscriptTurn
+import com.parlo.app.ui.LastWalk
 import com.parlo.app.ui.MainViewModel
 import com.parlo.app.ui.SetupStatus
-import com.parlo.app.ui.components.HeroCard
-import com.parlo.app.ui.theme.ParloSpacing
+import com.parlo.app.ui.components.LanguageMonogram
+import com.parlo.app.ui.components.Overline
+import com.parlo.app.ui.components.ParloSnackbarHost
+import com.parlo.app.ui.components.StatusBanner
+import com.parlo.app.ui.components.WalkFab
+import com.parlo.app.ui.components.WalkFabState
+import com.parlo.app.ui.components.nativeNameOf
 import com.parlo.app.ui.onboarding.WelcomeScreen
-import com.parlo.app.model.Scenario
-import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.SuggestionChip
-import androidx.compose.material.icons.filled.Tune
 import com.parlo.app.ui.settings.SettingsSheet
+import com.parlo.app.ui.theme.Parlo
+import com.parlo.app.ui.theme.ParloShape
+import com.parlo.app.ui.theme.ParloSize
+import com.parlo.app.ui.theme.ParloSpacing
 import kotlinx.coroutines.launch
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.InputChip
-import androidx.compose.material3.InputChipDefaults
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Replay
-import com.parlo.app.data.db.VocabEntity
-import com.parlo.app.ui.LastWalk
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -176,20 +178,37 @@ fun MainScreen(
     }
 
     val firstRun = !ui.hasWalked && !live.isActive && live.error == null
+    val lastWalk = ui.lastWalk
+    fun startFromHome() {
+        if (cfg.followPlan && lastWalk?.nextWalkTitle?.isNotBlank() == true && cfg.topicTitle.isBlank()) viewModel.useSuggestedWalk()
+        requestStart()
+    }
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) },
+        snackbarHost = { ParloSnackbarHost(snackbar) },
+        containerColor = if (live.isActive) Parlo.colors.walkGround else MaterialTheme.colorScheme.surface,
+        floatingActionButtonPosition = FabPosition.Center,
+        floatingActionButton = {
+            if (firstRun || live.isActive) return@Scaffold
+            WalkFab(
+                state = if (ui.ready) WalkFabState.READY else WalkFabState.SETUP,
+                subLabel = if (ui.ready) walkFabSubLabel(cfg) else setupStep(ui.setup),
+                onClick = { if (ui.ready) startFromHome() else showSettings = true },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = ParloSpacing.space4).testTag("start_walk"),
+            )
+        },
         topBar = {
             if (firstRun) return@Scaffold
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = if (live.isActive) Parlo.colors.walkGround else MaterialTheme.colorScheme.surface),
                 title = { Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium) },
                 actions = {
                     IconButton(onClick = onOpenVocab) {
                         BadgedBox(badge = { if (ui.suggestedVocab > 0) Badge { Text(ui.suggestedVocab.toString()) } }) {
-                            Icon(Icons.AutoMirrored.Filled.MenuBook, "Vocabulary")
+                            Icon(Icons.AutoMirrored.Rounded.MenuBook, "Vocabulary")
                         }
                     }
-                    IconButton(onClick = onOpenHistory) { Icon(Icons.Filled.History, "Session history") }
-                    IconButton(onClick = { showSettings = true }) { Icon(Icons.Filled.Settings, "Settings") }
+                    IconButton(onClick = onOpenHistory) { Icon(Icons.Rounded.History, "Session history") }
+                    IconButton(onClick = { showSettings = true }) { Icon(Icons.Rounded.Settings, "Settings") }
                 },
             )
         },
@@ -215,13 +234,14 @@ fun MainScreen(
                 onSlower = viewModel::repeatSlowly,
                 onEnglish = viewModel::englishHelp,
                 onEnd = { viewModel.endSession(skipRecap = false) },
-                modifier = Modifier.padding(padding).padding(horizontal = 16.dp),
+                modifier = Modifier.padding(padding).padding(horizontal = ParloSpacing.space4),
             )
             return@Scaffold
         }
         Column(
-            Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
+            Modifier.fillMaxSize().padding(padding).padding(horizontal = ParloSpacing.space4).verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(ParloSpacing.space4),
         ) {
             val error = live.error
             if (error != null) {
@@ -236,27 +256,20 @@ fun MainScreen(
                     },
                     onDismiss = viewModel::dismissError,
                 )
-                Spacer(Modifier.height(8.dp))
             } else if (!live.isActive && !ui.ready) {
                 SetupCard(status = ui.setup, onOpenSettings = { showSettings = true }, onRefresh = viewModel::refreshModels)
-                Spacer(Modifier.height(8.dp))
             }
 
             LanguageJourneyPicker(cfg, ui.languages, { viewModel.selectLanguage(it) }, { showLanguagePicker = true })
-            JourneyStatus(ui, onOpen = { showJournal = true })
-            val lastWalk = ui.lastWalk
             NextWalkCard(
                 cfg = cfg,
                 walk = lastWalk,
-                ready = ui.ready,
-                onStart = { if (cfg.followPlan && lastWalk?.nextWalkTitle?.isNotBlank() == true && cfg.topicTitle.isBlank()) viewModel.useSuggestedWalk(); requestStart() },
                 onTune = { showConfig = true },
                 onJustChat = { viewModel.updateConfig { it.copy(topic = "", topicTitle = "", scenario = Scenario.FREE, followPlan = false) } },
                 onContinuePlan = { viewModel.updateConfig { it.copy(followPlan = true) } },
                 onHarder = { viewModel.updateConfig { it.copy(level = it.level.harder()) } },
                 onOtherLanguage = { showLanguagePicker = true },
             )
-            Spacer(Modifier.height(12.dp))
             if (!live.isActive && lastWalk != null) {
                 LastWalkCard(
                     walk = lastWalk,
@@ -268,15 +281,16 @@ fun MainScreen(
                         }
                     },
                 )
-                Spacer(Modifier.height(12.dp))
             } else if (!live.isActive && live.transcript.isEmpty() && ui.suggestedVocab > 0) {
                 ReviewCard(count = ui.suggestedVocab, onReview = onOpenVocab)
-                Spacer(Modifier.height(12.dp))
             }
+            JourneyStatus(ui, onOpen = { showJournal = true })
 
             if (live.transcript.isNotEmpty() && lastWalk == null) {
                 TextButton(onClick = onOpenHistory) { Text("Read your conversation") }
             }
+            // Clearance for the Start-walk FAB in the thumb zone.
+            Spacer(Modifier.height(ParloSize.fabLarge + ParloSpacing.space8))
         }
     }
 
@@ -319,39 +333,6 @@ fun MainScreen(
     }
 }
 
-/** One-line "what am I about to practise" card; tapping opens [WalkConfigSheet]. */
-@Composable
-private fun WalkConfigCard(cfg: SessionConfig, onClick: () -> Unit) {
-    val entry = LanguageCatalog.find(cfg.language)
-    val dialectEntry = entry?.dialects?.firstOrNull { it.name.equals(cfg.dialect, true) }
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth().testTag("walk_config"),
-        colors = CardDefaults.elevatedCardColors(),
-        elevation = CardDefaults.elevatedCardElevation(),
-    ) {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Flag(dialectEntry?.flag ?: entry?.flag)
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    listOf(cfg.language.ifBlank { "Choose a language" }, cfg.dialect.takeIf { it.isNotBlank() && !it.equals(cfg.language, true) }.orEmpty())
-                        .filter { it.isNotBlank() }.joinToString(" · "),
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    listOfNotNull(cfg.topicTitle.takeIf { it.isNotBlank() }, cfg.level.label, "${cfg.correctionStyle.label} corrections").joinToString(" · "),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Adjust today's walk", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
 /** Scrollable sheet with everything that shapes the walk. Nothing on the main screen changes height. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -359,13 +340,13 @@ private fun WalkConfigSheet(viewModel: MainViewModel, onPickLanguage: () -> Unit
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val cfg = ui.config
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
         Column(
-            Modifier.padding(horizontal = 20.dp).padding(bottom = 32.dp).verticalScroll(rememberScrollState()),
+            Modifier.padding(horizontal = ParloSpacing.space5).padding(bottom = ParloSpacing.space8).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Text("Today's walk", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                Text("Today's walk", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
                 TextButton(onClick = onDismiss) { Text("Done") }
             }
             LanguageCard(language = cfg.language, dialect = cfg.dialect, onClick = onPickLanguage)
@@ -410,8 +391,10 @@ private fun SetupCard(status: SetupStatus, onOpenSettings: () -> Unit, onRefresh
         SetupStatus.NO_MODEL -> Triple("Can't find a voice model", "Your key works, but no live voice models showed up. Try refreshing.", "Refresh")
         SetupStatus.READY -> return
     }
-    OutlinedCard(Modifier.fillMaxWidth().testTag("setup_card")) {
-        Row(Modifier.padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Surface(Modifier.fillMaxWidth().testTag("setup_card"), shape = ParloShape.large, color = MaterialTheme.colorScheme.surfaceContainerHighest) {
+        Row(Modifier.padding(start = ParloSpacing.space4, top = ParloSpacing.space3, bottom = ParloSpacing.space3, end = ParloSpacing.space2), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Key, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.width(ParloSpacing.space3))
             Column(Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleSmall)
                 Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -425,14 +408,12 @@ private fun SetupCard(status: SetupStatus, onOpenSettings: () -> Unit, onRefresh
     }
 }
 
-/** Home hero: the tutor's suggested next walk (or today's settings), one Start button, and quick tweaks. */
+/** Today's suggestion: the tutor's next walk (or today's settings) and quick tweaks. Starting is the FAB's job. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun NextWalkCard(
     cfg: SessionConfig,
     walk: LastWalk?,
-    ready: Boolean,
-    onStart: () -> Unit,
     onTune: () -> Unit,
     onJustChat: () -> Unit,
     onContinuePlan: () -> Unit,
@@ -446,32 +427,33 @@ private fun NextWalkCard(
         cfg.followPlan && walk?.interrupted == true -> "Pick up where we paused"
         else -> cfg.scenario.label
     }
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        HeroCard(
-            eyebrow = if (suggested || cfg.topicTitle.isNotBlank()) "Your tutor suggests" else "Your next walk",
-            title = title,
-            subtitle = if (suggested && walk!!.focus.isNotBlank()) "Practise: ${walk.focus}" else "",
-            modifier = Modifier.testTag("next_walk"),
-        ) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SuggestionChip(onClick = onOtherLanguage, label = { Text("${LanguageCatalog.find(cfg.language)?.dialects?.firstOrNull { it.name == cfg.dialect }?.flag ?: LanguageCatalog.find(cfg.language)?.flag.orEmpty()} ${cfg.dialect}".trim(), maxLines = 1) })
-                    SuggestionChip(onClick = onTune, label = { Text(cfg.level.label) })
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = onStart, enabled = ready, modifier = Modifier.weight(1f).height(ParloSpacing.heroButton).testTag("start_walk")) {
-                        Icon(Icons.Filled.PlayArrow, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Start walk", style = MaterialTheme.typography.titleMedium)
-                    }
-                    FilledTonalIconButton(onClick = onTune, modifier = Modifier.size(56.dp)) { Icon(Icons.Filled.Tune, "Walk settings") }
-                }
-                Text("Earbuds or out loud: tap Start and talk.", style = MaterialTheme.typography.bodySmall)
-        }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (cfg.followPlan) AssistChip(onClick = onJustChat, label = { Text("Just chat") })
-            else AssistChip(onClick = onContinuePlan, label = { Text("Continue my plan") })
-            AssistChip(onClick = onHarder, enabled = cfg.level != Level.entries.last(), label = { Text("Make it harder") })
-            AssistChip(onClick = onOtherLanguage, label = { Text("Another language") })
+    val scheme = MaterialTheme.colorScheme
+    Surface(shape = ParloShape.extraLarge, color = scheme.surfaceContainer, modifier = Modifier.fillMaxWidth().testTag("next_walk")) {
+        Column(Modifier.padding(ParloSpacing.space5), verticalArrangement = Arrangement.spacedBy(ParloSpacing.space3)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Overline(
+                    if (suggested || cfg.topicTitle.isNotBlank()) "Your tutor suggests" else "Your next walk",
+                    color = scheme.secondary, icon = Icons.Rounded.Route, modifier = Modifier.weight(1f),
+                )
+                FilledTonalIconButton(onClick = onTune, modifier = Modifier.size(ParloSize.targetMin)) { Icon(Icons.Rounded.Tune, "Walk settings") }
+            }
+            Text(title, style = MaterialTheme.typography.headlineSmall)
+            if (suggested && walk!!.focus.isNotBlank()) {
+                Text("Practise: ${walk.focus}", style = MaterialTheme.typography.bodyLarge, color = scheme.onSurfaceVariant)
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(ParloSpacing.space2)) {
+                AssistChip(onClick = onOtherLanguage, label = { Text(cfg.dialect.ifBlank { cfg.language }, maxLines = 1) }, leadingIcon = { Icon(Icons.Rounded.Place, null, Modifier.size(AssistChipDefaults.IconSize)) })
+                AssistChip(onClick = onTune, label = { Text(cfg.level.label) })
+                AssistChip(onClick = onHarder, enabled = cfg.level != Level.entries.last(), label = { Text("Make it harder") })
+            }
+            ConnectedChoice(
+                options = listOf(true, false),
+                selected = cfg.followPlan,
+                label = { if (it) "Continue my plan" else "Just chat" },
+                icon = { if (it) Icons.Rounded.Route else Icons.Rounded.Forum },
+                onSelect = { plan -> if (plan) onContinuePlan() else onJustChat() },
+            )
+            Text("Earbuds or out loud: tap Start walk and talk.", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
         }
     }
 }
@@ -480,29 +462,35 @@ private fun NextWalkCard(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun LastWalkCard(walk: LastWalk, onDrop: (VocabEntity) -> Unit) {
-    ElevatedCard(Modifier.fillMaxWidth().testTag("last_walk")) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(if (walk.interrupted) "Your walk was interrupted · progress saved" else "Last walk", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-            Text("${walk.lengthLabel} · ${walk.language}", style = MaterialTheme.typography.titleMedium)
+    val scheme = MaterialTheme.colorScheme
+    Surface(shape = ParloShape.large, color = scheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth().testTag("last_walk")) {
+        Column(Modifier.padding(ParloSpacing.space4), verticalArrangement = Arrangement.spacedBy(ParloSpacing.space3)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(ParloSpacing.space3)) {
+                LanguageMonogram(walk.language, size = 36.dp)
+                Column {
+                    Overline(if (walk.interrupted) "Interrupted · progress saved" else "Last walk", color = scheme.secondary)
+                    Text("${walk.lengthLabel} · ${walk.language}", style = MaterialTheme.typography.titleLarge)
+                }
+            }
             if (walk.reviewing) {
                 LinearProgressIndicator(Modifier.fillMaxWidth())
-                Text("Picking out your words…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Picking out your words…", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             }
             if (walk.words.isNotEmpty()) {
                 val n = walk.words.size
                 Text("$n word${if (n == 1) "" else "s"} saved · tap one to drop it", style = MaterialTheme.typography.bodyMedium)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(ParloSpacing.space2)) {
                     walk.words.forEach { v ->
                         InputChip(
                             selected = false,
                             onClick = { onDrop(v) },
-                            label = { Text(v.word) },
-                            trailingIcon = { Icon(Icons.Filled.Close, "Drop ${v.word}", Modifier.size(InputChipDefaults.IconSize)) },
+                            label = { Text(v.word, style = Parlo.type.phraseGloss) },
+                            trailingIcon = { Icon(Icons.Rounded.Close, "Drop ${v.word}", Modifier.size(InputChipDefaults.IconSize)) },
                         )
                     }
                 }
             } else if (!walk.reviewing) {
-                Text("No new words this time.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("No new words this time.", style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
             }
             if (walk.focus.isNotBlank()) {
                 Text("Work on: ${walk.focus}", style = MaterialTheme.typography.bodyMedium)
@@ -513,80 +501,17 @@ private fun LastWalkCard(walk: LastWalk, onDrop: (VocabEntity) -> Unit) {
 
 @Composable
 private fun ReviewCard(count: Int, onReview: () -> Unit) {
-    OutlinedCard(onClick = onReview, modifier = Modifier.fillMaxWidth().testTag("review_card")) {
-        Row(Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.AutoAwesome, null, tint = MaterialTheme.colorScheme.tertiary)
-            Spacer(Modifier.width(12.dp))
+    val scheme = MaterialTheme.colorScheme
+    Surface(onClick = onReview, shape = ParloShape.large, color = scheme.secondaryContainer, contentColor = scheme.onSecondaryContainer, modifier = Modifier.fillMaxWidth().testTag("review_card")) {
+        Row(Modifier.padding(start = ParloSpacing.space4, top = ParloSpacing.space2, bottom = ParloSpacing.space2, end = ParloSpacing.space2), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.AutoAwesome, null)
+            Spacer(Modifier.width(ParloSpacing.space3))
             Text(
                 "$count new word${if (count == 1) "" else "s"} from your last walk",
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onReview) { Text("Review") }
-        }
-    }
-}
-
-@Composable
-private fun SessionButton(
-    active: Boolean,
-    ready: Boolean,
-    ending: Boolean,
-    connecting: Boolean,
-    muted: Boolean,
-    onStart: () -> Unit,
-    onEnd: () -> Unit,
-    onToggleMute: () -> Unit,
-    onSlower: () -> Unit,
-) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (!active) {
-            if (ready) {
-                Button(onClick = onStart, modifier = Modifier.weight(1f).height(64.dp), shape = RoundedCornerShape(20.dp)) {
-                    Text("Start Walk Session", style = MaterialTheme.typography.titleMedium)
-                }
-            } else {
-                FilledTonalButton(onClick = onStart, modifier = Modifier.weight(1f).height(64.dp), shape = RoundedCornerShape(20.dp)) {
-                    Text("Finish setup", style = MaterialTheme.typography.titleMedium)
-                }
-            }
-        } else {
-            Button(
-                onClick = onEnd,
-                enabled = !ending,
-                modifier = Modifier.weight(1f).height(64.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                    disabledContainerColor = MaterialTheme.colorScheme.errorContainer,
-                    disabledContentColor = MaterialTheme.colorScheme.onErrorContainer,
-                ),
-            ) {
-                if (connecting || ending) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onErrorContainer)
-                    Spacer(Modifier.width(10.dp))
-                    Text(if (ending) "Writing recap…" else "Connecting…", style = MaterialTheme.typography.titleMedium)
-                } else {
-                    Text("End Walk Session", style = MaterialTheme.typography.titleMedium)
-                }
-            }
-            FilledTonalButton(
-                onClick = onSlower,
-                enabled = !connecting && !ending,
-                modifier = Modifier.height(64.dp),
-                shape = RoundedCornerShape(20.dp),
-            ) {
-                Icon(Icons.Filled.Replay, "Repeat slowly")
-            }
-            FilledTonalButton(
-                onClick = onToggleMute,
-                modifier = Modifier.height(64.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = if (muted) ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError) else ButtonDefaults.filledTonalButtonColors(),
-            ) {
-                Icon(if (muted) Icons.Filled.MicOff else Icons.Filled.Mic, if (muted) "Unmute" else "Mute")
-            }
+            TextButton(onClick = onReview, colors = ButtonDefaults.textButtonColors(contentColor = scheme.onSecondaryContainer)) { Text("Review") }
         }
     }
 }
@@ -595,25 +520,19 @@ private fun SessionButton(
 @Composable
 private fun ErrorCard(error: SessionError, onAction: () -> Unit, onDismiss: () -> Unit) {
     var showDetail by remember(error) { mutableStateOf(false) }
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer), modifier = Modifier.fillMaxWidth().testTag("error_card")) {
-        Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.ErrorOutline, null, tint = MaterialTheme.colorScheme.onErrorContainer)
-                Spacer(Modifier.width(10.dp))
-                Text(error.title, color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.titleSmall)
+    val scheme = MaterialTheme.colorScheme
+    StatusBanner(error.title, error.body, icon = Icons.Rounded.ErrorOutline, error = true, modifier = Modifier.testTag("error_card")) {
+        AnimatedVisibility(visible = showDetail && error.detail.isNotBlank()) {
+            Text(error.detail, color = scheme.onErrorContainer, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = ParloSpacing.space2))
+        }
+        Row(horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = ParloSpacing.space1)) {
+            val textColors = ButtonDefaults.textButtonColors(contentColor = scheme.onErrorContainer)
+            if (error.detail.isNotBlank()) {
+                TextButton(onClick = { showDetail = !showDetail }, colors = textColors) { Text(if (showDetail) "Hide details" else "Details") }
             }
-            Text(error.body, color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp))
-            AnimatedVisibility(visible = showDetail && error.detail.isNotBlank()) {
-                Text(error.detail, color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
-            }
-            Row(horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                if (error.detail.isNotBlank()) {
-                    TextButton(onClick = { showDetail = !showDetail }) { Text(if (showDetail) "Hide details" else "Details") }
-                }
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = onDismiss) { Text("Dismiss") }
-                FilledTonalButton(onClick = onAction) { Text(error.action.label) }
-            }
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = onDismiss, colors = textColors) { Text("Dismiss") }
+            Button(onClick = onAction, colors = ButtonDefaults.buttonColors(containerColor = scheme.error, contentColor = scheme.onError)) { Text(error.action.label) }
         }
     }
 }
@@ -640,31 +559,53 @@ fun Transcript(turns: List<TranscriptTurn>, modifier: Modifier = Modifier) {
     }
 }
 
+/** Tutor left on surface-container-high, you right on primary-container; the 4dp corner points to the speaker. */
 @Composable
 fun TurnBubble(turn: TranscriptTurn) {
-    val scheme = MaterialTheme.colorScheme
+    val colors = Parlo.colors
     when (turn.speaker) {
         Speaker.SYSTEM -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            AssistChip(onClick = {}, label = { Text(turn.text, style = MaterialTheme.typography.labelSmall) }, enabled = false)
+            Text(turn.text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center,
+                modifier = Modifier.padding(vertical = ParloSpacing.space1))
         }
         else -> {
             val isUser = turn.speaker == Speaker.USER
+            val bg = if (isUser) colors.bubbleLearner else colors.bubbleTutor
+            val fg = if (isUser) colors.onBubbleLearner else colors.onBubbleTutor
             Row(Modifier.fillMaxWidth(), horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start) {
-                Box(
-                    Modifier.widthIn(max = 300.dp)
-                        .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = if (isUser) 16.dp else 4.dp, bottomEnd = if (isUser) 4.dp else 16.dp))
-                        .background(
-                            when {
-                                !turn.isFinal -> (if (isUser) scheme.primaryContainer else scheme.surfaceVariant).copy(alpha = 0.55f)
-                                isUser -> scheme.primaryContainer
-                                else -> scheme.surfaceVariant
-                            },
-                        )
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                Column(
+                    Modifier.widthIn(max = 320.dp)
+                        .clip(ParloShape.bubble(fromLearner = isUser))
+                        .background(if (turn.isFinal) bg else bg.copy(alpha = 0.6f))
+                        .padding(horizontal = ParloSpacing.space4, vertical = ParloSpacing.space3),
                 ) {
-                    Text(turn.text, style = MaterialTheme.typography.bodyMedium, color = if (isUser) scheme.onPrimaryContainer else scheme.onSurfaceVariant)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (!isUser) {
+                            Icon(Icons.Rounded.GraphicEq, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.tertiary)
+                            Spacer(Modifier.width(ParloSpacing.space1))
+                        }
+                        Text(if (isUser) "You" else "Parlo", style = MaterialTheme.typography.labelMedium, color = fg)
+                    }
+                    Text(turn.text, style = Parlo.type.phraseBody, color = fg)
                 }
             }
         }
     }
+}
+
+/** "Português · Lisboa": the language in its own name, then the accent's place. */
+internal fun walkFabSubLabel(cfg: SessionConfig): String {
+    if (cfg.language.isBlank()) return "Choose a language"
+    val accent = cfg.dialect.takeIf { it.isNotBlank() && !it.equals(cfg.language, true) }
+    return listOfNotNull(nativeNameOf(cfg.language), accent).joinToString(" · ")
+}
+
+/** The single missing setup step, named on the Finish-setup FAB. */
+internal fun setupStep(status: SetupStatus): String = when (status) {
+    SetupStatus.NO_KEY -> "Add your Gemini key"
+    SetupStatus.BAD_KEY -> "Replace your Gemini key"
+    SetupStatus.CHECKING -> "Checking your key…"
+    SetupStatus.OFFLINE -> "Reconnect to Gemini"
+    SetupStatus.NO_MODEL -> "Find a Live model"
+    SetupStatus.READY -> ""
 }

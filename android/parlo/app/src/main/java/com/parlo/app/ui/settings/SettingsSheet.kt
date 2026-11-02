@@ -68,6 +68,25 @@ import com.parlo.app.ui.SetupStatus
 import com.parlo.app.ui.VoicePreview
 import com.parlo.app.ui.main.ComboBox
 import com.parlo.app.ui.components.BuildDetails
+import com.parlo.app.ui.components.Overline
+import com.parlo.app.ui.main.ConnectedChoice
+import com.parlo.app.ui.theme.ParloContrast
+import com.parlo.app.ui.theme.ParloShape
+import com.parlo.app.ui.theme.ParloSpacing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.OutlinedIconButton
+import androidx.compose.material3.Surface
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.semantics.Role
 
 private const val AI_STUDIO_KEYS = "https://aistudio.google.com/app/apikey"
 
@@ -86,12 +105,12 @@ fun SettingsSheet(viewModel: MainViewModel, onDismiss: () -> Unit) {
 
     DisposableEffect(Unit) { onDispose { viewModel.stopPreview() } }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
         Column(
-            Modifier.padding(horizontal = 20.dp).padding(bottom = 32.dp).verticalScroll(rememberScrollState()),
+            Modifier.padding(horizontal = ParloSpacing.space5).padding(bottom = ParloSpacing.space8).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Settings", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text("Settings", style = MaterialTheme.typography.headlineSmall)
 
             Text("Gemini", style = MaterialTheme.typography.labelLarge)
             if (editingKey || keyFailed) {
@@ -156,12 +175,28 @@ fun SettingsSheet(viewModel: MainViewModel, onDismiss: () -> Unit) {
             }
 
             HorizontalDivider()
-            Text("Appearance", style = MaterialTheme.typography.labelLarge)
+            Text("Display", style = MaterialTheme.typography.labelLarge)
+            Text("Sunlight contrast", style = MaterialTheme.typography.bodyMedium)
+            ConnectedChoice(
+                options = ParloContrast.entries,
+                selected = ui.contrast,
+                label = { it.label },
+                onSelect = viewModel::setContrast,
+                modifier = Modifier.testTag("contrast_choice"),
+            )
+            Text(
+                when (ui.contrast) {
+                    ParloContrast.AUTO -> "Follows your system contrast, and the walk screen turns high contrast in bright sun."
+                    ParloContrast.STANDARD -> "Parlo's regular colours everywhere."
+                    ParloContrast.HIGH -> "Stronger colours for bright sun and low vision, everywhere."
+                },
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.weight(1f)) {
-                    Text("Match wallpaper colours", style = MaterialTheme.typography.bodyMedium)
+                    Text("Match my wallpaper", style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) "Use Material You instead of Parlo's teal and coral." else "Needs Android 12 or newer.",
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) "Use your wallpaper's colours. Parlo's voice and your language colours stay the same." else "Needs Android 12 or newer.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -248,22 +283,20 @@ private fun VoiceSection(
         Text("Couldn't play a sample — $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
     }
     VoiceGender.entries.forEach { gender ->
-        Text(gender.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(0.dp), modifier = Modifier.fillMaxWidth().testTag("voices_${gender.name.lowercase()}")) {
-            VoiceCatalog.byGender(gender).forEach { v ->
-                val isSelected = v == selected
-                FilterChip(
-                    selected = isSelected,
-                    onClick = {
-                        onSelect(v.name)
-                        if (canPreview) onPreview(v.name)
-                    },
-                    label = { Text("${v.name} · ${v.character}") },
-                    leadingIcon = when {
-                        v.name == busy -> ({ Icon(Icons.AutoMirrored.Filled.VolumeUp, null, Modifier.size(FilterChipDefaults.IconSize)) })
-                        isSelected -> ({ Icon(Icons.Filled.Check, null, Modifier.size(FilterChipDefaults.IconSize)) })
-                        else -> null
-                    },
+        Overline(gender.label, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = ParloSpacing.space2))
+        val voices = VoiceCatalog.byGender(gender)
+        Column(Modifier.fillMaxWidth().testTag("voices_${gender.name.lowercase()}"), verticalArrangement = Arrangement.spacedBy(ParloSpacing.hair)) {
+            voices.forEachIndexed { i, v ->
+                VoiceRow(
+                    name = v.name,
+                    character = v.character,
+                    selected = v == selected,
+                    playing = preview.playing == v.name,
+                    loading = preview.loading == v.name,
+                    canPreview = canPreview,
+                    shape = ParloShape.grouped(i, voices.size),
+                    onSelect = { onSelect(v.name) },
+                    onPreview = { if (preview.playing == v.name) onStopPreview() else onPreview(v.name) },
                 )
             }
         }
@@ -321,3 +354,57 @@ internal fun modelLabel(model: String): String =
         .replace(Regex("""-(\d{2}-\d{4}|\d{2}-\d{2}|latest)$"""), "")
         .split('-')
         .joinToString(" ") { part -> part.replaceFirstChar { it.uppercase() } }
+
+/** One Gemini voice: play to hear it greet you in your accent, tap the row to choose it. */
+@Composable
+private fun VoiceRow(
+    name: String,
+    character: String,
+    selected: Boolean,
+    playing: Boolean,
+    loading: Boolean,
+    canPreview: Boolean,
+    shape: androidx.compose.ui.graphics.Shape,
+    onSelect: () -> Unit,
+    onPreview: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        shape = shape,
+        color = scheme.surfaceContainerLow,
+        modifier = Modifier.fillMaxWidth().selectable(selected = selected, onClick = onSelect, role = Role.RadioButton),
+    ) {
+        Row(Modifier.padding(horizontal = ParloSpacing.space2, vertical = ParloSpacing.space1), verticalAlignment = Alignment.CenterVertically) {
+            if (playing) {
+                FilledIconButton(onClick = onPreview) { Icon(Icons.Filled.Stop, "Stop preview") }
+            } else {
+                OutlinedIconButton(onClick = onPreview, enabled = canPreview && !loading) {
+                    if (loading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    else Icon(Icons.Filled.PlayArrow, "Preview $name")
+                }
+            }
+            Spacer(Modifier.width(ParloSpacing.space3))
+            Column(Modifier.weight(1f)) {
+                Text(name, style = MaterialTheme.typography.titleMedium)
+                Text(character, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+            }
+            if (playing) LevelMeter()
+            if (selected) Icon(Icons.Filled.CheckCircle, "Selected", tint = scheme.primary, modifier = Modifier.padding(horizontal = ParloSpacing.space2))
+        }
+    }
+}
+
+/** Five bars in the tutor's colour while a voice sample plays. */
+@Composable
+private fun LevelMeter() {
+    val loop = rememberInfiniteTransition(label = "meter")
+    val phase by loop.animateFloat(0f, 1f, infiniteRepeatable(tween(900, easing = LinearEasing)), label = "phase")
+    val color = MaterialTheme.colorScheme.tertiary
+    Canvas(Modifier.size(width = 28.dp, height = 24.dp).padding(end = 4.dp)) {
+        val bar = size.width / 9f
+        for (i in 0 until 5) {
+            val h = size.height * (0.3f + 0.7f * kotlin.math.abs(kotlin.math.sin((phase * 2 * Math.PI + i * 1.3).toFloat())))
+            drawRoundRect(color, topLeft = Offset(i * bar * 2, (size.height - h) / 2), size = Size(bar, h), cornerRadius = CornerRadius(bar / 2))
+        }
+    }
+}

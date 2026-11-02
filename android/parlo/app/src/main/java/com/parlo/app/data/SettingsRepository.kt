@@ -128,6 +128,13 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[DYNAMIC_COLOR] = enabled }
     }
 
+    /** Sunlight contrast mode name (AUTO, STANDARD, HIGH); blank means automatic. */
+    val contrast: Flow<String> = context.dataStore.data.map { it[CONTRAST].orEmpty() }
+
+    suspend fun setContrast(mode: String) {
+        context.dataStore.edit { it[CONTRAST] = mode }
+    }
+
     val cachedModels: Flow<List<String>> = context.dataStore.data.map { p ->
         p[CACHED_MODELS]?.split('\n')?.filter { it.isNotBlank() } ?: emptyList()
     }
@@ -179,6 +186,7 @@ class SettingsRepository(private val context: Context) {
         val RECENT_COMBOS = stringPreferencesKey("recent_combos")
         val CACHED_MODELS = stringPreferencesKey("cached_models")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
+        val CONTRAST = stringPreferencesKey("contrast")
         val json = Json { ignoreUnknownKeys = true }
         val comboListSerializer = ListSerializer(LanguageCombo.serializer())
         val configListSerializer = ListSerializer(SessionConfig.serializer())

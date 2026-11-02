@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.Parlo" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowBackground">@color/parlo_surface</item>
+    </style>
+</resources>

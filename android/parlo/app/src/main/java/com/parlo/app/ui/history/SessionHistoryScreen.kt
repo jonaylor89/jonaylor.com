@@ -11,6 +11,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material3.Surface
+import com.parlo.app.ui.components.LanguageMonogram
+import com.parlo.app.ui.components.Overline
+import com.parlo.app.ui.components.ParloSnackbarHost
+import com.parlo.app.ui.theme.ParloShape
+import com.parlo.app.ui.theme.ParloSpacing
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -77,10 +89,10 @@ fun SessionHistoryScreen(onBack: () -> Unit, onOpen: (Long) -> Unit) {
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) },
+        snackbarHost = { ParloSnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
-                title = { Text("Past walks") },
+                title = { Text("Past walks", style = MaterialTheme.typography.headlineMedium) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
             )
         },
@@ -92,44 +104,50 @@ fun SessionHistoryScreen(onBack: () -> Unit, onOpen: (Long) -> Unit) {
             return@Scaffold
         }
         val grouped = visible.groupBy { weekLabel(it.startedAt) }
-        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(ParloSpacing.space4), verticalArrangement = Arrangement.spacedBy(ParloSpacing.hair)) {
             grouped.forEach { (week, list) ->
                 item(key = "week-$week") {
-                    Text(week, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp, bottom = 2.dp))
+                    Overline(week, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = ParloSpacing.space4, bottom = ParloSpacing.space2))
                 }
-                items(list, key = { it.id }) { s ->
-                    SessionCard(s, onClick = { onOpen(s.id) }, onDelete = { deleteWithUndo(s.id) })
+                itemsIndexed(list, key = { _, it -> it.id }) { i, s ->
+                    SessionCard(s, ParloShape.grouped(i, list.size), onClick = { onOpen(s.id) }, onDelete = { deleteWithUndo(s.id) })
                 }
             }
         }
     }
 }
 
+/** Monogram · recap-written title · date, duration and outcome. Excluded walks keep their row, dimmed and tagged. */
 @Composable
-private fun SessionCard(s: SessionEntity, onClick: () -> Unit, onDelete: () -> Unit) {
-    Card(Modifier.fillMaxWidth().clickable(onClick = onClick), colors = CardDefaults.elevatedCardColors()) {
-        Row(Modifier.padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("${sessionTitle(s.language, s.dialect)} · ${Level.parse(s.level).label}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+private fun SessionCard(s: SessionEntity, shape: androidx.compose.ui.graphics.Shape, onClick: () -> Unit, onDelete: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(onClick = onClick, shape = shape, color = scheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(start = ParloSpacing.space4, top = ParloSpacing.space3, bottom = ParloSpacing.space3, end = ParloSpacing.space1), verticalAlignment = Alignment.CenterVertically) {
+            LanguageMonogram(s.language, dimmed = !s.remember)
+            Spacer(Modifier.width(ParloSpacing.space4))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("${sessionTitle(s.language, s.dialect)} · ${Level.parse(s.level).label}", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
                     "${formatDate(s.startedAt)} · ${formatDuration(s.durationMs)}" + when {
-                        s.interrupted -> " · interrupted, progress saved"
-                        s.endedAt == null -> " · in progress"
+                        s.interrupted -> " · Interrupted, progress saved"
+                        s.endedAt == null -> " · In progress"
                         else -> ""
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = scheme.onSurfaceVariant,
                 )
                 s.recap?.takeIf { it.isNotBlank() }?.let {
-                    Text(
-                        it.replace('\n', ' '),
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
+                    Text(it.replace('\n', ' '), style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                if (!s.remember) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.VisibilityOff, null, Modifier.size(14.dp), tint = scheme.onSurfaceVariant)
+                        Spacer(Modifier.width(ParloSpacing.space1))
+                        Text("Not remembered", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+                    }
                 }
             }
-            IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, "Delete walk", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+            IconButton(onClick = onDelete) { Icon(Icons.Rounded.Delete, "Delete walk", tint = scheme.onSurfaceVariant) }
         }
     }
 }
@@ -148,7 +166,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
     val snackbar = remember { SnackbarHostState() }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) },
+        snackbarHost = { ParloSnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = { Text(s?.let { it.dialect.ifBlank { it.language } } ?: "Walk", maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -169,10 +187,10 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                 }
                 if (!s.recap.isNullOrBlank()) {
                     item {
-                        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)) {
-                            Column(Modifier.padding(12.dp)) {
-                                Text("Recap", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onTertiaryContainer)
-                                Text(s.recap, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                        Card(Modifier.fillMaxWidth(), shape = ParloShape.extraLarge, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)) {
+                            Column(Modifier.padding(ParloSpacing.space5), verticalArrangement = Arrangement.spacedBy(ParloSpacing.space2)) {
+                                Overline("Recap", color = MaterialTheme.colorScheme.onTertiaryContainer)
+                                Text(s.recap, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onTertiaryContainer)
                             }
                         }
                     }

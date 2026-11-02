@@ -1,102 +1,155 @@
 package com.parlo.app.ui.theme
 
+import android.app.UiModeManager
+import android.content.Context
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
-import androidx.compose.material3.Typography
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
-private val Teal = Color(0xFF1E5F74)
-private val TealLight = Color(0xFF6FB3C4)
-private val Coral = Color(0xFFE8735A)
+/** Settings → Display → Sunlight contrast. */
+enum class ParloContrast(val label: String) {
+    /** Follows the system contrast setting, and switches the walk screen to high contrast in bright sunlight. */
+    AUTO("Automatic"),
+    STANDARD("Standard"),
+    /** "Sunlight" (light) and "Night walk" (dark): M3 contrast level 1.0. */
+    HIGH("High");
 
-/** Shared with the home-screen widgets (Glance ColorProviders). */
-internal val LightScheme = lightColorScheme(
-    primary = Teal,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFCDEAF2),
-    onPrimaryContainer = Color(0xFF00363F),
-    secondary = Coral,
-    onSecondary = Color.White,
-    secondaryContainer = Color(0xFFFFDBD1),
-    onSecondaryContainer = Color(0xFF3B0A02),
-    tertiary = Color(0xFF5B8C5A),
-    tertiaryContainer = Color(0xFFD7F0D4),
-    onTertiaryContainer = Color(0xFF0F2A10),
-    surface = Color(0xFFFBFAF6),
-    background = Color(0xFFFBFAF6),
-    surfaceVariant = Color(0xFFE5EBED),
-    onSurfaceVariant = Color(0xFF3F4A4E),
-)
-
-internal val DarkScheme = darkColorScheme(
-    primary = TealLight,
-    onPrimary = Color(0xFF00363F),
-    primaryContainer = Color(0xFF0B4A5B),
-    onPrimaryContainer = Color(0xFFCDEAF2),
-    secondary = Color(0xFFF2A18C),
-    onSecondary = Color(0xFF4A1508),
-    secondaryContainer = Color(0xFF6B2A19),
-    onSecondaryContainer = Color(0xFFFFDBD1),
-    tertiary = Color(0xFF9CCB9B),
-    tertiaryContainer = Color(0xFF2B4A2B),
-    onTertiaryContainer = Color(0xFFD7F0D4),
-    surface = Color(0xFF121517),
-    background = Color(0xFF121517),
-    surfaceVariant = Color(0xFF2A3336),
-    onSurfaceVariant = Color(0xFFC0CBCF),
-)
+    companion object {
+        fun parse(value: String?) = entries.firstOrNull { it.name == value } ?: AUTO
+    }
+}
 
 private val ParloShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(20.dp),
-    extraLarge = RoundedCornerShape(28.dp),
+    extraSmall = ParloShape.extraSmall,
+    small = ParloShape.small,
+    medium = ParloShape.medium,
+    large = ParloShape.large,
+    extraLarge = ParloShape.extraLarge,
 )
 
-/** Serif display/headline for the tutor's voice (titles, phrases); sans for everything functional. */
-private val ParloTypography = Typography().let { t ->
-    t.copy(
-        displaySmall = t.displaySmall.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold),
-        headlineLarge = t.headlineLarge.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold),
-        headlineMedium = t.headlineMedium.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold),
-        headlineSmall = t.headlineSmall.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold),
-        labelMedium = t.labelMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp),
-        titleLarge = t.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-        labelLarge = t.labelLarge.copy(letterSpacing = 0.2.sp),
-    )
+/** The inputs a nested [ParloTheme] needs to re-theme part of the screen (the walk screen in sunlight). */
+private data class ThemeInputs(val dynamicColor: Boolean, val contrast: ParloContrast, val highContrast: Boolean)
+
+private val LocalThemeInputs = staticCompositionLocalOf { ThemeInputs(false, ParloContrast.AUTO, false) }
+
+internal fun schemeFor(dark: Boolean, highContrast: Boolean): ColorScheme = when {
+    dark && highContrast -> NightScheme
+    dark -> DarkScheme
+    highContrast -> SunlightScheme
+    else -> LightScheme
+}
+
+private fun fixedFor(dark: Boolean, highContrast: Boolean): ParloFixedColors = when {
+    dark && highContrast -> NightFixed
+    dark -> DarkFixed
+    highContrast -> SunlightFixed
+    else -> LightFixed
 }
 
 /**
- * Parlo's own teal/coral palette by default. [dynamicColor] opts into Material You (wallpaper)
- * colours on Android 12+.
+ * Parlo's Trail / Sunpath / Persimmon palette, light or dark with the system. [dynamicColor] swaps the
+ * Material roles for wallpaper colours on Android 12+ but keeps the tutor's Persimmon (tertiary) and the
+ * language tones, so who is speaking stays recognisable.
  */
 @Composable
-fun ParloTheme(dynamicColor: Boolean = false, content: @Composable () -> Unit) {
+fun ParloTheme(
+    dynamicColor: Boolean = false,
+    contrast: ParloContrast = ParloContrast.AUTO,
+    content: @Composable () -> Unit,
+) {
+    val context = LocalContext.current
+    val high = when (contrast) {
+        ParloContrast.HIGH -> true
+        ParloContrast.STANDARD -> false
+        ParloContrast.AUTO -> remember(context) { systemPrefersHighContrast(context) }
+    }
+    ProvideParloTheme(dynamicColor, contrast, high, content)
+}
+
+@Composable
+private fun ProvideParloTheme(dynamicColor: Boolean, contrast: ParloContrast, high: Boolean, content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
-    val scheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val ctx = LocalContext.current
-            if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
-        }
-        dark -> DarkScheme
-        else -> LightScheme
+    val parlo = schemeFor(dark, high)
+    // High contrast always uses Parlo's audited palette: wallpaper colours aren't contrast-checked.
+    val scheme = if (dynamicColor && !high && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val ctx = LocalContext.current
+        (if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)).copy(
+            tertiary = parlo.tertiary,
+            onTertiary = parlo.onTertiary,
+            tertiaryContainer = parlo.tertiaryContainer,
+            onTertiaryContainer = parlo.onTertiaryContainer,
+        )
+    } else {
+        parlo
     }
     MaterialTheme(colorScheme = scheme, shapes = ParloShapes, typography = ParloTypography) {
-        CompositionLocalProvider(LocalParloRoles provides rolesFrom(scheme), content = content)
+        CompositionLocalProvider(
+            LocalParloColors provides parloColors(scheme, fixedFor(dark, high), dark),
+            LocalParloTextStyles provides ParloTextStyles(),
+            LocalThemeInputs provides ThemeInputs(dynamicColor, contrast, high),
+            content = content,
+        )
     }
+}
+
+/**
+ * The walk screen is read at arm's length outdoors. With contrast on Automatic it switches to the
+ * Sunlight / Night walk theme while the ambient light sensor reads above 10,000 lux (back below 5,000).
+ */
+@Composable
+fun SunlightAwareTheme(content: @Composable () -> Unit) {
+    val inputs = LocalThemeInputs.current
+    if (inputs.contrast != ParloContrast.AUTO || inputs.highContrast) {
+        content()
+        return
+    }
+    val bright = rememberBrightSunlight()
+    if (!bright) content() else ProvideParloTheme(inputs.dynamicColor, inputs.contrast, high = true, content = content)
+}
+
+@Composable
+private fun rememberBrightSunlight(): Boolean {
+    val context = LocalContext.current
+    var bright by remember { mutableStateOf(false) }
+    DisposableEffect(context) {
+        val sensors = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+        val light = sensors?.getDefaultSensor(Sensor.TYPE_LIGHT)
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                val lux = event.values.firstOrNull() ?: return
+                bright = if (bright) lux > SUNLIGHT_EXIT_LUX else lux > SUNLIGHT_ENTER_LUX
+            }
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+        }
+        if (light != null) sensors.registerListener(listener, light, SensorManager.SENSOR_DELAY_NORMAL)
+        onDispose { sensors?.unregisterListener(listener) }
+    }
+    return bright
+}
+
+private const val SUNLIGHT_ENTER_LUX = 10_000f
+private const val SUNLIGHT_EXIT_LUX = 5_000f
+
+/** Android 14+ exposes the system contrast slider; "medium" or above maps to Parlo's high-contrast themes. */
+private fun systemPrefersHighContrast(context: Context): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return false
+    val ui = context.getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager ?: return false
+    return runCatching { ui.contrast >= 0.5f }.getOrDefault(false)
 }

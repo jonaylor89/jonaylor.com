@@ -14,6 +14,33 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.rounded.HelpOutline
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.HourglassBottom
+import androidx.compose.material.icons.rounded.Lightbulb
+import androidx.compose.material.icons.rounded.Spellcheck
+import androidx.compose.material.icons.rounded.Style
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Surface
+import com.parlo.app.model.RetrievalSchedule
+import com.parlo.app.ui.components.LanguageMonogram
+import com.parlo.app.ui.components.Overline
+import com.parlo.app.ui.components.ParloSnackbarHost
+import com.parlo.app.ui.theme.Parlo
+import com.parlo.app.ui.theme.ParloShape
+import com.parlo.app.ui.theme.ParloSpacing
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -80,17 +107,17 @@ fun VocabListScreen(onBack: () -> Unit) {
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) },
+        snackbarHost = { ParloSnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
-                title = { Text("Vocabulary") },
+                title = { Text("Vocabulary", style = MaterialTheme.typography.headlineMedium) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                 actions = {
                     FilterChip(
                         selected = flashcardMode,
                         onClick = { flashcardMode = !flashcardMode },
                         label = { Text("Flashcards") },
-                        leadingIcon = { Icon(Icons.Filled.Style, null) },
+                        leadingIcon = { Icon(Icons.Rounded.Style, null, Modifier.size(FilterChipDefaults.IconSize)) },
                         modifier = Modifier.padding(end = 8.dp),
                     )
                 },
@@ -108,7 +135,7 @@ fun VocabListScreen(onBack: () -> Unit) {
             }
             return@Scaffold
         }
-        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(ParloSpacing.space4), verticalArrangement = Arrangement.spacedBy(ParloSpacing.hair)) {
             if (suggested.isNotEmpty()) {
                 item(key = "header-suggested") {
                     val snapshot = suggested
@@ -118,41 +145,37 @@ fun VocabListScreen(onBack: () -> Unit) {
                         onDismissAll = { undoable("Skipped ${snapshot.size} words", { repo.dismissAllSuggested() }, { repo.restore(snapshot) }) },
                     )
                 }
-                items(suggested, key = { "s-${it.id}" }) { v ->
+                itemsIndexed(suggested, key = { _, it -> "s-${it.id}" }) { i, v ->
                     SuggestedCard(
-                        v,
+                        v, last = i == suggested.lastIndex,
                         onKeep = { undoable("Kept “${v.word}”", { repo.keep(v) }, { repo.unkeep(listOf(v)) }) },
                         onDismiss = { undoable("Skipped “${v.word}”", { repo.delete(v) }, { repo.restore(listOf(v)) }) },
                     )
                 }
                 if (kept.isNotEmpty()) {
                     item(key = "header-kept") {
-                        Text(
-                            "Saved",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 16.dp),
-                        )
+                        Overline("Saved", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = ParloSpacing.space6))
                     }
                 }
             }
             if (flashcardMode) item(key = "retrieval_help") {
                 Text(if (due.isEmpty()) "You're caught up. Your words will return when they're due." else
                     "Try saying the word before revealing it. Rate what you actually recalled; today's repeats don't count as delayed recall.",
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = ParloSpacing.space2))
             }
             grouped.forEach { (language, words) ->
                 item(key = "header-$language") {
-                    Text(
-                        "$language · ${words.size}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
-                    )
+                    Row(Modifier.padding(top = ParloSpacing.space4, bottom = ParloSpacing.space2), verticalAlignment = Alignment.CenterVertically) {
+                        LanguageMonogram(language, size = 32.dp)
+                        Spacer(Modifier.width(ParloSpacing.space3))
+                        Text("$language · ${words.size}", style = MaterialTheme.typography.titleMedium)
+                    }
                 }
-                items(words, key = { it.id }) { v ->
-                    VocabCard(v, flashcardMode,
-                        onReview = { recalled -> scope.launch { container.learning.recordReview(v.id, recalled) } },
+                itemsIndexed(words, key = { _, it -> it.id }) { i, v ->
+                    if (flashcardMode) Flashcard(v, onReview = { recalled -> scope.launch { container.learning.recordReview(v.id, recalled) } },
+                        modifier = Modifier.padding(bottom = ParloSpacing.space3))
+                    else VocabCard(v, ParloShape.grouped(i, words.size),
                         onDelete = { undoable("Deleted “${v.word}”", { repo.delete(v) }, { repo.restore(listOf(v)) }) })
                 }
             }
@@ -160,53 +183,74 @@ fun VocabListScreen(onBack: () -> Unit) {
     }
 }
 
+/** Top of the suggested tray, on Sunpath's container: machine-suggested, so labelled with the sparkle. */
 @Composable
 private fun SuggestedHeader(count: Int, onKeepAll: () -> Unit, onDismissAll: () -> Unit) {
-    Column(Modifier.padding(top = 8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.AutoAwesome, null, tint = MaterialTheme.colorScheme.tertiary)
-            Text(
-                "  Suggested · $count",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f),
-            )
-        }
-        Text(
-            "Picked up automatically from your walks. Keep what's useful.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.End) {
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = onDismissAll) { Text("Skip all") }
-            TextButton(onClick = onKeepAll) { Text("Keep all") }
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        color = scheme.secondaryContainer, contentColor = scheme.onSecondaryContainer,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = ParloSpacing.space2),
+    ) {
+        Column(Modifier.padding(start = ParloSpacing.space5, end = ParloSpacing.space2, top = ParloSpacing.space4, bottom = ParloSpacing.space2)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(20.dp))
+                Spacer(Modifier.width(ParloSpacing.space2))
+                Text("$count suggested from your walks", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            }
+            Text("Picked up automatically. Keep what's useful.", style = MaterialTheme.typography.bodyMedium)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                val c = ButtonDefaults.textButtonColors(contentColor = scheme.onSecondaryContainer)
+                TextButton(onClick = onDismissAll, colors = c) { Text("Skip all") }
+                TextButton(onClick = onKeepAll, colors = c) { Text("Keep all") }
+            }
         }
     }
 }
 
 @Composable
-private fun SuggestedCard(v: VocabEntity, onKeep: () -> Unit, onDismiss: () -> Unit) {
-    Card(
-        Modifier.fillMaxWidth().semantics { contentDescription = "Suggested ${v.word}" },
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.35f)),
+private fun SuggestedCard(v: VocabEntity, last: Boolean, onKeep: () -> Unit, onDismiss: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        color = scheme.secondaryContainer,
+        shape = if (last) RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp) else RoundedCornerShape(0.dp),
+        modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(start = 16.dp, top = 12.dp, bottom = 8.dp, end = 8.dp)) {
-            Text(v.word, style = MaterialTheme.typography.titleMedium)
-            if (v.translation.isNotBlank()) Text(v.translation, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-            if (v.exampleSentence.isNotBlank()) {
-                Text(v.exampleSentence, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Surface(
+            color = scheme.surfaceContainerLowest,
+            shape = if (last) RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 20.dp, bottomEnd = 20.dp) else ParloShape.extraSmall,
+            modifier = Modifier.fillMaxWidth().padding(start = ParloSpacing.space2, end = ParloSpacing.space2, bottom = if (last) ParloSpacing.space2 else 0.dp)
+                .semantics { contentDescription = "Suggested ${v.word}" },
+        ) {
+            Row(Modifier.padding(start = ParloSpacing.space4, top = ParloSpacing.space3, bottom = ParloSpacing.space3, end = ParloSpacing.space2), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(ParloSpacing.space1)) {
+                    Text(v.word, style = Parlo.type.phraseLarge)
+                    if (v.translation.isNotBlank()) Text(v.translation, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                    if (v.exampleSentence.isNotBlank()) Text(v.exampleSentence, style = Parlo.type.phraseGloss, color = scheme.onSurfaceVariant)
+                    ReasonTag(v.reason.ifBlank { sourceLabel(v) })
+                }
+                IconButton(onClick = onDismiss, modifier = Modifier.semantics { contentDescription = "Skip ${v.word}" }) { Icon(Icons.Rounded.Close, null) }
+                FilledIconButton(onClick = onKeep, modifier = Modifier.semantics { contentDescription = "Keep ${v.word}" }) { Icon(Icons.Rounded.Check, null) }
             }
-            Text(
-                listOf(v.language, v.reason.ifBlank { sourceLabel(v) }).joinToString(" · "),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                OutlinedButton(onClick = onDismiss, modifier = Modifier.semantics { contentDescription = "Skip ${v.word}" }) { Text("Skip") }
-                Button(onClick = onKeep, modifier = Modifier.semantics { contentDescription = "Keep ${v.word}" }) { Text("Keep") }
-            }
+        }
+    }
+}
+
+/** Why a word was picked up, with an icon so the reason reads without colour. */
+@Composable
+private fun ReasonTag(reason: String) {
+    val r = reason.lowercase()
+    val icon = when {
+        "correct" in r -> Icons.Rounded.Spellcheck
+        "ask" in r || "mean" in r -> Icons.AutoMirrored.Rounded.HelpOutline
+        "paus" in r || "stuck" in r || "hesit" in r -> Icons.Rounded.HourglassBottom
+        else -> Icons.Rounded.Lightbulb
+    }
+    Surface(shape = ParloShape.medium, color = MaterialTheme.colorScheme.surfaceContainerHigh, contentColor = MaterialTheme.colorScheme.onSurfaceVariant) {
+        Row(Modifier.padding(horizontal = ParloSpacing.space2, vertical = ParloSpacing.space1), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, Modifier.size(14.dp))
+            Spacer(Modifier.width(ParloSpacing.space1))
+            Text(reason, style = MaterialTheme.typography.labelMedium)
         }
     }
 }
@@ -218,36 +262,101 @@ private fun sourceLabel(v: VocabEntity) = when (v.source) {
 }
 
 @Composable
-private fun VocabCard(v: VocabEntity, flashcard: Boolean, onReview: (Boolean) -> Unit, onDelete: () -> Unit) {
-    var revealed by remember(v.id, flashcard) { mutableStateOf(!flashcard) }
-    Card(Modifier.fillMaxWidth().clickable(enabled = flashcard) { revealed = !revealed }) {
-        Row(Modifier.padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun VocabCard(v: VocabEntity, shape: androidx.compose.ui.graphics.Shape, onDelete: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(shape = shape, color = scheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(start = ParloSpacing.space4, top = ParloSpacing.space3, bottom = ParloSpacing.space3, end = ParloSpacing.space1), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (flashcard && !revealed && v.translation.isNotBlank()) v.translation else v.word, style = MaterialTheme.typography.titleMedium)
+                    Text(v.word, style = Parlo.type.phraseLarge)
                     if (v.source != VocabSource.MANUAL.name) {
-                        Icon(
-                            Icons.Filled.AutoAwesome, "Captured automatically",
-                            tint = MaterialTheme.colorScheme.outline,
-                            modifier = Modifier.padding(start = 6.dp).size(14.dp),
-                        )
+                        Icon(Icons.Rounded.AutoAwesome, "Captured automatically", tint = scheme.onSurfaceVariant, modifier = Modifier.padding(start = 6.dp).size(14.dp))
                     }
                 }
-                AnimatedVisibility(visible = revealed) {
-                    Column {
-                        if (v.translation.isNotBlank()) Text(v.translation, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-                        if (v.exampleSentence.isNotBlank()) {
-                            Text(v.exampleSentence, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
-                if (!revealed) Text("Say it in ${v.language} · tap to reveal", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                if (flashcard && revealed) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { onReview(false) }) { Text("Try again tomorrow") }
-                    TextButton(onClick = { onReview(true) }) { Text("I recalled it") }
+                if (v.translation.isNotBlank()) Text(v.translation, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                if (v.exampleSentence.isNotBlank()) Text(v.exampleSentence, style = Parlo.type.phraseGloss, color = scheme.onSurfaceVariant)
+            }
+            IconButton(onClick = onDelete) { Icon(Icons.Rounded.Delete, "Delete", tint = scheme.onSurfaceVariant) }
+        }
+    }
+}
+
+/**
+ * Production first: the meaning in your language, say it aloud, reveal the phrase, then rate your own
+ * recall. Each rating says when the word returns. A self-rating, not a score.
+ */
+@Composable
+private fun Flashcard(v: VocabEntity, onReview: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    var revealed by remember(v.id) { mutableStateOf(false) }
+    val scheme = MaterialTheme.colorScheme
+    val now = System.currentTimeMillis()
+    fun returns(remembered: Boolean): String {
+        val (_, due) = RetrievalSchedule.next(v.reviewStage, v.lastReviewedAt, remembered, now)
+        val days = ((due - now + RetrievalSchedule.DAY / 2) / RetrievalSchedule.DAY).toInt()
+        return if (days <= 1) "tomorrow" else "in $days days"
+    }
+    Surface(
+        onClick = { revealed = !revealed },
+        shape = ParloShape.extraLargeIncreased,
+        color = scheme.surfaceContainerLowest,
+        shadowElevation = 1.dp,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(ParloSpacing.space5), verticalArrangement = Arrangement.spacedBy(ParloSpacing.space3)) {
+            Overline("Say it in ${v.language}", color = scheme.onSurfaceVariant)
+            Text(v.translation.ifBlank { v.word }, style = MaterialTheme.typography.titleLarge)
+            AnimatedVisibility(visible = revealed) {
+                Column(verticalArrangement = Arrangement.spacedBy(ParloSpacing.space1)) {
+                    Text(v.word, style = Parlo.type.phraseHero, color = scheme.onSurface)
+                    if (v.exampleSentence.isNotBlank()) Text(v.exampleSentence, style = Parlo.type.phraseGloss, color = scheme.onSurfaceVariant)
                 }
             }
-            IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, "Delete", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+            if (!revealed) {
+                Text("Tap to reveal", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+            } else {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ParloSpacing.hair)) {
+                    RatingButton("Missed", returns(false), RoundedCornerShape(topStartPercent = 50, bottomStartPercent = 50, topEndPercent = 20, bottomEndPercent = 20),
+                        scheme.surfaceContainerHighest, scheme.onSurface, Modifier.weight(1f)) { onReview(false) }
+                    RatingButton("Got it", returns(true), RoundedCornerShape(topStartPercent = 20, bottomStartPercent = 20, topEndPercent = 50, bottomEndPercent = 50),
+                        scheme.primary, scheme.onPrimary, Modifier.weight(1f)) { onReview(true) }
+                }
+            }
+            ReviewLadder(v.reviewStage, reviewed = v.lastReviewedAt != null)
+        }
+    }
+}
+
+@Composable
+private fun RatingButton(label: String, returns: String, shape: androidx.compose.ui.graphics.Shape, bg: androidx.compose.ui.graphics.Color, fg: androidx.compose.ui.graphics.Color, modifier: Modifier, onClick: () -> Unit) {
+    Surface(onClick = onClick, shape = shape, color = bg, contentColor = fg, modifier = modifier.heightIn(min = 56.dp)) {
+        Column(Modifier.padding(vertical = ParloSpacing.space2), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Text(label, style = MaterialTheme.typography.labelLarge)
+            Text(returns, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+/** Six rising pills for the 1/3/7/14/30/60-day stages: reached filled, later outlined, the current one labelled. */
+@Composable
+private fun ReviewLadder(stage: Int, reviewed: Boolean) {
+    val days = listOf(1, 3, 7, 14, 30, 60)
+    val current = stage.coerceIn(days.indices)
+    val stages = Parlo.colors.fixed.reviewStages
+    val outline = MaterialTheme.colorScheme.outline
+    Row(
+        Modifier.semantics(mergeDescendants = true) { contentDescription = "Review stage ${current + 1} of 6, every ${days[current]} days" },
+        horizontalArrangement = Arrangement.spacedBy(ParloSpacing.space2), verticalAlignment = Alignment.Bottom,
+    ) {
+        days.forEachIndexed { i, d ->
+            val reached = reviewed && i <= current
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    Modifier.width(14.dp).height((12 + i * 4).dp)
+                        .then(if (reached) Modifier.background(stages[i], ParloShape.full) else Modifier.border(1.dp, outline, ParloShape.full)),
+                )
+                Text("$d d", style = MaterialTheme.typography.labelSmall,
+                    color = if (i == current && reviewed) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }

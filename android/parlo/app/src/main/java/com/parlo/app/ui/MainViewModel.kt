@@ -1,6 +1,7 @@
 package com.parlo.app.ui
 
 import android.annotation.SuppressLint
+import com.parlo.app.ui.theme.ParloContrast
 import android.app.Application
 import android.content.ComponentName
 import android.content.Context
@@ -49,6 +50,7 @@ data class MainUiState(
     /** Auto-captured words waiting in the Vocab "Suggested" tray. */
     val suggestedVocab: Int = 0,
     val dynamicColor: Boolean = false,
+    val contrast: ParloContrast = ParloContrast.AUTO,
     val voicePreview: VoicePreview = VoicePreview(),
     /** Most recent finished walk, shown as the post-walk recap and next-walk suggestion. */
     val lastWalk: LastWalk? = null,
@@ -169,6 +171,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         .combine(models.error) { s, e -> s.copy(modelsError = e) }
         .combine(vocab.observeAll()) { s, words -> s.copy(suggestedVocab = words.count { it.isSuggested }) }
         .combine(settings.dynamicColor) { s, d -> s.copy(dynamicColor = d) }
+        .combine(settings.contrast) { s, c -> s.copy(contrast = ParloContrast.parse(c)) }
         .combine(preview) { s, p -> s.copy(voicePreview = p) }
         .combine(combine(container.sessions.observeSessions(), vocab.observeAll(), container.vocabCapture.mining,
             container.db.sessionDao().observeLanguageSessions(), ::WalkHistory)) { s, history ->
@@ -311,6 +314,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setDynamicColor(enabled: Boolean) {
         viewModelScope.launch { settings.setDynamicColor(enabled) }
+    }
+
+    fun setContrast(mode: ParloContrast) {
+        viewModelScope.launch { settings.setContrast(mode.name) }
     }
 
     /** Plays a short greeting in [voice] via Gemini TTS; tapping the voice already playing stops it. */

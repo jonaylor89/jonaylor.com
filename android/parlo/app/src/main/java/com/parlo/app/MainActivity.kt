@@ -20,7 +20,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val ui by viewModel.uiState.collectAsStateWithLifecycle()
-            ParloTheme(dynamicColor = ui.dynamicColor) { ParloNavHost(viewModel) }
+            ParloTheme(dynamicColor = ui.dynamicColor, contrast = ui.contrast) { ParloNavHost(viewModel) }
         }
     }
 

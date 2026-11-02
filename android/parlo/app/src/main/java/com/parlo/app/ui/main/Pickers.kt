@@ -1,12 +1,31 @@
 package com.parlo.app.ui.main
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import com.parlo.app.ui.theme.ParloMotion
+import com.parlo.app.ui.theme.ParloShape
+import com.parlo.app.ui.theme.ParloSize
+import com.parlo.app.ui.theme.ParloSpacing
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -65,6 +84,7 @@ fun ComboBox(
     }
 }
 
+/** Level and correction style: connected segments, the selected one on Sunpath (secondary) with a check. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun <T> SegmentedPicker(
@@ -74,17 +94,66 @@ fun <T> SegmentedPicker(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val scheme = MaterialTheme.colorScheme
     SingleChoiceSegmentedButtonRow(modifier = modifier.fillMaxWidth()) {
         options.forEachIndexed { i, opt ->
             SegmentedButton(
                 selected = opt == selected,
                 onClick = { onSelect(opt) },
                 shape = SegmentedButtonDefaults.itemShape(index = i, count = options.size),
-            ) { Text(label(opt), maxLines = 1) }
+                colors = SegmentedButtonDefaults.colors(
+                    activeContainerColor = scheme.secondary,
+                    activeContentColor = scheme.onSecondary,
+                    activeBorderColor = scheme.secondary,
+                    inactiveContainerColor = scheme.surfaceContainerHighest,
+                    inactiveBorderColor = scheme.outline,
+                ),
+                modifier = Modifier.heightIn(min = ParloSize.targetMin),
+            ) { Text(label(opt), maxLines = 1, style = MaterialTheme.typography.labelLarge) }
         }
     }
 }
 
+/**
+ * A two-to-four-way toggle drawn as an M3 Expressive connected button group: full outer corners,
+ * tighter inner ones, a hairline gap, and the selection morphing to a full pill.
+ */
+@Composable
+fun <T> ConnectedChoice(
+    options: List<T>,
+    selected: T,
+    label: (T) -> String,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ((T) -> ImageVector)? = null,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(ParloSpacing.hair)) {
+        options.forEachIndexed { i, opt ->
+            val isSelected = opt == selected
+            val bg by animateColorAsState(if (isSelected) scheme.secondary else scheme.surfaceContainerHighest, ParloMotion.effects(), label = "choice")
+            Surface(
+                shape = ParloShape.connected(i, options.size, isSelected),
+                color = bg,
+                contentColor = if (isSelected) scheme.onSecondary else scheme.onSurface,
+                modifier = Modifier.weight(1f).heightIn(min = ParloSize.targetMin)
+                    .selectable(selected = isSelected, onClick = { onSelect(opt) }, role = Role.RadioButton),
+            ) {
+                Row(Modifier.padding(horizontal = ParloSpacing.space3), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    val glyph = if (isSelected) Icons.Rounded.Check else icon?.invoke(opt)
+                    if (glyph != null) {
+                        Icon(glyph, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(ParloSpacing.space2))
+                    }
+                    Text(label(opt), style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+/** Quick-switch and accent chips: selected on secondary-container with a leading check; wraps, never scrolls. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun <T> ChipRow(
     options: List<T>,
@@ -93,12 +162,21 @@ fun <T> ChipRow(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+    val scheme = MaterialTheme.colorScheme
+    FlowRow(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(ParloSpacing.space2)) {
         options.forEach { opt ->
-            FilterChip(selected = opt == selected, onClick = { onSelect(opt) }, label = { Text(label(opt)) })
+            val isSelected = opt == selected
+            FilterChip(
+                selected = isSelected,
+                onClick = { onSelect(opt) },
+                label = { Text(label(opt)) },
+                leadingIcon = if (isSelected) ({ Icon(Icons.Rounded.Check, null, Modifier.size(FilterChipDefaults.IconSize)) }) else null,
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = scheme.secondaryContainer,
+                    selectedLabelColor = scheme.onSecondaryContainer,
+                    selectedLeadingIconColor = scheme.onSecondaryContainer,
+                ),
+            )
         }
     }
 }

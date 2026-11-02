@@ -56,6 +56,11 @@ import androidx.compose.ui.unit.dp
 import com.parlo.app.model.Dialect
 import com.parlo.app.model.Language
 import com.parlo.app.model.LanguageCatalog
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import com.parlo.app.ui.components.LanguageMonogram
+import com.parlo.app.ui.components.nativeNameOf
+import com.parlo.app.ui.theme.Parlo
+import com.parlo.app.ui.theme.ParloShape
 
 /** Summary card on the main screen. Tapping opens [LanguagePickerSheet]. */
 @Composable
@@ -73,19 +78,16 @@ fun LanguageCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
     ) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Flag(dialectEntry?.flag ?: entry?.flag)
+            if (language.isBlank()) Flag(null) else LanguageMonogram(language)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    buildString {
-                        append(language.ifBlank { "Choose a language" })
-                        entry?.nativeName?.takeIf { it != language }?.let { append("  ·  \u2068").append(it).append('\u2069') }
-                    },
-                    style = MaterialTheme.typography.titleMedium,
+                    if (language.isBlank()) "Choose a language" else nativeNameOf(language),
+                    style = if (language.isBlank()) MaterialTheme.typography.titleMedium else Parlo.type.phraseLarge,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    dialectEntry?.let { "${it.name}  ·  ${it.region}" } ?: dialect.ifBlank { "Any accent" },
+                    listOfNotNull(language.takeIf { entry != null && entry.nativeName != language }, dialectEntry?.name ?: dialect.ifBlank { "Any accent" }).joinToString("  ·  "),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -118,7 +120,7 @@ fun LanguagePickerSheet(
 
     fun pick(lang: String, d: String) { onSelect(lang, d); onDismiss() }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, dragHandle = null) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, dragHandle = null, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
         Column(Modifier.fillMaxHeight(0.94f)) {
             // Header
             Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -131,13 +133,13 @@ fun LanguagePickerSheet(
                 }
                 Column(Modifier.weight(1f)) {
                     Text(
-                        if (step == Step.LANGUAGE) "Language" else "Accent",
-                        style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold,
+                        if (step == Step.LANGUAGE) "Choose a language" else "Choose an accent",
+                        style = MaterialTheme.typography.headlineSmall,
                     )
                     if (step == Step.DIALECT) {
                         val entry = LanguageCatalog.find(chosen)
                         Text(
-                            entry?.let { "${it.flag} ${it.name} · ${it.dialects.size} accents" } ?: chosen,
+                            entry?.let { "${it.nativeName} · ${it.name} · ${it.dialects.size} accents" } ?: chosen,
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -156,6 +158,12 @@ fun LanguagePickerSheet(
                 keyboardActions = KeyboardActions(onDone = {
                     if (query.isNotBlank() && step == Step.DIALECT) pick(chosen, query.trim())
                 }),
+                shape = ParloShape.full,
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+                ),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).testTag("language_search"),
             )
 
@@ -263,19 +271,19 @@ private fun DialectList(
 @Composable
 private fun LanguageRow(l: Language, selected: Boolean, onClick: () -> Unit) {
     ListItem(
-        headlineContent = { Text(l.name, fontWeight = if (selected) FontWeight.SemiBold else null) },
+        headlineContent = { Text(l.nativeName.ifBlank { l.name }, style = Parlo.type.phraseLarge, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         supportingContent = {
             Text(
-                if (l.nativeName != l.name) "\u2068${l.nativeName}\u2069  ·  ${l.dialects.size} accents" else "${l.dialects.size} accents",
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                if (l.nativeName != l.name) "${l.name}  ·  ${l.dialects.size} accents" else "${l.dialects.size} accents",
+                style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         },
-        leadingContent = { Flag(l.flag) },
+        leadingContent = { LanguageMonogram(l.name, ring = selected) },
         trailingContent = {
             if (selected) Icon(Icons.Filled.Check, "Selected", tint = MaterialTheme.colorScheme.primary)
             else Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         },
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         modifier = Modifier.clickable(onClick = onClick),
     )
 }
@@ -286,7 +294,7 @@ private fun DialectHitRow(l: Language, d: Dialect, onClick: () -> Unit) {
         headlineContent = { Text(d.name) },
         supportingContent = { Text("${l.name}  ·  ${d.region}", maxLines = 1, overflow = TextOverflow.Ellipsis) },
         leadingContent = { Flag(d.flag) },
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         modifier = Modifier.clickable(onClick = onClick),
     )
 }
@@ -298,7 +306,7 @@ private fun DialectRow(name: String, region: String, flag: String?, selected: Bo
         supportingContent = { Text(region, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         leadingContent = { Flag(flag) },
         trailingContent = { if (selected) Icon(Icons.Filled.Check, "Selected", tint = MaterialTheme.colorScheme.primary) },
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         modifier = Modifier.clickable(onClick = onClick),
     )
 }
@@ -331,7 +339,7 @@ private fun CustomRow(
             headlineContent = { Text(title) },
             supportingContent = { Text(subtitle) },
             leadingContent = { Icon(Icons.Filled.Edit, null, tint = MaterialTheme.colorScheme.primary) },
-            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
             modifier = Modifier.clickable { if (query.isBlank()) editing = true else onClick() }.testTag("custom_row"),
         )
     }
@@ -341,8 +349,8 @@ private fun CustomRow(
 private fun SectionHeader(text: String) {
     Text(
         text.uppercase(),
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.primary,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
     )
 }
