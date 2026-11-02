@@ -44,16 +44,17 @@ internal fun LanguageJourneyPicker(
     onSelect: (String) -> Unit,
     onMore: () -> Unit,
 ) {
-    val choices = (listOf(config.language) + languages.map { it.language } + listOf("German", "Hungarian", "Spanish", "Catalan"))
+    val choices = (listOf(config.language) + languages.map { it.language })
+        .filter { it.isNotBlank() }
         .distinctBy(LearningRepository::key)
     val rowState = rememberLazyListState()
     LaunchedEffect(config.language) { rowState.scrollToItem(0) }
     Column(Modifier.fillMaxWidth().testTag("language_journeys")) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("What are we practising today?", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            TextButton(onClick = onMore) { Text("All languages") }
+            Text("Which language today?", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            TextButton(onClick = onMore) { Text("Add language") }
         }
-        LazyRow(state = rowState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyRow(state = rowState, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.testTag("your_languages")) {
             items(choices, key = LearningRepository::key) { language ->
                 FilterChip(
                     selected = language.equals(config.language, true),
@@ -63,7 +64,8 @@ internal fun LanguageJourneyPicker(
                 )
             }
         }
-        Text("Your place in each language stays saved.", style = MaterialTheme.typography.bodySmall,
+        Text(if (choices.size > 1) "Switch freely. Each language keeps its own progress." else
+            "Learning more than one? Add another whenever you like.", style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -106,7 +108,7 @@ internal fun LearningJournalSheet(
             }
             item {
                 OutlinedTextField(value = goal, onValueChange = { goal = it.take(500) }, label = { Text("My learning goal") },
-                    placeholder = { Text("For example, talk with my Hungarian family") }, modifier = Modifier.fillMaxWidth())
+                    placeholder = { Text("For example, feel comfortable in everyday conversations") }, modifier = Modifier.fillMaxWidth())
                 Row {
                     Button(onClick = { onSaveGoal(goal) }, enabled = goal.trim() != ui.goal) { Text("Save goal") }
                     TextButton(onClick = onHistory) { Text("Conversation history") }
