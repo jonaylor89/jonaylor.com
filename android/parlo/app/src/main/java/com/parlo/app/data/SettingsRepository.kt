@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -61,19 +62,51 @@ class SettingsRepository(private val context: Context) {
     /** Transform the latest persisted value, so quick edits cannot overwrite voice-driven changes. */
     suspend fun updateConfig(transform: (SessionConfig) -> SessionConfig) {
         val updated = context.dataStore.edit { p ->
-            val config = transform(p.toConfig())
-            p[LANGUAGE] = config.language
-            p[DIALECT] = config.dialect
-            p[LEVEL] = config.level.name
-            p[SCENARIO] = config.scenario.name
-            p[CORRECTION] = config.correctionStyle.name
-            p[VOICE] = config.voice
-            p[MODEL] = config.model
-            p[TOPIC] = config.topic
-            p[TOPIC_TITLE] = config.topicTitle
+            val previous = p.toConfig()
+            val saved = p.languageConfigs()
+            val config = transform(previous)
+            val updatedProfiles = (listOf(config.copy(onboarding = false), previous.copy(onboarding = false)) + saved)
+                .distinctBy { LearningRepository.key(it.language) }
+            p[LANGUAGE_CONFIGS] = json.encodeToString(configListSerializer, updatedProfiles)
+            p.writeConfig(config)
         }
         rememberCombo(updated.toConfig().languageCombo)
     }
+
+    /** Archive import never changes API credentials, discovery cache or appearance. */
+    suspend fun replaceLanguageConfigs(config: SessionConfig, languages: List<SessionConfig>) {
+        context.dataStore.edit { p ->
+            val saved = (listOf(config) + languages).map { it.copy(onboarding = false) }.distinctBy { LearningRepository.key(it.language) }
+            p.writeConfig(config)
+            p[LANGUAGE_CONFIGS] = json.encodeToString(configListSerializer, saved)
+            p[RECENT_COMBOS] = json.encodeToString(comboListSerializer, saved.take(MAX_RECENT).map { it.languageCombo })
+        }
+    }
+
+    /** Backfill language preferences from older installations without overwriting any current choice. */
+    suspend fun seedLanguages(configs: List<SessionConfig>) {
+        context.dataStore.edit { p ->
+            val merged = (p.languageConfigs() + p.toConfig() + configs).distinctBy { LearningRepository.key(it.language) }
+            p[LANGUAGE_CONFIGS] = json.encodeToString(configListSerializer, merged)
+        }
+    }
+
+    /** Selecting a language restores its own chapter; explicitly supplied level/accent wins. */
+    suspend fun selectLanguage(language: String, dialect: String? = null, level: Level? = null) {
+        val saved = languageConfigs.first()
+        updateConfig { previous ->
+            val restored = languageConfig(previous, previous.copy(language = language), saved)
+            restored.copy(dialect = dialect ?: restored.dialect, level = level ?: restored.level)
+        }
+    }
+
+    val languageConfigs: Flow<List<SessionConfig>> = context.dataStore.data.map { it.languageConfigs() }
+
+    suspend fun forLanguage(language: String): SessionConfig? =
+        languageConfigs.first().firstOrNull { it.language.equals(language, true) }
+
+    private fun Preferences.languageConfigs(): List<SessionConfig> = this[LANGUAGE_CONFIGS]
+        ?.let { runCatching { json.decodeFromString(configListSerializer, it) }.getOrNull() }.orEmpty()
 
     val recentCombos: Flow<List<LanguageCombo>> = context.dataStore.data.map { p ->
         p[RECENT_COMBOS]?.let { runCatching { json.decodeFromString(comboListSerializer, it) }.getOrNull() } ?: emptyList()
@@ -103,6 +136,19 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[CACHED_MODELS] = models.joinToString("\n") }
     }
 
+    private fun MutablePreferences.writeConfig(config: SessionConfig) {
+        this[LANGUAGE] = config.language
+        this[DIALECT] = config.dialect
+        this[LEVEL] = config.level.name
+        this[SCENARIO] = config.scenario.name
+        this[CORRECTION] = config.correctionStyle.name
+        this[VOICE] = config.voice
+        this[MODEL] = config.model
+        this[TOPIC] = config.topic
+        this[TOPIC_TITLE] = config.topicTitle
+        this[FOLLOW_PLAN] = config.followPlan
+    }
+
     private fun Preferences.toConfig() = SessionConfig(
         language = this[LANGUAGE] ?: "Spanish",
         dialect = this[DIALECT] ?: SessionConfig().dialect,
@@ -113,6 +159,7 @@ class SettingsRepository(private val context: Context) {
         model = this[MODEL] ?: "",
         topic = this[TOPIC] ?: "",
         topicTitle = this[TOPIC_TITLE] ?: "",
+        followPlan = this[FOLLOW_PLAN] ?: true,
     )
 
     private companion object {
@@ -127,10 +174,13 @@ class SettingsRepository(private val context: Context) {
         val MODEL = stringPreferencesKey("model")
         val TOPIC = stringPreferencesKey("topic")
         val TOPIC_TITLE = stringPreferencesKey("topic_title")
+        val FOLLOW_PLAN = booleanPreferencesKey("follow_plan")
+        val LANGUAGE_CONFIGS = stringPreferencesKey("language_configs")
         val RECENT_COMBOS = stringPreferencesKey("recent_combos")
         val CACHED_MODELS = stringPreferencesKey("cached_models")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val json = Json { ignoreUnknownKeys = true }
         val comboListSerializer = ListSerializer(LanguageCombo.serializer())
+        val configListSerializer = ListSerializer(SessionConfig.serializer())
     }
 }

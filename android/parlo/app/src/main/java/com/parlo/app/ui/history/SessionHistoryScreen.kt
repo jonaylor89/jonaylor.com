@@ -15,6 +15,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -110,7 +112,11 @@ private fun SessionCard(s: SessionEntity, onClick: () -> Unit, onDelete: () -> U
             Column(Modifier.weight(1f)) {
                 Text("${sessionTitle(s.language, s.dialect)} · ${Level.parse(s.level).label}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "${formatDate(s.startedAt)} · ${formatDuration(s.durationMs)}" + if (s.endedAt == null) " · in progress" else "",
+                    "${formatDate(s.startedAt)} · ${formatDuration(s.durationMs)}" + when {
+                        s.interrupted -> " · interrupted, progress saved"
+                        s.endedAt == null -> " · in progress"
+                        else -> ""
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -137,6 +143,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
     val data by repo.observeSessionWithTurns(sessionId).collectAsStateWithLifecycle(initialValue = null)
     val mining by capture.mining.collectAsStateWithLifecycle()
     val s = data?.session
+    var excludeMemory by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
 
@@ -149,7 +156,7 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
             )
         },
     ) { padding ->
-        val turns = data?.turns.orEmpty()
+        val turns = data?.turns.orEmpty().sortedBy { it.id }
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (s != null) {
                 item {
@@ -170,7 +177,11 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                         }
                     }
                 }
-                if (s.endedAt != null) {
+                item {
+                    AssistChip(enabled = s.remember, onClick = { excludeMemory = true },
+                        label = { Text(if (s.remember) "Exclude this walk from memory" else "Excluded from tutor memory") })
+                }
+                if (s.endedAt != null && s.remember) {
                     item {
                         AssistChip(
                             enabled = sessionId !in mining,
@@ -204,6 +215,15 @@ fun SessionDetailScreen(sessionId: Long, onBack: () -> Unit) {
                 )
             }
         }
+    }
+    if (excludeMemory) {
+        AlertDialog(onDismissRequest = { excludeMemory = false }, title = { Text("Exclude this walk?") },
+            text = { Text("Future conversations won't use this walk's transcript or teaching checkpoints as memory. Your transcript and saved vocabulary remain available to you.") },
+            confirmButton = { TextButton(onClick = {
+                scope.launch { container.learning.forgetSession(sessionId) }
+                excludeMemory = false
+            }) { Text("Exclude walk") } },
+            dismissButton = { TextButton(onClick = { excludeMemory = false }) { Text("Cancel") } })
     }
 }
 

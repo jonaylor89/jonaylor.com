@@ -4,6 +4,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,11 +50,11 @@ private const val AI_STUDIO_KEYS = "https://aistudio.google.com/app/apikey"
 
 /** First run: what Parlo is, then a two-step connect. Voice, appearance and model stay in Settings. */
 @Composable
-fun WelcomeScreen(status: SetupStatus, maskedKey: String, onPasteKey: (String) -> Unit, onStart: () -> Unit, modifier: Modifier = Modifier) {
+fun WelcomeScreen(status: SetupStatus, maskedKey: String, onPasteKey: (String) -> Unit, onStart: () -> Unit, modifier: Modifier = Modifier, languageChoice: (@Composable () -> Unit)? = null) {
     val context = LocalContext.current
     val connected = status == SetupStatus.READY
-    Column(modifier.fillMaxSize().padding(24.dp).testTag("welcome"), verticalArrangement = Arrangement.spacedBy(ParloSpacing.lg)) {
-        Spacer(Modifier.weight(1f))
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp).testTag("welcome"), verticalArrangement = Arrangement.spacedBy(ParloSpacing.lg)) {
+        Spacer(Modifier.height(12.dp))
         Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(96.dp)) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.Headphones, null, Modifier.size(44.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
@@ -64,6 +66,7 @@ fun WelcomeScreen(status: SetupStatus, maskedKey: String, onPasteKey: (String) -
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        languageChoice?.invoke()
         StepRow(
             done = status != SetupStatus.NO_KEY,
             icon = Icons.AutoMirrored.Filled.OpenInNew,
@@ -88,7 +91,7 @@ fun WelcomeScreen(status: SetupStatus, maskedKey: String, onPasteKey: (String) -
             busy = status == SetupStatus.CHECKING,
             onClick = { clipboardText(context)?.let(onPasteKey) },
         )
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Lock, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.width(6.dp))
@@ -100,7 +103,7 @@ fun WelcomeScreen(status: SetupStatus, maskedKey: String, onPasteKey: (String) -
             Text("Start your first walk", style = MaterialTheme.typography.titleMedium)
         }
         Text(
-            "No more setup. Your tutor asks what you want to learn. Earbuds are optional.",
+            "Your tutor will help you find your level in your chosen language. Earbuds are optional.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

@@ -52,6 +52,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -84,6 +86,33 @@ class LiveSessionService : LifecycleService() {
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     private var dbSessionId: Long? = null
+    /** Ordered application-scope writes survive service teardown; connecting waits for session creation. */
+    private var pendingWrite: Job? = null
+    private var committedTurns = 0
+    private var dataLease: Long? = null
+    private val configMutex = Mutex()
+    private var persistenceFailed = false
+
+    private fun persist(block: suspend () -> Unit) {
+        val previous = pendingWrite
+        pendingWrite = container.appScope.launch {
+            previous?.join()
+            try { block() }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) {
+                Log.e(TAG, "Could not persist walk; stopping rather than silently losing history", e)
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
+                    if (!persistenceFailed) {
+                        persistenceFailed = true
+                        container.learningDataGate.endSession(dataLease)
+                        dataLease = null
+                        fail(SessionError.Unknown("Could not save this walk. Check free storage before trying again."))
+                    }
+                }
+            }
+        }
+    }
+    private var startupJob: Job? = null
     private var eventsJob: Job? = null
     private var recapJob: Job? = null
     private var walkMemory: WalkMemory? = null
@@ -128,6 +157,9 @@ class LiveSessionService : LifecycleService() {
             },
             onProfileUpdated = ::onProfileUpdate,
             currentConfig = { _state.value.config },
+            recallHistory = { query -> pendingWrite?.join(); container.learning.search(_state.value.config.language, query) },
+            languageDefaults = { language -> container.settings.forLanguage(language) ?: SessionConfig(language = language, dialect = LanguageCatalog.defaultDialectFor(language), level = com.parlo.app.model.Level.SUPER_BEGINNER) },
+            languageMemory = { PromptBuilder.memoryBlock(_state.value.config, walkMemory) },
             onShowPhrase = { phrase -> _state.update { it.copy(phrase = phrase) } },
             onWalkUpdated = ::onVoiceWalkUpdate,
             onEndWalk = { lifecycleScope.launch { delay(END_WALK_DELAY_MS); endSession(skipRecap = false) } },
@@ -155,8 +187,12 @@ class LiveSessionService : LifecycleService() {
                 // Started with startForegroundService (widget/notification): promote before any early failure.
                 if (!_state.value.isActive) goForeground()
                 lifecycleScope.launch {
-                    if (container.models.defaultModel() == null) container.models.loadCached()
-                    startSession(container.settings.currentConfig().copy(onboarding = intent.getBooleanExtra(EXTRA_ONBOARDING, false)))
+                    try {
+                        container.recovery.await()
+                        if (container.models.defaultModel() == null) container.models.loadCached()
+                        startSession(container.settings.currentConfig().copy(onboarding = intent.getBooleanExtra(EXTRA_ONBOARDING, false)))
+                    } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                    catch (e: Exception) { fail(SessionError.Unknown(e.message ?: "Could not recover learning history")) }
                 }
             }
             ACTION_TOGGLE_MUTE -> toggleMute()
@@ -171,12 +207,29 @@ class LiveSessionService : LifecycleService() {
 
     fun startSession(config: SessionConfig) {
         if (_state.value.isActive) return
+        val previousStartup = startupJob
+        if (previousStartup?.isActive == true) {
+            // An immediate restart after ending during setup must not make the old setup's
+            // CONNECTING guard match a new walk and open a stale socket.
+            lifecycleScope.launch {
+                previousStartup.join()
+                pendingWrite?.join()
+                if (!_state.value.isActive) startSession(config)
+            }
+            return
+        }
         val apiKey = container.settings.apiKey.value
         if (apiKey.isBlank()) { fail(SessionError.MissingApiKey); return }
         val model = config.model.ifBlank { container.models.defaultModel().orEmpty() }
         if (model.isBlank()) { fail(SessionError.NoLiveModel); return }
+        dataLease = container.learningDataGate.beginSession()
+        if (dataLease == null) {
+            fail(SessionError.Unknown("Wait for the backup or restore to finish before starting a walk"))
+            return
+        }
         liveModel = model
         val effective = config
+        committedTurns = 0
         toolDispatcher.clear()
 
         hadReadyOnce = false
@@ -191,10 +244,6 @@ class LiveSessionService : LifecycleService() {
             profile = if (effective.onboarding) LearnerProfile() else null,
         )
         goForeground()
-        lifecycleScope.launch {
-            dbSessionId = container.sessions.startSession(effective, _state.value.sessionStartMs)
-            container.settings.saveConfig(effective)
-        }
         route.begin()
         player.start()
         mediaSession?.isActive = true
@@ -202,17 +251,30 @@ class LiveSessionService : LifecycleService() {
         eventsJob?.cancel()
         eventsJob = lifecycleScope.launch { client.events.collect(::onLiveEvent) }
         walkMemory = null
-        lifecycleScope.launch {
-            walkMemory = runCatching { loadWalkMemory(effective.language) }.getOrNull()
-            if (_state.value.connection == ConnectionState.CONNECTING) client.start(apiKey) { buildSetup(_state.value.config) }
+        val priorWrites = pendingWrite
+        startupJob = lifecycleScope.launch {
+            try {
+                container.recovery.await()
+                priorWrites?.join()
+                if (_state.value.connection != ConnectionState.CONNECTING) return@launch
+                persistenceFailed = false
+                walkMemory = container.learning.memory(effective.language)
+                if (_state.value.connection != ConnectionState.CONNECTING) return@launch
+                val prepared = effective.copy(onboarding = walkMemory?.returning != true)
+                _state.update { it.copy(config = prepared, profile = if (prepared.onboarding) LearnerProfile() else null) }
+                container.settings.saveConfig(prepared)
+                dbSessionId = container.sessions.startSession(prepared, _state.value.sessionStartMs)
+                // An end tap during DB setup must not open a new socket or leave an empty session.
+                if (_state.value.connection == ConnectionState.CONNECTING) client.start(apiKey) { buildSetup(_state.value.config) }
+                else { container.sessions.cleanupEmpty(); dbSessionId = null }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Could not prepare durable session", e)
+                fail(SessionError.Unknown(e.message ?: "Could not load learning history"))
+            }
         }
     }
-
-    private suspend fun loadWalkMemory(language: String): WalkMemory = WalkMemory(
-        language = language,
-        focus = container.sessions.latestReviewed(language)?.focus.orEmpty(),
-        reviewWords = container.vocab.recentWords(language, MEMORY_WORDS),
-    )
 
     fun toggleMute() = setMuted(!_state.value.muted)
 
@@ -228,11 +290,19 @@ class LiveSessionService : LifecycleService() {
 
     /** Apply new settings mid-session. Live-switchable fields go over the wire as a text turn; voice/model reconnect. */
     fun applyConfig(new: SessionConfig) {
+        lifecycleScope.launch { configMutex.withLock { applyConfigDurably(new) } }
+    }
+
+    private suspend fun applyConfigDurably(new: SessionConfig) {
         val old = _state.value.config
-        val merged = new
-        if (merged == old) return
+        if (new == old) return
+        flushBuffers()
+        container.settings.saveConfig(new)
+        val merged = container.settings.currentConfig().copy(onboarding = new.onboarding)
+        if (!old.language.equals(merged.language, true)) {
+            walkMemory = container.learning.memory(merged.language, dbSessionId ?: 0)
+        }
         _state.update { it.copy(config = merged) }
-        lifecycleScope.launch { container.settings.saveConfig(merged) }
         if (!_state.value.isActive) return
         val model = merged.model.ifBlank { container.models.defaultModel() ?: liveModel }
         val needsReconnect = merged.voice != old.voice || model != liveModel
@@ -245,14 +315,20 @@ class LiveSessionService : LifecycleService() {
             client.reconnectWithNewSetup { buildSetup(_state.value.config) }
         } else if (client.isReady) {
             player.flush()
-            client.sendText(PromptBuilder.switchMessage(old, merged))
+            client.sendText(PromptBuilder.switchMessage(old, merged) + "\n" + PromptBuilder.memoryBlock(merged, walkMemory))
             appendTurn(Speaker.SYSTEM, "Switched to ${merged.dialect.ifBlank { merged.language }} · ${merged.level.label}")
         }
         updateNotification()
     }
 
-    fun switchCombo(combo: LanguageCombo) =
-        applyConfig(_state.value.config.copy(language = combo.language, dialect = combo.dialect, level = combo.level))
+    fun selectLanguage(language: String, dialect: String? = null, level: com.parlo.app.model.Level? = null) {
+        lifecycleScope.launch {
+            configMutex.withLock {
+                container.settings.selectLanguage(language, dialect, level)
+                applyConfigDurably(container.settings.currentConfig().copy(onboarding = false))
+            }
+        }
+    }
 
     fun requestEnglishHelp() {
         if (!client.isReady) return
@@ -318,15 +394,26 @@ class LiveSessionService : LifecycleService() {
         _state.update {
             it.copy(connection = ConnectionState.IDLE, audio = AudioState.IDLE, muted = false, recapInProgress = false, statusText = "")
         }
+        dbSessionId = null
+        val lease = dataLease
+        val setup = startupJob
+        dataLease = null
+        persist {
+            try {
+                setup?.join()
+                if (id != null) {
+                    container.sessions.finishSession(id, endedAt, recap.ifBlank { null }, config)
+                    com.parlo.app.data.LearningWorker.enqueue(applicationContext, id)
+                }
+            } finally { container.learningDataGate.endSession(lease) }
+        }
         lifecycleScope.launch {
-            if (id != null) {
-                container.sessions.finishSession(id, endedAt, recap.ifBlank { null }, config)
-                container.vocabCapture.mineInBackground(id)
-            }
-            dbSessionId = null
+            pendingWrite?.join()
             delay(700)
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
+            if (!_state.value.isActive) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
         }
     }
 
@@ -345,22 +432,44 @@ class LiveSessionService : LifecycleService() {
         val id = dbSessionId
         val config = _state.value.config
         _state.update { it.copy(connection = ConnectionState.ERROR, audio = AudioState.IDLE, error = error, recapInProgress = false, statusText = error.title) }
-        lifecycleScope.launch {
-            if (id != null) {
-                container.sessions.finishSession(id, System.currentTimeMillis(), null, config)
-                container.vocabCapture.mineInBackground(id)
-            }
-            container.sessions.cleanupEmpty()
-            dbSessionId = null
+        dbSessionId = null
+        val lease = dataLease
+        val setup = startupJob
+        dataLease = null
+        persist {
+            try {
+                setup?.join()
+                if (id != null) {
+                    container.sessions.finishSession(id, System.currentTimeMillis(), null, config)
+                    com.parlo.app.data.LearningWorker.enqueue(applicationContext, id)
+                }
+                container.sessions.cleanupEmpty()
+            } finally { container.learningDataGate.endSession(lease) }
         }
         if (isForeground) updateNotification()
     }
 
     override fun onDestroy() {
         toolDispatcher.clear()
+        flushBuffers()
+        val interruptedId = dbSessionId
+        val lease = dataLease
+        val setup = startupJob
+        dataLease = null
+        persist {
+            try {
+                setup?.join()
+                if (interruptedId != null) {
+                    container.db.sessionDao().recoverInterrupted(interruptedId)
+                    com.parlo.app.data.LearningWorker.enqueue(applicationContext, interruptedId)
+                }
+            } finally { container.learningDataGate.endSession(lease) }
+        }
         if (_state.value.isActive) {
             client.close(); mic.stop(); player.stop(); route.end()
+            _state.update { it.copy(connection = ConnectionState.IDLE, audio = AudioState.IDLE, muted = false) }
         }
+        container.liveWalk.value = _state.value
         networkCallback?.let { runCatching { connectivity?.unregisterNetworkCallback(it) } }
         mediaSession?.release()
         super.onDestroy()
@@ -411,6 +520,7 @@ class LiveSessionService : LifecycleService() {
             }
             LiveEvent.TurnComplete -> {
                 flushBuffers()
+                pendingWrite?.join()
                 if (awaitingRecapTurnComplete) awaitingRecapTurnComplete = false
             }
             LiveEvent.GenerationComplete -> Unit
@@ -433,13 +543,25 @@ class LiveSessionService : LifecycleService() {
 
     private suspend fun sendResumeContext() {
         val id = dbSessionId ?: return
+        flushBuffers()
+        pendingWrite?.join()
+        walkMemory = container.learning.memory(_state.value.config.language, id)
         val recent = container.sessions.recentTurns(id).filter { it.speaker != Speaker.SYSTEM.name }
             .map { (if (it.speaker == Speaker.USER.name) "User" else "Tutor") to it.text }
         if (recent.isEmpty()) return
-        client.sendText(PromptBuilder.resumeContextMessage(recent, _state.value.config))
+        val config = _state.value.config
+        val currentEpisodes = container.db.learningDao().recent(com.parlo.app.data.LearningRepository.key(config.language), 4)
+            .filter { it.sessionId == id }.map(com.parlo.app.data.LearningRepository::episodeText)
+        client.sendText(PromptBuilder.memoryBlock(config, walkMemory) +
+            "\nEarlier in this walk (quoted data):\n" + currentEpisodes.joinToString("\n") + "\n" +
+            PromptBuilder.resumeContextMessage(recent, config))
     }
 
     private suspend fun onVoiceWalkUpdate(u: ToolHandler.WalkUpdate) {
+        configMutex.withLock { voiceWalkUpdateLocked(u) }
+    }
+
+    private suspend fun voiceWalkUpdateLocked(u: ToolHandler.WalkUpdate) {
         val old = _state.value.config
         val new = old.copy(
             topic = u.topic.ifBlank { if (u.scenario != null) "" else old.topic },
@@ -456,18 +578,32 @@ class LiveSessionService : LifecycleService() {
 
     /** Profile/tool responses hand off to normal tutoring once language, accent and level are confirmed. */
     private suspend fun onProfileUpdate(u: ToolHandler.ProfileUpdate) {
+        configMutex.withLock { profileUpdateLocked(u) }
+    }
+
+    private suspend fun profileUpdateLocked(u: ToolHandler.ProfileUpdate) {
+        flushBuffers()
         val (new, profile) = applyProfileUpdate(_state.value.config, _state.value.profile ?: LearnerProfile(), u)
         _state.update { it.copy(config = new, profile = profile) }
         container.settings.saveConfig(new)
+        if (u.goal.isNotBlank()) container.learning.setGoal(new.language, u.goal)
+        if (walkMemory?.language?.equals(new.language, true) != true) walkMemory = container.learning.memory(new.language, dbSessionId ?: 0)
         updateNotification()
     }
 
     private suspend fun onVoiceLanguageSwitch(combo: LanguageCombo) {
+        configMutex.withLock { voiceLanguageSwitchLocked(combo) }
+    }
+
+    private suspend fun voiceLanguageSwitchLocked(combo: LanguageCombo) {
         val old = _state.value.config
-        val new = old.copy(language = combo.language, dialect = combo.dialect, level = combo.level)
+        flushBuffers()
+        container.settings.selectLanguage(combo.language, combo.dialect, combo.level)
+        val new = container.settings.currentConfig().copy(onboarding = false)
         if (new == old) return
         _state.update { it.copy(config = new) }
-        container.settings.saveConfig(new)
+        pendingWrite?.join()
+        walkMemory = container.learning.memory(new.language, dbSessionId ?: 0)
         appendTurn(Speaker.SYSTEM, "Switched by voice to ${combo.label}")
         updateNotification()
     }
@@ -497,7 +633,13 @@ class LiveSessionService : LifecycleService() {
         _state.update { s -> s.copy(transcript = s.transcript.filter { it.isFinal } + turn) }
         publishPartial()
         val id = dbSessionId ?: return
-        lifecycleScope.launch { container.sessions.addTurn(id, speaker, clean, now) }
+        val language = _state.value.config.language
+        if (speaker != Speaker.SYSTEM) committedTurns++
+        val checkpoint = speaker != Speaker.SYSTEM && committedTurns % 12 == 0
+        persist {
+            container.sessions.addTurn(id, speaker, clean, now, language)
+            if (checkpoint) com.parlo.app.data.LearningWorker.enqueue(applicationContext, id)
+        }
     }
 
     // ------------------------------------------------------------------ audio state / focus
@@ -653,7 +795,6 @@ class LiveSessionService : LifecycleService() {
         const val ACTION_END_NOW = "com.parlo.app.action.END_NOW"
         private const val RECAP_TIMEOUT_MS = 75_000L
         private const val END_WALK_DELAY_MS = 300L
-        private const val MEMORY_WORDS = 6
 
         private const val EXTRA_ONBOARDING = "onboarding"
 

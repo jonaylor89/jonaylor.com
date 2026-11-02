@@ -59,14 +59,16 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VocabListScreen(onBack: () -> Unit) {
-    val repo = ParloApp.container(LocalContext.current).vocab
+    val container = ParloApp.container(LocalContext.current)
+    val repo = container.vocab
     val all by repo.observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     var flashcardMode by remember { mutableStateOf(false) }
     val suggested = all.filter { it.isSuggested }
     val kept = all.filterNot { it.isSuggested }
-    val grouped = kept.groupBy { it.language }.toSortedMap()
+    val due = kept.filter { it.nextReviewAt <= System.currentTimeMillis() }
+    val grouped = (if (flashcardMode) due else kept).groupBy { it.language }.toSortedMap()
 
     /** Runs [action], then offers Undo for a few seconds. */
     fun undoable(message: String, action: suspend () -> Unit, undo: suspend () -> Unit) {
@@ -134,6 +136,11 @@ fun VocabListScreen(onBack: () -> Unit) {
                     }
                 }
             }
+            if (flashcardMode) item(key = "retrieval_help") {
+                Text(if (due.isEmpty()) "You're caught up. Your words will return when they're due." else
+                    "Try saying the word before revealing it. Rate what you actually recalled; today's repeats don't count as delayed recall.",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             grouped.forEach { (language, words) ->
                 item(key = "header-$language") {
                     Text(
@@ -144,7 +151,9 @@ fun VocabListScreen(onBack: () -> Unit) {
                     )
                 }
                 items(words, key = { it.id }) { v ->
-                    VocabCard(v, flashcardMode) { undoable("Deleted “${v.word}”", { repo.delete(v) }, { repo.restore(listOf(v)) }) }
+                    VocabCard(v, flashcardMode,
+                        onReview = { recalled -> scope.launch { container.learning.recordReview(v.id, recalled) } },
+                        onDelete = { undoable("Deleted “${v.word}”", { repo.delete(v) }, { repo.restore(listOf(v)) }) })
                 }
             }
         }
@@ -209,13 +218,13 @@ private fun sourceLabel(v: VocabEntity) = when (v.source) {
 }
 
 @Composable
-private fun VocabCard(v: VocabEntity, flashcard: Boolean, onDelete: () -> Unit) {
+private fun VocabCard(v: VocabEntity, flashcard: Boolean, onReview: (Boolean) -> Unit, onDelete: () -> Unit) {
     var revealed by remember(v.id, flashcard) { mutableStateOf(!flashcard) }
     Card(Modifier.fillMaxWidth().clickable(enabled = flashcard) { revealed = !revealed }) {
         Row(Modifier.padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(v.word, style = MaterialTheme.typography.titleMedium)
+                    Text(if (flashcard && !revealed && v.translation.isNotBlank()) v.translation else v.word, style = MaterialTheme.typography.titleMedium)
                     if (v.source != VocabSource.MANUAL.name) {
                         Icon(
                             Icons.Filled.AutoAwesome, "Captured automatically",
@@ -232,7 +241,11 @@ private fun VocabCard(v: VocabEntity, flashcard: Boolean, onDelete: () -> Unit) 
                         }
                     }
                 }
-                if (!revealed) Text("tap to reveal", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                if (!revealed) Text("Say it in ${v.language} · tap to reveal", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                if (flashcard && revealed) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { onReview(false) }) { Text("Try again tomorrow") }
+                    TextButton(onClick = { onReview(true) }) { Text("I recalled it") }
+                }
             }
             IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, "Delete", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }

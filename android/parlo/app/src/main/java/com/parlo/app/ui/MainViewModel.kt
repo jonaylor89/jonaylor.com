@@ -14,6 +14,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.parlo.app.ParloApp
 import com.parlo.app.audio.AudioPlayer
+import com.parlo.app.data.db.LearningEpisodeEntity
 import com.parlo.app.data.db.SessionEntity
 import com.parlo.app.data.db.VocabEntity
 import com.parlo.app.model.LanguageCombo
@@ -27,6 +28,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -51,6 +55,11 @@ data class MainUiState(
     /** False until the first walk has finished; drives the welcome screen and voice onboarding. */
     val hasWalked: Boolean = true,
     val maskedKey: String = "",
+    val languages: List<SessionConfig> = emptyList(),
+    val goal: String = "",
+    val learningEpisodes: List<LearningEpisodeEntity> = emptyList(),
+    val walkCount: Int = 0,
+    val lastPractisedAt: Long? = null,
 ) {
     /** True once a walk can actually start: a key is saved and a voice model is known. */
     val ready: Boolean get() = hasApiKey && !keyRejected && (config.model.isNotBlank() || models.isNotEmpty())
@@ -80,6 +89,7 @@ data class LastWalk(
     val nextWalkTitle: String,
     val nextWalkPrompt: String,
     val reviewing: Boolean,
+    val interrupted: Boolean = false,
 ) {
     val lengthLabel: String get() = walkLengthLabel(durationMs)
 }
@@ -102,14 +112,23 @@ internal fun lastWalkOf(sessions: List<SessionEntity>, vocab: List<VocabEntity>,
         nextWalkTitle = s.nextWalkTitle.orEmpty(),
         nextWalkPrompt = s.nextWalkPrompt.orEmpty(),
         reviewing = s.id in mining,
+        interrupted = s.interrupted,
     )
 }
 
 enum class SetupStatus { NO_KEY, CHECKING, BAD_KEY, OFFLINE, NO_MODEL, READY }
 
+private data class WalkHistory(
+    val sessions: List<SessionEntity>,
+    val words: List<VocabEntity>,
+    val mining: Set<Long>,
+    val languages: List<com.parlo.app.data.db.LanguageSession>,
+)
+
 /** Which voice sample is being fetched or played from Settings, if any. */
 data class VoicePreview(val loading: String? = null, val playing: String? = null, val error: String? = null)
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val container = ParloApp.container(app)
     private val settings = container.settings
@@ -118,6 +137,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val sampler = container.voiceSampler
     private val preview = MutableStateFlow(VoicePreview())
     private var previewJob: Job? = null
+    private var configWrite: Job? = null
+
+    private fun queueConfig(block: suspend () -> Unit) {
+        val previous = configWrite
+        configWrite = viewModelScope.launch { previous?.join(); block() }
+    }
     private val previewPlayer = AudioPlayer(viewModelScope, onSpeakingChanged = { speaking ->
         if (!speaking) preview.update { it.copy(playing = null) }
     })
@@ -145,11 +170,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         .combine(vocab.observeAll()) { s, words -> s.copy(suggestedVocab = words.count { it.isSuggested }) }
         .combine(settings.dynamicColor) { s, d -> s.copy(dynamicColor = d) }
         .combine(preview) { s, p -> s.copy(voicePreview = p) }
-        .combine(combine(container.sessions.observeSessions(), vocab.observeAll(), container.vocabCapture.mining, ::lastWalkOf)) { s, w ->
-            s.copy(lastWalk = w)
+        .combine(combine(container.sessions.observeSessions(), vocab.observeAll(), container.vocabCapture.mining,
+            container.db.sessionDao().observeLanguageSessions(), ::WalkHistory)) { s, history ->
+            val participating = history.languages.filter { it.language.equals(s.config.language, true) }.map { it.sessionId }.toSet()
+            val withLearnerTurns = history.languages.map { it.sessionId }.toSet()
+            val languageWalks = history.sessions.filter { it.id in participating || (it.id !in withLearnerTurns && it.language.equals(s.config.language, true)) }
+                .map { walk ->
+                    // The final language's review must never become another language's lesson.
+                    if (walk.language.equals(s.config.language, true)) walk else walk.copy(
+                        language = s.config.language, dialect = s.config.dialect, level = s.config.level.name,
+                        focus = null, nextWalkTitle = null, nextWalkPrompt = null)
+                }
+            s.copy(lastWalk = lastWalkOf(languageWalks, history.words.filter { it.language.equals(s.config.language, true) }, history.mining),
+                hasWalked = history.sessions.isNotEmpty(), walkCount = languageWalks.count { it.endedAt != null && !it.interrupted },
+                lastPractisedAt = languageWalks.maxOfOrNull { it.startedAt })
+        }
+        .combine(settings.languageConfigs) { s, languages -> s.copy(languages = languages) }
+        .combine(container.learning.profiles) { s, profiles ->
+            s.copy(goal = profiles.firstOrNull { it.language.equals(s.config.language, true) }?.goal.orEmpty())
+        }
+        .combine(settings.config.map { it.language }.distinctUntilChanged().flatMapLatest(container.learning::episodes)) { s, episodes ->
+            s.copy(learningEpisodes = episodes.filter { it.language.equals(s.config.language, true) })
         }
         .combine(settings.apiKey) { s, k -> s.copy(maskedKey = com.parlo.app.ui.onboarding.maskKey(k)) }
-        .combine(container.sessions.observeSessions()) { s, all -> s.copy(hasWalked = all.any { it.endedAt != null }) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, MainUiState())
 
     private val connection = object : ServiceConnection {
@@ -188,7 +231,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun startSession(context: Context) {
         // One start path, including when the service hasn't bound yet. Read settings in the service
         // after queued edits, and carry the transient onboarding flag explicitly in the intent.
-        ContextCompat.startForegroundService(context, LiveSessionService.startIntent(context, onboarding = !uiState.value.hasWalked))
+        viewModelScope.launch {
+            configWrite?.join()
+            ContextCompat.startForegroundService(context, LiveSessionService.startIntent(context, onboarding = !uiState.value.hasWalked))
+        }
     }
 
     fun endSession(skipRecap: Boolean) = service?.endSession(skipRecap)
@@ -211,6 +257,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 level = if (sameLanguage) it.level else Level.parse(w.level),
                 topic = w.nextWalkPrompt,
                 topicTitle = w.nextWalkTitle,
+                followPlan = true,
             )
         }
     }
@@ -230,15 +277,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (svc != null && svc.state.value.isActive) {
             svc.applyConfig(transform(svc.state.value.config))
         } else {
-            viewModelScope.launch { settings.updateConfig(transform) }
+            queueConfig { settings.updateConfig(transform) }
         }
     }
 
-    fun selectCombo(combo: LanguageCombo) =
-        updateConfig { it.copy(language = combo.language, dialect = combo.dialect, level = combo.level) }
+    fun selectCombo(combo: LanguageCombo) = selectLanguageConfig(combo.language, combo.dialect, combo.level)
+
+    fun selectLanguage(language: String, dialect: String? = null) = selectLanguageConfig(language, dialect)
+
+    private fun selectLanguageConfig(language: String, dialect: String?, level: Level? = null) {
+        val svc = service
+        if (svc != null && svc.state.value.isActive) svc.selectLanguage(language, dialect, level)
+        else queueConfig { settings.selectLanguage(language, dialect, level) }
+    }
+
+    fun setGoal(goal: String) {
+        val language = uiState.value.config.language
+        viewModelScope.launch { container.learning.setGoal(language, goal) }
+    }
+
+    fun forgetSessionMemory(id: Long) {
+        viewModelScope.launch { container.learning.forgetSession(id) }
+    }
 
     fun setApiKey(key: String) {
         settings.setApiKey(key)
+        if (key.isNotBlank()) com.parlo.app.data.LearningWorker.enqueue(getApplication())
     }
 
     fun refreshModels() {

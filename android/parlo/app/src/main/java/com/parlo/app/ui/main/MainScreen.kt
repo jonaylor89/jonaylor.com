@@ -130,6 +130,7 @@ fun MainScreen(
     var showSettings by remember { mutableStateOf(false) }
     var showConfig by remember { mutableStateOf(false) }
     var showLanguagePicker by remember { mutableStateOf(false) }
+    var showJournal by remember { mutableStateOf(false) }
     var showPermissionRationale by remember { mutableStateOf(false) }
 
     val neededPermissions = remember {
@@ -198,6 +199,10 @@ fun MainScreen(
                 onPasteKey = viewModel::setApiKey,
                 onStart = ::requestStart,
                 modifier = Modifier.padding(padding),
+                languageChoice = {
+                    LanguageJourneyPicker(cfg, ui.languages, { viewModel.selectLanguage(it) }, { showLanguagePicker = true })
+                    TextButton(onClick = { showJournal = true }) { Text("Already learning with Parlo? Restore progress") }
+                },
             )
             return@Scaffold
         }
@@ -213,7 +218,7 @@ fun MainScreen(
             return@Scaffold
         }
         Column(
-            Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
+            Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             val error = live.error
@@ -235,14 +240,17 @@ fun MainScreen(
                 Spacer(Modifier.height(8.dp))
             }
 
+            LanguageJourneyPicker(cfg, ui.languages, { viewModel.selectLanguage(it) }, { showLanguagePicker = true })
+            JourneyStatus(ui, onOpen = { showJournal = true })
             val lastWalk = ui.lastWalk
             NextWalkCard(
                 cfg = cfg,
                 walk = lastWalk,
                 ready = ui.ready,
-                onStart = { if (lastWalk?.nextWalkTitle?.isNotBlank() == true && cfg.topicTitle.isBlank()) viewModel.useSuggestedWalk(); requestStart() },
+                onStart = { if (cfg.followPlan && lastWalk?.nextWalkTitle?.isNotBlank() == true && cfg.topicTitle.isBlank()) viewModel.useSuggestedWalk(); requestStart() },
                 onTune = { showConfig = true },
-                onJustChat = { viewModel.updateConfig { it.copy(topic = "", topicTitle = "", scenario = Scenario.FREE) } },
+                onJustChat = { viewModel.updateConfig { it.copy(topic = "", topicTitle = "", scenario = Scenario.FREE, followPlan = false) } },
+                onContinuePlan = { viewModel.updateConfig { it.copy(followPlan = true) } },
                 onHarder = { viewModel.updateConfig { it.copy(level = it.level.harder()) } },
                 onOtherLanguage = { showLanguagePicker = true },
             )
@@ -265,7 +273,7 @@ fun MainScreen(
             }
 
             if (live.transcript.isNotEmpty() && lastWalk == null) {
-                Transcript(turns = live.transcript, modifier = Modifier.weight(1f).fillMaxWidth())
+                TextButton(onClick = onOpenHistory) { Text("Read your conversation") }
             }
         }
     }
@@ -285,6 +293,10 @@ fun MainScreen(
             dismissButton = { TextButton(onClick = { showPermissionRationale = false }) { Text("Not now") } },
         )
     }
+    if (showJournal) {
+        LearningJournalSheet(ui, viewModel::setGoal, viewModel::forgetSessionMemory,
+            onHistory = { showJournal = false; onOpenHistory() }, onDismiss = { showJournal = false })
+    }
     if (showSettings) {
         SettingsSheet(viewModel = viewModel, onDismiss = { showSettings = false })
     }
@@ -299,7 +311,7 @@ fun MainScreen(
         LanguagePickerSheet(
             language = cfg.language,
             dialect = cfg.dialect,
-            onSelect = { lang, dialect -> viewModel.updateConfig { it.copy(language = lang, dialect = dialect) } },
+            onSelect = { lang, dialect -> viewModel.selectLanguage(lang, dialect) },
             onDismiss = { showLanguagePicker = false },
         )
     }
@@ -421,13 +433,15 @@ private fun NextWalkCard(
     onStart: () -> Unit,
     onTune: () -> Unit,
     onJustChat: () -> Unit,
+    onContinuePlan: () -> Unit,
     onHarder: () -> Unit,
     onOtherLanguage: () -> Unit,
 ) {
-    val suggested = cfg.topicTitle.isBlank() && walk?.nextWalkTitle?.isNotBlank() == true && walk.language.equals(cfg.language, true)
+    val suggested = cfg.followPlan && cfg.topicTitle.isBlank() && walk?.nextWalkTitle?.isNotBlank() == true && walk.language.equals(cfg.language, true)
     val title = when {
         cfg.topicTitle.isNotBlank() -> cfg.topicTitle
         suggested -> walk!!.nextWalkTitle
+        cfg.followPlan && walk?.interrupted == true -> "Pick up where we paused"
         else -> cfg.scenario.label
     }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -452,7 +466,8 @@ private fun NextWalkCard(
                 Text("Earbuds or out loud: tap Start and talk.", style = MaterialTheme.typography.bodySmall)
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            AssistChip(onClick = onJustChat, label = { Text("Just chat") })
+            if (cfg.followPlan) AssistChip(onClick = onJustChat, label = { Text("Just chat") })
+            else AssistChip(onClick = onContinuePlan, label = { Text("Continue my plan") })
             AssistChip(onClick = onHarder, enabled = cfg.level != Level.entries.last(), label = { Text("Make it harder") })
             AssistChip(onClick = onOtherLanguage, label = { Text("Another language") })
         }
@@ -465,7 +480,7 @@ private fun NextWalkCard(
 private fun LastWalkCard(walk: LastWalk, onDrop: (VocabEntity) -> Unit) {
     ElevatedCard(Modifier.fillMaxWidth().testTag("last_walk")) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Last walk", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            Text(if (walk.interrupted) "Your walk was interrupted · progress saved" else "Last walk", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             Text("${walk.lengthLabel} · ${walk.language}", style = MaterialTheme.typography.titleMedium)
             if (walk.reviewing) {
                 LinearProgressIndicator(Modifier.fillMaxWidth())

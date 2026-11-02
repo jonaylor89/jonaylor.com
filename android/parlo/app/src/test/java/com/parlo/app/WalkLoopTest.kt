@@ -161,7 +161,8 @@ class WalkLoopTest {
         val prompt = PromptBuilder.systemInstruction(SessionConfig(onboarding = true))
         assertTrue(prompt.contains("first walk"))
         assertTrue(prompt.contains("update_learner_profile"))
-        assertFalse(PromptBuilder.systemInstruction(SessionConfig()).contains("update_learner_profile"))
+        assertFalse(PromptBuilder.systemInstruction(SessionConfig()).contains("First-walk setup"))
+        assertTrue(PromptBuilder.systemInstruction(SessionConfig()).contains("explicitly changed learning goal"))
         assertEquals(Level.ADVANCED, Level.INTERMEDIATE.harder())
         assertEquals(Level.ADVANCED, Level.ADVANCED.harder())
     }

@@ -5,6 +5,7 @@ import com.parlo.app.data.db.VocabSource
 import com.parlo.app.gemini.VocabMiner
 import com.parlo.app.model.Level
 import com.parlo.app.model.Speaker
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -13,6 +14,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** Runs the post-walk review: saves the mined words and stores the focus + next-walk suggestion on the session. */
 class VocabCapture(
@@ -21,6 +24,7 @@ class VocabCapture(
     private val settings: SettingsRepository,
     private val miner: VocabMiner,
     private val scope: CoroutineScope,
+    private val maintenance: Mutex = Mutex(),
 ) {
     sealed interface Outcome {
         data class Found(val count: Int) : Outcome
@@ -40,44 +44,54 @@ class VocabCapture(
         Log.i(TAG, "mining session $sessionId -> $outcome")
     }
 
-    suspend fun mine(sessionId: Long, force: Boolean = false): Outcome {
+    suspend fun mine(sessionId: Long, force: Boolean = false): Outcome =
+        maintenance.withLock { mineLocked(sessionId, force) }
+
+    private suspend fun mineLocked(sessionId: Long, force: Boolean): Outcome {
         if (!claim(sessionId)) return Outcome.NothingNew
         try {
             val apiKey = settings.apiKey.value
             if (apiKey.isBlank()) return Outcome.NoApiKey
             val session = sessions.getSession(sessionId) ?: return Outcome.Failed("Session not found")
+            if (!session.remember) return Outcome.NothingNew
             if (session.minedAt != null && !force) return Outcome.NothingNew
             val turns = sessions.allTurns(sessionId).filter { it.speaker != Speaker.SYSTEM.name }
             if (turns.count { it.speaker == Speaker.USER.name } < MIN_USER_TURNS) {
                 sessions.markMined(sessionId)
                 return Outcome.TooShort
             }
-            val known = vocab.knownWords(session.language)
-            val review = withContext(Dispatchers.IO) {
-                miner.review(
-                    apiKey = apiKey,
-                    language = session.language,
-                    level = Level.parse(session.level),
-                    transcript = turns.map { it.speaker.lowercase() to it.text },
-                    knownWords = known,
-                )
-            }
             var added = 0
-            for (m in review.words) {
-                val id = vocab.capture(
-                    word = m.word,
-                    translation = m.translation,
-                    example = m.example,
-                    language = session.language,
-                    sessionId = sessionId,
-                    source = VocabSource.MINED,
-                    reason = reasonLabel(m.reason),
-                )
-                if (id != null) added++
+            // A multilingual walk must not mine German words as Spanish. Older v3 turns inherit
+            // their session's language; their original language cannot be reconstructed reliably.
+            for ((language, languageTurns) in turns.groupBy { it.language.ifBlank { session.language } }) {
+                if (languageTurns.none { it.speaker == Speaker.USER.name }) continue
+                val known = vocab.knownWords(language)
+                val review = withContext(Dispatchers.IO) {
+                    miner.review(
+                        apiKey = apiKey,
+                        language = language,
+                        level = Level.parse(session.level),
+                        transcript = languageTurns.takeLast(40).map { it.speaker.lowercase() to it.text.take(2400) },
+                        knownWords = known.takeLast(500),
+                    )
+                }
+                if (sessions.getSession(sessionId)?.remember != true) return Outcome.NothingNew
+                for (m in review.words) {
+                    val id = vocab.capture(
+                        word = m.word, translation = m.translation, example = m.example,
+                        language = language, sessionId = sessionId, source = VocabSource.MINED,
+                        reason = reasonLabel(m.reason),
+                    )
+                    if (id != null) added++
+                }
+                if (language.equals(session.language, true)) {
+                    sessions.saveReview(sessionId, review.focus, review.nextWalkTitle, review.nextWalkPrompt)
+                }
             }
-            sessions.saveReview(sessionId, review.focus, review.nextWalkTitle, review.nextWalkPrompt)
             sessions.markMined(sessionId)
             return if (added == 0) Outcome.NothingNew else Outcome.Found(added)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "vocab mining failed for session $sessionId", e)
             return Outcome.Failed(e.message ?: "Mining failed")

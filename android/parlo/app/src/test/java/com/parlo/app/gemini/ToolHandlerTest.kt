@@ -61,6 +61,31 @@ class ToolHandlerTest {
     )
 
     @Test
+    fun `history tool returns source excerpts and admits when nothing matches`() = runTest {
+        val queries = mutableListOf<String>()
+        val recall = ToolHandler(VocabRepository(dao), { "German" }, { "Standard German" }, { Level.BEGINNER }, { 7L }, {}, {},
+            recallHistory = { query -> queries += query; if (query == "interview") listOf("2026-01-01 [session 3, turn 42] USER: interview") else emptyList() })
+        val found = recall.handle(FunctionCall(id = "r1", name = "recall_history", args = buildJsonObject { put("query", "interview") }))
+        assertEquals("r1", found.id)
+        assertEquals("true", found.response["found"]!!.jsonPrimitive.content)
+        assertTrue(found.response["excerpts"]!!.jsonPrimitive.content.contains("turn 42"))
+        val absent = recall.handle(FunctionCall(name = "recall_history", args = buildJsonObject { put("query", "unknown") }))
+        assertEquals("false", absent.response["found"]!!.jsonPrimitive.content)
+        assertTrue(absent.response["note"]!!.jsonPrimitive.content.contains("cannot find"))
+        assertEquals(listOf("interview", "unknown"), queries)
+    }
+
+    @Test
+    fun `voice switching restores the target language level rather than the previous language level`() = runTest {
+        val german = com.parlo.app.model.SessionConfig(language = "German", dialect = "Austrian German", level = Level.ADVANCED)
+        val languageSwitch = ToolHandler(VocabRepository(dao), { "Hungarian" }, { "Standard Hungarian" }, { Level.SUPER_BEGINNER }, { 7L }, {}, { switched += it },
+            languageDefaults = { if (it == "German") german else null }, languageMemory = { "Earlier German practice" })
+        val result = languageSwitch.handle(FunctionCall(name = "switch_language", args = buildJsonObject { put("language", "German") }))
+        assertEquals(LanguageCombo("German", "Austrian German", Level.ADVANCED), switched.single())
+        assertEquals("Earlier German practice", result.response["memory"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun `save_vocab stores the word and answers the call id`() = runTest {
         val call = FunctionCall(
             id = "call-1", name = "save_vocab",

@@ -48,7 +48,7 @@ class MessagesTest {
         assertEquals("END_SENSITIVITY_LOW", vad["endOfSpeechSensitivity"]!!.jsonPrimitive.content)
 
         val fns = setup["tools"]!!.jsonArray.single().jsonObject["functionDeclarations"]!!.jsonArray
-        assertEquals(listOf("save_vocab", "note_vocab", "switch_language", "update_learner_profile", "show_phrase", "update_walk", "end_walk"), fns.map { it.jsonObject["name"]!!.jsonPrimitive.content })
+        assertEquals(listOf("recall_history", "save_vocab", "note_vocab", "switch_language", "update_learner_profile", "show_phrase", "update_walk", "end_walk"), fns.map { it.jsonObject["name"]!!.jsonPrimitive.content })
         // no nulls / no "temperature" leaking in
         assertFalse(text.contains("null"))
         assertFalse(text.contains("temperature"))

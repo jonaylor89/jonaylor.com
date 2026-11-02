@@ -21,6 +21,7 @@ espresso = "3.6.1"
 glance = "1.2.0"
 
 [libraries]
+androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version = "2.10.0" }
 androidx-glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "glance" }
 androidx-glance-material3 = { group = "androidx.glance", name = "glance-material3", version.ref = "glance" }
 androidx-glance-appwidget-testing = { group = "androidx.glance", name = "glance-appwidget-testing", version.ref = "glance" }

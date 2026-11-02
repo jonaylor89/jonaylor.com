@@ -23,16 +23,20 @@ Native Kotlin + Jetpack Compose (Material 3), Gemini Live API over WebSockets. S
 - **Bluetooth / wired earbud routing** with mid-session route changes
 - **Barge-in**: interrupt the tutor at any time; playback flushes instantly
 - **137+ languages, 800+ regional accents**: a built-in catalog (`LanguageCatalog.kt`) covering every region — Europe, East/Southeast Asia, South Asia, Middle East & Central Asia, Africa, the Americas, Oceania — each language with its major regional accents/dialects (e.g. English × 36, Arabic × 32, French × 27, Spanish × 22). Picked through a searchable bottom sheet: language first (Popular + by region, native names, flags), then accent; search matches language names, native names, accent names and places ("porto", "Québec", "粤语"). Anything not in the catalog can still be typed in as a custom language or accent
+- **Language-first home**: “What are we practising today?” with one-tap German, Hungarian, Spanish, Catalan and saved languages, plus the full catalog. Each language restores its own accent, level, topic and correction preferences; voice/model remain global.
+- **Continuing learning journeys**: explicit per-language goals, dated teaching checkpoints with transcript sources, older-history retrieval, returning-learner openings, and a journal where you can inspect or exclude remembered walks.
 - **Level / correction style** segmented pickers, plus quick-switch chips of recent combos
 - **Voice-driven switching**: say "let's switch to Portuguese" and the tutor calls `switch_language` mid-session
-- **Vocabulary**: say "save that word" and the tutor calls `save_vocab`; review in a list or flashcard mode
+- **Vocabulary**: say "save that word" and the tutor calls `save_vocab`; review in a list or flashcard mode. Flashcards prompt target-language production from a translation, save explicit recall ratings, and schedule practice at 1/3/7/14/30/60-day intervals. Same-day repetitions don't advance the stage; this is a self-rating, not a proficiency score.
 - **Automatic vocab capture** — no need to ask:
   - *In-session*: the tutor has a silent `note_vocab` tool it calls whenever you show a gap (ask what a word means, ask how to say something, stall, answer in English, get corrected) or introduces a genuinely useful new word. Nothing is spoken; the word lands in Vocabulary as a **Suggested** entry with the reason ("You asked what it means", "Tutor corrected you", …).
-  - *After the session*: the stored transcript is sent once to Gemini `generateContent` (JSON mode) to mine words you didn't know or the tutor introduced, skipping anything already in your list. Sessions with fewer than two learner turns are skipped. Runs in the background after the recap; you can also re-run it from a session's history page (✨).
+  - *After the session*: bounded, language-separated transcript tails are sent to Gemini `generateContent` (JSON mode) to mine words you didn't know or the tutor introduced, skipping anything already in your list. Sessions with fewer than two learner turns are skipped. Runs in the background after the recap; you can also re-run it from a session's history page (✨).
   - Suggested entries sit in their own tray at the top of Vocabulary — Keep / Skip individually or all at once, with Undo. Kept words join the normal list and flashcards.
 - **Session history** with full transcript and spoken end-of-session recap (a snackbar offers **Skip** while the recap is being written)
 - **Automatic model discovery**: lists models advertising `bidiGenerateContent`, prefers newer conversational Live generations, and lets you override it under Settings → Advanced
-- **Resilience**: session resumption handles, exponential-backoff reconnect, connectivity monitoring, fresh-session fallback with recent-transcript context
+- **Resilience**: session resumption handles, exponential-backoff reconnect, connectivity monitoring, fresh-session fallback with teaching checkpoints and recent-transcript context. Finalized turns are written in order outside the service lifecycle; process-start recovery marks unfinished walks interrupted using the last persisted timestamp, not the next launch time.
+- **Durable consolidation**: WorkManager checkpoints original transcript windows during/after walks and backfills older history, retrying network/model failures without advancing the source cursor. You can start another walk before analysis finishes.
+- **Encrypted backup/restore**: Your journey → Protect your progress (also accessible from the welcome screen). Password-encrypted, user-selected files contain all languages, transcripts, vocabulary, review schedules and goals, never the Gemini key.
 - **Encrypted API key storage** via `EncryptedSharedPreferences` (Android Keystore)
 
 ## Requirements
@@ -133,6 +137,20 @@ app/src/main/java/com/parlo/app/
   ui/                      Compose screens: main, settings, vocab, history; MainViewModel; theme; nav
 ```
 
+## Durable learning and memory
+
+A model connection is temporary; Room is the source of truth. Walks are chapters in a continuing relationship. The tutor reconnects to prior practice, naturally retrieves a little older material, introduces a small challenge and tries it in a changed context. **Just chat** explicitly disables the lesson agenda without deleting the relationship; **Continue my plan** restores it.
+
+- Schema v4 auto-migrates existing sessions/vocabulary. Older turns inherit their session's final language; earlier language switches in legacy transcripts cannot be reconstructed reliably. New turns carry their target-language segment explicitly.
+- `LearningRepository` assembles bounded context: the explicit goal, four recent and up to two older teaching checkpoints, six recent excerpts, and up to six vocabulary items due for review. Observations distinguish prompted from independent production; they are not permanent ability grades.
+- `MemoryAnalyzer` summarizes original windows of at most 20 turns / roughly 24,000 characters, with per-turn input caps. The full original transcript remains stored. Checkpoints retain session/turn references. They are never recursively compressed from previous summaries.
+- `recall_history` searches original transcripts and checkpoint text in the current language using a literal short phrase, returning up to six dated excerpts. This is local phrase retrieval, not semantic search; the tutor must try another wording or admit a missing memory rather than invent one.
+- WorkManager queues a checkpoint every twelve finalized conversational turns and at the end of a walk. Startup/key changes drain older unprocessed history in bounded batches. Successful batches continue immediately; only failures incur retry backoff. Background analysis sends relevant transcript windows to Gemini and uses your API quota.
+- Excluding a walk transactionally disables future retrieval/backfill and removes its derived checkpoints, including an in-flight checkpoint. Deleting a walk cascades checkpoints and turns. Saved vocabulary remains in your list but words sourced only from excluded/deleted walks are not automatically supplied to the tutor. Exclusion takes effect for subsequent conversations; a running model cannot unhear already-sent data.
+- Backup files use AES-256-GCM with fresh salt/IV and PBKDF2-HMAC-SHA256 (210,000 iterations). The password must be at least twelve characters and cannot be recovered. Restore authenticates the complete archive before transactionally replacing learning data; credentials stay device-local. Do not restore during a walk. Archives have a 32 MiB uncompressed safety limit. Backups are manual: uninstall/device loss without an exported backup still loses local data.
+
+Regression tests cover database reopening, v3 migration, interrupted recovery, multilingual isolation, bounded/idempotent compaction, failed-analysis retry, literal history search, exclusion during an in-flight request, cascade deletion, per-language preferences, review scheduling, backup round trips, wrong-password/tampered archives and one-tap language selection. Robolectric renders the language selector in `app/build/uiaudit/40_language_journeys.png`. The optional real-Gemini audit tests require `GEMINI_API_KEY`; a physical phone/earbuds are still needed to assess actual audio and teaching behavior.
+
 ## Gemini Live details
 
 - Endpoint: `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=…`
@@ -143,7 +161,7 @@ app/src/main/java/com/parlo/app/
 - Automatic speech detection uses a 60 ms pre-speech buffer and 600 ms silence window, with barge-in enabled. The mic remains open while Parlo speaks. Muting or losing audio focus sends `audioStreamEnd` so pending speech doesn't stall.
 - Tools execute in order outside the audio-event collector. Cancellation and reconnects discard pending tool responses. On known async-capable families (2.5 native audio and 3.8 Live), `note_vocab`, `show_phrase`, and `update_walk` are non-blocking with silent responses; profile/language changes and explicit actions remain blocking. Other models retain the sequential protocol.
 - Automatic discovery ranks model generations before legacy naming bonuses, including cached results. The resolved automatic model isn't persisted as an override. Existing saved overrides are preserved: use **Settings → Advanced → Back to automatic** to resume automatic selection.
-- Post-session vocab mining is the only non-Live call: one `POST /v1beta/models/{model}:generateContent` with `responseMimeType: application/json` (tries `gemini-2.5-flash`, then `gemini-2.0-flash`, then `gemini-flash-latest`).
+- Vocabulary mining and durable teaching checkpoints use non-Live `POST /v1beta/models/{model}:generateContent` calls with JSON output (tries `gemini-2.5-flash`, then `gemini-2.0-flash`, then `gemini-flash-latest`). Input is bounded and language-scoped; longer histories are processed incrementally.
 
 ## Releases
 
@@ -161,4 +179,4 @@ pnpm --filter parlo-site build
 
 ## Privacy
 
-Everything (transcripts, vocab, settings) is stored locally in the app's private storage. Backups are disabled. The only network traffic is to Google's Gemini API using your own key: the Live session itself, model discovery, and one post-session `generateContent` call that sends that session's transcript for vocab mining.
+Transcripts, vocabulary, teaching checkpoints, goals and settings live in the app's private local storage. Android automatic backups remain disabled; you can explicitly export/restore a password-encrypted learning archive. Network traffic goes to Google's Gemini API using your key: Live audio/transcription, model discovery, voice previews, bounded transcript windows for teaching checkpoints, and post-walk vocabulary review. Older history is also sent for checkpoint backfill. You can exclude a walk from future tutor memory in its history detail or your learning journal. Exported archives never include API credentials.

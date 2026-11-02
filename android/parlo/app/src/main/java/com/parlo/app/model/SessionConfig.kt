@@ -84,6 +84,8 @@ data class SessionConfig(
     /** Free-form walk topic from the tutor's suggestion or update_walk; overrides [scenario] when set. */
     val topic: String = "",
     val topicTitle: String = "",
+    /** Explicit free conversation must not be replaced by an automatic lesson suggestion. */
+    val followPlan: Boolean = true,
     /** First walk: the tutor asks for language, accent, goal and level by voice. Not persisted. */
     val onboarding: Boolean = false,
 ) {

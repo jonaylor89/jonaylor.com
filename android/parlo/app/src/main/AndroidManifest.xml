@@ -25,6 +25,14 @@
         android:theme="@style/Theme.Parlo"
         tools:targetApi="34">
 
+        <!-- ParloApp supplies on-demand WorkManager configuration (also used in local tests). -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            tools:node="merge">
+            <meta-data android:name="androidx.work.WorkManagerInitializer" tools:node="remove" />
+        </provider>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

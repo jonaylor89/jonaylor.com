@@ -26,13 +26,13 @@ class SessionRepository(private val dao: SessionDao) {
             ),
         )
 
-    suspend fun addTurn(sessionId: Long, speaker: Speaker, text: String, timestamp: Long) {
+    suspend fun addTurn(sessionId: Long, speaker: Speaker, text: String, timestamp: Long, language: String = "") {
         if (text.isBlank()) return
-        dao.insertTurn(TurnEntity(sessionId = sessionId, speaker = speaker.name, text = text.trim(), timestamp = timestamp))
+        dao.insertTurn(TurnEntity(sessionId = sessionId, speaker = speaker.name, text = text.trim(), timestamp = timestamp, language = language))
     }
 
     suspend fun recentTurns(sessionId: Long, limit: Int = 12): List<TurnEntity> =
-        dao.getTurns(sessionId).takeLast(limit)
+        dao.getTurns(sessionId).filter { it.speaker != Speaker.SYSTEM.name }.takeLast(limit)
 
     suspend fun finishSession(sessionId: Long, endedAt: Long, recap: String?, config: SessionConfig) {
         val s = dao.getSession(sessionId) ?: return

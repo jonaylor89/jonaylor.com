@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -47,6 +48,40 @@ class SettingsRepositoryTest {
         }
         assertEquals("Italian", settings.currentConfig().language)
         assertEquals("Aoede", settings.currentConfig().voice)
+    }
+
+    @Test
+    fun `each language restores its own level accent topic and correction preference`() = runBlocking {
+        settings.saveConfig(SessionConfig(language = "German", dialect = "Austrian German", level = com.parlo.app.model.Level.ADVANCED,
+            topic = "Prepare for an interview", topicTitle = "Interview", correctionStyle = CorrectionStyle.NONE))
+        settings.selectLanguage("Hungarian")
+        assertEquals(com.parlo.app.model.Level.SUPER_BEGINNER, settings.currentConfig().level)
+        assertEquals("", settings.currentConfig().topic)
+        assertFalse(settings.currentConfig().dialect.contains("German"))
+        settings.updateConfig { it.copy(level = com.parlo.app.model.Level.BEGINNER, followPlan = false) }
+        settings.selectLanguage("German")
+        val german = settings.currentConfig()
+        assertEquals(com.parlo.app.model.Level.ADVANCED, german.level)
+        assertEquals("Austrian German", german.dialect)
+        assertEquals("Interview", german.topicTitle)
+        assertEquals(CorrectionStyle.NONE, german.correctionStyle)
+        settings.selectLanguage("Hungarian")
+        assertEquals(com.parlo.app.model.Level.BEGINNER, settings.currentConfig().level)
+        assertFalse(settings.currentConfig().followPlan)
+        settings.selectLanguage("German", level = com.parlo.app.model.Level.BEGINNER)
+        // Explicit level wins even when it matches the previous language's level.
+        assertEquals(com.parlo.app.model.Level.BEGINNER, settings.currentConfig().level)
+    }
+
+    @Test
+    fun `just chat survives a restart and another language's lesson`() = runBlocking {
+        settings.saveConfig(SessionConfig(language = "German", followPlan = false))
+        settings.selectLanguage("Catalan")
+        settings.updateConfig { it.copy(topic = "Ordering food", topicTitle = "Cafe", followPlan = true) }
+        settings.selectLanguage("German")
+        assertFalse(settings.currentConfig().followPlan)
+        assertEquals("", settings.currentConfig().topic)
+        assertFalse(settings.currentConfig().onboarding)
     }
 
     @Test
