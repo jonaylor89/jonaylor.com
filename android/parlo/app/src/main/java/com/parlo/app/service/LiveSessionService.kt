@@ -569,11 +569,12 @@ class LiveSessionService : LifecycleService() {
             topicTitle = u.topic.ifBlank { if (u.scenario != null) "" else old.topicTitle },
             scenario = u.scenario ?: old.scenario,
             correctionStyle = u.correctionStyle ?: old.correctionStyle,
+            encouragement = u.encouragement ?: old.encouragement,
         )
         if (new == old) return
         _state.update { it.copy(config = new) }
         container.settings.saveConfig(new)
-        appendTurn(Speaker.SYSTEM, "Walk updated by voice: ${new.topicTitle.ifBlank { new.scenario.label }} · ${new.correctionStyle.label} corrections")
+        appendTurn(Speaker.SYSTEM, "Walk updated by voice: ${new.topicTitle.ifBlank { new.scenario.label }} · ${new.correctionStyle.label} corrections · ${new.encouragement.label} encouragement")
         updateNotification()
     }
 

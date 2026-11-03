@@ -24,6 +24,8 @@ Native Kotlin + Jetpack Compose (Material 3), Gemini Live API over WebSockets. S
 - **Barge-in**: interrupt the tutor at any time; playback flushes instantly
 - **137+ languages, 800+ regional accents**: a built-in catalog (`LanguageCatalog.kt`) covering every region — Europe, East/Southeast Asia, South Asia, Middle East & Central Asia, Africa, the Americas, Oceania — each language with its major regional accents/dialects (e.g. English × 36, Arabic × 32, French × 27, Spanish × 22). Picked through a searchable bottom sheet: language first (Popular + by region, native names, flags), then accent; search matches language names, native names, accent names and places ("porto", "Québec", "粤语"). Anything not in the catalog can still be typed in as a custom language or accent
 - **Language-first home**: “Which language today?” with one-tap switching between your saved languages and **Add language** for the full searchable catalog. No fixed language suggestions: the home adapts whether you practise one language or juggle several. Each language restores its own accent, level, topic and correction preferences; voice/model remain global.
+- **Tutor-led conversation**: after an answer, repetition or explanation, Parlo supplies the next concrete question, phrase or role-play cue in the same reply rather than stopping at praise or waiting for “continue”. It still leaves thinking time and respects pauses/stopping; Just chat remains conversational, not a forced lesson.
+- **Adjustable encouragement** in Settings: five positions from **Matter-of-fact** to **Very encouraging**, defaulting to **Low-key**. Always adult-to-adult, even for beginners. The global preference persists across languages and backups, applies live without a model reconnect, and changes tone—not difficulty or correction frequency. You can also say “less praise” or “be more encouraging”.
 - **Continuing learning journeys**: explicit per-language goals, dated teaching checkpoints with transcript sources, older-history retrieval, returning-learner openings, and a journal where you can inspect or exclude remembered walks.
 - **Focused home layout**: a compact, labelled language switcher, one **Today’s walk** card, **Guided practice / Just chat**, and a persistent bottom Start action. Accent, level and corrections live in **Walk settings**. Controls stack for large text/narrow screens, and content clears the measured Start bar rather than relying on a fixed spacer.
 - **First-walk activation**: choose a language, connect Gemini, then start from a pinned action once ready. Network retries use the saved key; empty-clipboard feedback is visible. Declining optional permissions does not repeatedly gate a microphone-enabled walk.
@@ -123,6 +125,7 @@ The tutor speaks first and keeps turns short. Things you can say at any time (in
 - "Repeat that slowly"
 - "What does ___ mean?" / "How do I say ___?"
 - "Correct me more" / "Stop correcting me"
+- "Less praise" / "Be more encouraging" → saves the coaching tone for all languages
 - "Save that word" → stored to Vocabulary (words you struggle with are also captured silently — see *Automatic vocab capture*)
 - "Let's switch to Italian" / "Make it easier" → switches language / level live
 

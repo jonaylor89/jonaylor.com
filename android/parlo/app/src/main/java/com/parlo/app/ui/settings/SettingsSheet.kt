@@ -162,6 +162,15 @@ fun SettingsSheet(viewModel: MainViewModel, onDismiss: () -> Unit) {
             }
 
             HorizontalDivider()
+            EncouragementControl(
+                value = ui.config.encouragement,
+                onChange = { tone -> viewModel.updateConfig { it.copy(encouragement = tone) } },
+            )
+            if (ui.live.isActive) {
+                Text("Tone changes apply to this walk without restarting it.", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            HorizontalDivider()
             VoiceSection(
                 current = ui.config.voice,
                 preview = ui.voicePreview,

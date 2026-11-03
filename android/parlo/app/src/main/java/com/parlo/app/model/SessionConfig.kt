@@ -10,8 +10,8 @@ enum class Level(val label: String, val shortLabel: String, val description: Str
         "Super Beginner: the user understands almost nothing yet. Lead the conversation in English and teach one very short phrase (one to four words) at a time. " +
             "Say the phrase slowly and clearly, then give the English meaning right away, then say the phrase slowly once more and ask the user to repeat it. " +
             "Never say more than one short target-language sentence without an English translation immediately after it. " +
-            "Accept one-word answers, English answers, and rough pronunciation warmly; if the user is silent or confused, do not ask a new question — repeat even slower or make it simpler. " +
-            "Recycle the same handful of phrases many times before adding a new one.",
+            "Treat one-word answers, English answers, and approximate pronunciation as normal adult learning, not occasions for automatic praise. If the user is confused, simplify the current task rather than piling on new questions; give them time to think. " +
+            "Recycle a small set of useful phrases in varied situations. Once the learner can use one, choose the next small step yourself rather than waiting for them to plan the lesson.",
     ),
     BEGINNER(
         "Beginner",
@@ -79,6 +79,8 @@ data class SessionConfig(
     val level: Level = Level.INTERMEDIATE,
     val scenario: Scenario = Scenario.FREE,
     val correctionStyle: CorrectionStyle = CorrectionStyle.GENTLE,
+    /** Global preference: do not restore an old language's saved coaching tone when switching. */
+    val encouragement: Encouragement = Encouragement.LOW_KEY,
     val voice: String = "Puck",
     val model: String = "",
     /** Free-form walk topic from the tutor's suggestion or update_walk; overrides [scenario] when set. */

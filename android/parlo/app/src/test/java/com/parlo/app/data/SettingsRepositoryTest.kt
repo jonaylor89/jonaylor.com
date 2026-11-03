@@ -85,6 +85,21 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `encouragement persists globally across repository recreation and language switching`() = runBlocking {
+        settings.saveConfig(SessionConfig(language = "German", encouragement = com.parlo.app.model.Encouragement.WARM))
+        settings.selectLanguage("Hungarian")
+        settings.updateConfig { it.copy(encouragement = com.parlo.app.model.Encouragement.MATTER_OF_FACT) }
+        settings = SettingsRepository(ApplicationProvider.getApplicationContext())
+        assertEquals(com.parlo.app.model.Encouragement.MATTER_OF_FACT, settings.currentConfig().encouragement)
+        settings.selectLanguage("German") // The old German snapshot was warm; tone is a global preference.
+        assertEquals(com.parlo.app.model.Encouragement.MATTER_OF_FACT, settings.currentConfig().encouragement)
+        settings.updateConfig { it.copy(voice = "Kore", level = com.parlo.app.model.Level.BEGINNER) }
+        assertEquals(com.parlo.app.model.Encouragement.MATTER_OF_FACT, settings.currentConfig().encouragement)
+        settings.selectLanguage("Japanese")
+        assertEquals(com.parlo.app.model.Encouragement.MATTER_OF_FACT, settings.currentConfig().encouragement)
+    }
+
+    @Test
     fun `cached models use the new ranking even before a network refresh`() = runBlocking {
         settings.saveCachedModels(listOf(
             "gemini-2.5-flash-native-audio-preview-12-2025",

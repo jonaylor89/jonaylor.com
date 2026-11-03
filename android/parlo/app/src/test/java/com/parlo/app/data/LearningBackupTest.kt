@@ -30,7 +30,7 @@ class LearningBackupTest {
         val context = ApplicationProvider.getApplicationContext<Application>()
         db = Room.inMemoryDatabaseBuilder(context, ParloDatabase::class.java).allowMainThreadQueries().build()
         settings = SettingsRepository(context)
-        settings.saveConfig(SessionConfig(language = "German", followPlan = false))
+        settings.saveConfig(SessionConfig(language = "German", followPlan = false, encouragement = com.parlo.app.model.Encouragement.MATTER_OF_FACT))
         backup = LearningBackup(db, settings, Mutex())
     }
     @After fun close() { db.close() }
@@ -65,6 +65,7 @@ class LearningBackupTest {
         assertEquals("Work in Berlin", LearningRepository(db).memory("German").goal)
         assertEquals("German", settings.currentConfig().language)
         assertFalse(settings.currentConfig().followPlan)
+        assertEquals(com.parlo.app.model.Encouragement.MATTER_OF_FACT, settings.currentConfig().encouragement)
         assertEquals("new-device-key", settings.apiKey.value)
     }
 

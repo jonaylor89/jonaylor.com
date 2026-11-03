@@ -12,6 +12,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.parlo.app.model.CorrectionStyle
+import com.parlo.app.model.Encouragement
 import com.parlo.app.model.LanguageCombo
 import com.parlo.app.model.Level
 import com.parlo.app.model.Scenario
@@ -149,6 +150,7 @@ class SettingsRepository(private val context: Context) {
         this[LEVEL] = config.level.name
         this[SCENARIO] = config.scenario.name
         this[CORRECTION] = config.correctionStyle.name
+        this[ENCOURAGEMENT] = config.encouragement.name
         this[VOICE] = config.voice
         this[MODEL] = config.model
         this[TOPIC] = config.topic
@@ -162,6 +164,7 @@ class SettingsRepository(private val context: Context) {
         level = Level.parse(this[LEVEL]),
         scenario = Scenario.parse(this[SCENARIO]),
         correctionStyle = CorrectionStyle.parse(this[CORRECTION]),
+        encouragement = Encouragement.parse(this[ENCOURAGEMENT]),
         voice = this[VOICE] ?: "Puck",
         model = this[MODEL] ?: "",
         topic = this[TOPIC] ?: "",
@@ -177,6 +180,7 @@ class SettingsRepository(private val context: Context) {
         val LEVEL = stringPreferencesKey("level")
         val SCENARIO = stringPreferencesKey("scenario")
         val CORRECTION = stringPreferencesKey("correction")
+        val ENCOURAGEMENT = stringPreferencesKey("encouragement")
         val VOICE = stringPreferencesKey("voice")
         val MODEL = stringPreferencesKey("model")
         val TOPIC = stringPreferencesKey("topic")

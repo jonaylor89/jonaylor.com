@@ -4,6 +4,7 @@ import com.parlo.app.data.VocabCapture
 import com.parlo.app.data.VocabRepository
 import com.parlo.app.data.db.VocabSource
 import com.parlo.app.model.CorrectionStyle
+import com.parlo.app.model.Encouragement
 import com.parlo.app.model.LanguageCatalog
 import com.parlo.app.model.LanguageCombo
 import com.parlo.app.model.Level
@@ -38,7 +39,8 @@ class ToolHandler(
     data class ProfileUpdate(val language: String = "", val dialect: String = "", val goal: String = "", val level: Level? = null)
 
     /** Fields the tutor changed by voice; null / blank means unchanged. */
-    data class WalkUpdate(val topic: String = "", val scenario: Scenario? = null, val correctionStyle: CorrectionStyle? = null)
+    data class WalkUpdate(val topic: String = "", val scenario: Scenario? = null, val correctionStyle: CorrectionStyle? = null,
+        val encouragement: Encouragement? = null)
 
     suspend fun handle(call: FunctionCall): FunctionResponse {
         val args = call.args ?: JsonObject(emptyMap())
@@ -122,10 +124,17 @@ class ToolHandler(
             topic = args.str("topic"),
             scenario = args.str("scenario").takeIf { it.isNotBlank() }?.let { s -> Scenario.entries.firstOrNull { it.name.equals(s, true) } },
             correctionStyle = args.str("correction_style").takeIf { it.isNotBlank() }?.let { s -> CorrectionStyle.entries.firstOrNull { it.name.equals(s, true) } },
+            encouragement = Encouragement.parseOrNull(args.str("encouragement")),
         )
         if (update == WalkUpdate()) return buildJsonObject { put("error", "nothing to update") }
         onWalkUpdated(update)
-        return buildJsonObject { put("result", "ok") }
+        return buildJsonObject {
+            put("result", "ok")
+            update.encouragement?.let {
+                put("encouragement", it.name)
+                put("coaching_instruction", PromptBuilder.coachingInstruction(it))
+            }
+        }
     }
 
     private suspend fun endWalk(): JsonObject {

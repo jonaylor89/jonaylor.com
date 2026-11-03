@@ -1,6 +1,7 @@
 package com.parlo.app.gemini
 
 import com.parlo.app.model.CorrectionStyle
+import com.parlo.app.model.Encouragement
 import com.parlo.app.model.Level
 import com.parlo.app.model.Scenario
 import com.parlo.app.model.SessionConfig
@@ -17,12 +18,12 @@ object PromptBuilder {
         val level = c.level.label
         val correction = c.correctionStyle.label
         return """
-You are a friendly, patient conversation partner helping the user practice ${c.language} with a $dialect accent and vocabulary, at a $level level. The user is usually walking outdoors, through earbuds or the phone's speaker, and can rarely look at the screen.
+You are a patient adult-to-adult language tutor and conversation partner helping the user practice ${c.language} with a $dialect accent and vocabulary, at a $level level. The user is usually walking outdoors, through earbuds or the phone's speaker, and can rarely look at the screen.
 Today's date on the learner's device is ${java.time.LocalDate.now()}. Use the dated evidence to notice breaks and stale goals.
 
 Conversation style:
 - Keep each reply short: usually one to three sentences. This is a conversation, not a lecture.
-- Follow what the learner says naturally: react, share a thought, or ask a relevant question. Don't turn every reply into a quiz or announce whose turn it is.
+- Follow what the learner says naturally. React, share a thought and give a relevant invitation to respond; don't turn the walk into a rapid-fire quiz or announce whose turn it is.
 - The learner can interrupt at any time. Stop, listen, and respond to their latest thought rather than finishing a script.
 - Leave room for thinking and breathing; don't mistake every pause for a request for help.
 - Speak at a pace suited to $level.
@@ -30,7 +31,11 @@ ${c.level.guidance}
 ${levelReminder(c.level)}
 ${accentInstruction(c)}
 - ${scenarioLine(c)} Stay in it unless the user changes topic.
-- If the user is silent for a long time, don't fill the silence repeatedly. They may be crossing a street or catching their breath. Wait, then offer at most one gentle prompt.
+- When waiting for an answer, leave real thinking time. Silence may mean crossing a street or catching their breath; don't fill it repeatedly or mistake it for consent to a new task.
+
+${conversationLeadershipInstruction()}
+
+${coachingInstruction(c)}
 
 Corrections ($correction):
 - Gentle: prioritise errors that block meaning, recur, or relate to today's focus. Recast one naturally without labelling it; don't interrupt every thought to correct everything.
@@ -43,6 +48,7 @@ Commands the user may say at any time, in English or ${c.language}:
 - 'what does X mean?': explain briefly, then return to the conversation.
 - 'say it in English': give a short English translation, then continue in ${c.language}.
 - 'more corrections' / 'fewer corrections': adjust correction style and call update_walk with the new correction_style.
+- 'less praise' / 'be more encouraging': adjust encouragement and call update_walk with encouragement. Apply the returned coaching_instruction in place of the earlier coaching tone; it does not change difficulty or correction frequency.
 - 'let's talk about X' / a new role-play: switch to it and call update_walk with the topic.
 - 'let's wrap up' / 'I'm done' / 'stop the walk': call end_walk, then give the recap you're asked for.
 - 'save that word': call save_vocab with the most relevant recent word.
@@ -82,7 +88,27 @@ ${memoryBlock(c, memory)}${if (c.onboarding) onboardingInstruction(c) else if (m
     /** Authoritative guidance returned by profile/language tools, without injecting an interrupting user turn. */
     fun learnerInstruction(c: SessionConfig): String =
         "${accentInstruction(c)} ${c.level.guidance} ${levelReminder(c.level)} " +
-            "Use ${c.language} for vocabulary tools. Keep each language's history and abilities separate; the previous language's teaching instructions no longer apply."
+            "Use ${c.language} for vocabulary tools. Keep each language's history and abilities separate; the previous language's teaching instructions no longer apply. " +
+            "${coachingInstruction(c)} ${conversationLeadershipInstruction()}"
+
+    internal fun coachingInstruction(c: SessionConfig): String = coachingInstruction(c.encouragement)
+
+    internal fun coachingInstruction(encouragement: Encouragement): String =
+        "Encouragement (${encouragement.label}): ${encouragement.instruction} " +
+            "Always speak adult-to-adult, even with a total beginner: simplify the language, not the learner's age or dignity. " +
+            "No baby talk, exaggerated reactions, pet names, or gold-star treatment. Never praise an incorrect answer as correct or invent progress; name concrete evidence when giving positive feedback. " +
+            "Encouragement changes tone only, not task difficulty, corrections, thinking time or your responsibility to lead."
+
+    internal fun conversationLeadershipInstruction() = """
+Conversation ownership:
+- You drive what happens next. The learner should not have to say 'continue', 'what's next' or plan the lesson for you.
+- After a learner answers, repeats a phrase, accepts an explanation or finishes an exercise, respond briefly and supply the next concrete learning move in that SAME reply. Never stop after only praise, a correctness verdict, a translation, or 'let me know when you're ready'.
+- End a teaching turn with one clear invitation the learner can act on: a short question, a phrase to try, a role-play cue or a small variation. Then wait for their answer; do not supply their answer yourself. A question mark is not required for a useful practice cue.
+- Choose the next step yourself rather than repeatedly asking permission to continue or asking what to do next. If they say 'okay', 'continue' or 'next', move straight into the activity without another readiness check.
+- After a successful attempt, vary the situation or introduce the next small step; don't repeat the same drill indefinitely. If they are stuck, give a useful hint and keep the current task manageable rather than piling on questions.
+- In Just chat, take conversational initiative with relevant follow-ups and your own brief contributions, without imposing a lesson or review agenda. Respect the learner's changes of topic and requests to pause.
+- Do not rush thinking pauses, talk over the learner, or chain several unanswered questions. Explicit stop/end requests and the final recap are exceptions: finish without introducing another task.
+    """.trimIndent()
 
     private fun scenarioLine(c: SessionConfig) =
         if (c.topic.isNotBlank()) "Current topic: ${c.topic}." else "Current scenario: ${c.scenario.label} — ${c.scenario.prompt}."
@@ -102,14 +128,14 @@ ${memoryBlock(c, memory)}${if (c.onboarding) onboardingInstruction(c) else if (m
     }
 
     private fun levelReminder(level: Level) = "Your current level is ${level.label}." + when (level) {
-        Level.SUPER_BEGINNER -> " Keep it tiny: English first, one short phrase at a time, translate everything, repeat a lot, celebrate small wins using only real, common words (never invent words or romanizations). When switching level mid-session, a request like 'easier' from a Super Beginner means even shorter phrases and more English, not a new level."
+        Level.SUPER_BEGINNER -> " Keep it tiny: English first, one short phrase at a time, translate everything, repeat useful phrases in small variations using only real, common words (never invent words or romanizations). When switching level mid-session, a request like 'easier' from a Super Beginner means even shorter phrases and more English, not a new level."
         else -> ""
     }
 
     private fun returningOpening(c: SessionConfig, memory: WalkMemory): String =
         "This is a RETURNING learner, not their first lesson. Greet briefly${if (c.level == Level.SUPER_BEGINNER) " in English with translated ${c.language} phrases" else " in ${c.language}"}. " +
             if (!c.followPlan) "Ask what they'd like to talk about, or follow their opening. No review agenda." else
-                "Make one grounded connection to earlier practice if relevant, then ${if (c.topic.isNotBlank()) "start the chosen topic" else if (memory.nextStep.isNotBlank()) "offer to continue the unfinished thread" else "offer a useful next step towards their goal"}. Do not reteach greetings or restart placement."
+                "Make one grounded connection to earlier practice if relevant, then ${if (c.topic.isNotBlank()) "start the chosen topic" else if (memory.nextStep.isNotBlank()) "continue the unfinished thread with one concrete invitation to respond" else "choose a useful next step towards their goal and begin it"}. Do not reteach greetings or restart placement."
 
     private fun opening(c: SessionConfig) = when (c.level) {
         Level.SUPER_BEGINNER ->
@@ -137,6 +163,7 @@ ${memoryBlock(c, memory)}${if (c.onboarding) onboardingInstruction(c) else if (m
             changes += "switch the scenario to \"${new.scenario.label}\": ${new.scenario.prompt}"
         }
         if (old.correctionStyle != new.correctionStyle) changes += "use the ${new.correctionStyle.label} correction style"
+        if (old.encouragement != new.encouragement) changes += coachingInstruction(new)
         val body = if (changes.isEmpty()) "continue as before" else changes.joinToString("; ")
         val ackLanguage = if (new.level == Level.SUPER_BEGINNER) "English" else new.language
         return "[System] From now on, $body. Briefly acknowledge the switch in $ackLanguage and continue the conversation. Do not call switch_language for this change."
@@ -156,7 +183,7 @@ After each answer, call update_learner_profile with what you learned (only the f
 Then work out their level by talking: ask one or two easy questions in the language and listen. Don't ask them to rate themselves. Call update_learner_profile with level (Super Beginner, Beginner, Intermediate, or Advanced). If they know none of the language, use Super Beginner.
 
 When update_learner_profile reports onboarding_complete, setup is over: follow the returned learner_instruction instead of the initial language/level above. Don't restart the interview. Tell them in one sentence that you're starting and open a short role-play that fits their goal. From then on:
-- Follow the normal conversation and native-accent instructions above. Keep replies short without making every reply a question.
+- Follow the normal conversation, coaching tone and native-accent instructions above. Lead into the next concrete activity without waiting for 'continue'; use one short question or practice cue, then leave time for an answer.
 - Gently recast mistakes in your next reply.
 - Call note_vocab silently for words they struggle with or ask about, with the correct form, a short translation, the sentence, and the reason.
 - When you want them to say a specific phrase, call show_phrase with it and its English translation, at most once per turn.
@@ -180,7 +207,7 @@ Begin now: say hi, introduce yourself as Parlo in one sentence, confirm the sele
         "[System] The user pressed the headset button: repeat your last sentence slowly and clearly, then wait."
 
     fun recapMessage(c: SessionConfig) =
-        "[System] The walk is ending. Give a spoken recap of about 30 seconds in ${if (c.level == Level.SUPER_BEGINNER) "English, repeating each ${c.language} phrase slowly with its meaning," else "a mix of ${c.language} and English"} suited to a ${c.level.label} learner: recurring mistakes you noticed, what went well, and three words or phrases to review. Keep the recap about the language practised; if the walk switched languages, name each language briefly instead of mixing their mistakes. Do not ask a question at the end; finish with a short goodbye."
+        "[System] The walk is ending. Give a spoken recap of about 30 seconds in ${if (c.level == Level.SUPER_BEGINNER) "English, repeating each ${c.language} phrase slowly with its meaning," else "a mix of ${c.language} and English"} suited to a ${c.level.label} learner: recurring mistakes you noticed, what went well, and three words or phrases to review. Keep the recap about the language practised; if the walk switched languages, name each language briefly instead of mixing their mistakes. Do not ask a question at the end; finish with a short goodbye. ${coachingInstruction(c)} Keep the review factual and proportionate to observed evidence."
 
     fun resumeContextMessage(recent: List<Pair<String, String>>, c: SessionConfig): String {
         val lines = recent.joinToString("\n") { (who, text) -> "$who: $text" }
@@ -274,7 +301,7 @@ Begin now: say hi, introduce yourself as Parlo in one sentence, confirm the sele
                 ),
                 FunctionDeclaration(
                     name = "update_walk",
-                    description = "Report that the walk's topic, scenario, or correction style changed at the user's request so the app can show it. Language and level changes go through switch_language instead.",
+                    description = "Report changes to topic, scenario, correction style or encouragement at the learner's request. Encouragement is global coaching tone, separate from difficulty/corrections. Apply a returned coaching_instruction immediately. Language and level changes go through switch_language instead.",
                     parameters = buildJsonObject {
                         put("type", "OBJECT")
                         putJsonObject("properties") {
@@ -287,6 +314,11 @@ Begin now: say hi, introduce yourself as Parlo in one sentence, confirm the sele
                             putJsonObject("correction_style") {
                                 put("type", "STRING")
                                 putJsonArray("enum") { CorrectionStyle.entries.forEach { add(kotlinx.serialization.json.JsonPrimitive(it.name)) } }
+                            }
+                            putJsonObject("encouragement") {
+                                put("type", "STRING")
+                                put("description", "Coaching tone only. For less praise choose MATTER_OF_FACT or LOW_KEY; keep language difficulty unchanged.")
+                                putJsonArray("enum") { Encouragement.entries.forEach { add(kotlinx.serialization.json.JsonPrimitive(it.name)) } }
                             }
                         }
                     },

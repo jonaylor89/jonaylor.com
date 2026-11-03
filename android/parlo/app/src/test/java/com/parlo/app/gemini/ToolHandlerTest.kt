@@ -86,6 +86,23 @@ class ToolHandlerTest {
     }
 
     @Test
+    fun `voice encouragement changes return authoritative tone without changing difficulty`() = runTest {
+        val changes = mutableListOf<ToolHandler.WalkUpdate>()
+        val tutor = ToolHandler(VocabRepository(dao), { "German" }, { "Standard German" }, { Level.ADVANCED }, { 7L }, {}, {},
+            onWalkUpdated = { changes += it })
+        val response = tutor.handle(FunctionCall(name = "update_walk", args = buildJsonObject { put("encouragement", "MATTER_OF_FACT") }))
+        val change = changes.single()
+        assertEquals(com.parlo.app.model.Encouragement.MATTER_OF_FACT, change.encouragement)
+        assertNull(change.correctionStyle)
+        assertNull(change.scenario)
+        assertEquals("MATTER_OF_FACT", response.response["encouragement"]!!.jsonPrimitive.content)
+        assertTrue(response.response["coaching_instruction"]!!.jsonPrimitive.content.contains("Do not add praise"))
+        val invalid = tutor.handle(FunctionCall(name = "update_walk", args = buildJsonObject { put("encouragement", "anything") }))
+        assertTrue(invalid.response.containsKey("error"))
+        assertEquals(1, changes.size)
+    }
+
+    @Test
     fun `save_vocab stores the word and answers the call id`() = runTest {
         val call = FunctionCall(
             id = "call-1", name = "save_vocab",
