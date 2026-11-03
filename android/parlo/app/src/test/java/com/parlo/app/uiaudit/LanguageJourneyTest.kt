@@ -57,7 +57,8 @@ class LanguageJourneyTest {
         }
         rule.onNodeWithText("Which language today?").assertExists()
         rule.onNodeWithTag("journey_japanese").assertIsSelected()
-        rule.onNodeWithText("Switch freely. Each language keeps its own progress.").assertExists()
+        rule.onNodeWithText("Portuguese").assertExists()
+        rule.onNodeWithText("Arabic").assertExists()
         rule.onRoot().captureRoboImage("build/uiaudit/40_language_journeys.png")
         rule.onNodeWithTag("journey_portuguese").performClick().assertIsSelected().assertIsDisplayed()
         rule.onNodeWithText("Add language").performClick()
@@ -75,7 +76,7 @@ class LanguageJourneyTest {
             rule.onNodeWithTag("journey_$language").assertDoesNotExist()
         }
         rule.onNodeWithText("Add language").assertExists()
-        rule.onNodeWithText("Learning more than one? Add another whenever you like.").assertExists()
+        rule.onNodeWithText("Which language today?").assertExists()
     }
 
     @Test fun `multiple accents do not duplicate a language in the switcher`() {

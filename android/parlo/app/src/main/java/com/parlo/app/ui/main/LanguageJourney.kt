@@ -62,8 +62,15 @@ internal fun LanguageJourneyPicker(
         .distinctBy(LearningRepository::key)
     val rowState = rememberLazyListState()
     LaunchedEffect(config.language) { rowState.scrollToItem(0) }
-    Column(Modifier.fillMaxWidth().padding(top = ParloSpacing.space6).testTag("language_journeys"), verticalArrangement = Arrangement.spacedBy(ParloSpacing.space4)) {
-        Text("Which language today?", style = MaterialTheme.typography.displaySmall)
+    Column(Modifier.fillMaxWidth().testTag("language_journeys"), verticalArrangement = Arrangement.spacedBy(ParloSpacing.space2)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Which language today?", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            TextButton(onClick = onMore) {
+                Icon(Icons.Rounded.Add, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(ParloSpacing.space1))
+                Text("Add language")
+            }
+        }
         LazyRow(
             state = rowState,
             horizontalArrangement = Arrangement.spacedBy(ParloSpacing.hair),
@@ -72,26 +79,14 @@ internal fun LanguageJourneyPicker(
         ) {
             itemsIndexed(choices, key = { _, l -> LearningRepository.key(l) }) { i, language ->
                 val selected = language.equals(config.language, true)
-                val saved = if (selected) config else languages.firstOrNull { it.language.equals(language, true) }
                 LanguageSegment(
                     language = language,
-                    detail = saved?.let { listOfNotNull(it.dialect.takeIf { d -> d.isNotBlank() && !d.equals(language, true) }, it.level.label).joinToString(" · ") }.orEmpty(),
                     selected = selected,
                     index = i,
                     count = choices.size,
                     onClick = { onSelect(language) },
                     modifier = Modifier.testTag("journey_${LearningRepository.key(language)}"),
                 )
-            }
-        }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (choices.size > 1) "Switch freely. Each language keeps its own progress." else
-                "Learning more than one? Add another whenever you like.", style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-            TextButton(onClick = onMore) {
-                Icon(Icons.Rounded.Add, null, Modifier.size(18.dp))
-                Spacer(Modifier.width(ParloSpacing.space1))
-                Text("Add language")
             }
         }
     }

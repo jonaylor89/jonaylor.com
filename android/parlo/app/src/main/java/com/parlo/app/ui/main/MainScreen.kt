@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -86,6 +87,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -135,6 +137,7 @@ fun MainScreen(
     var showConfig by remember { mutableStateOf(false) }
     var showLanguagePicker by remember { mutableStateOf(false) }
     var showJournal by remember { mutableStateOf(false) }
+    var selectedWord by remember { mutableStateOf<VocabEntity?>(null) }
     var showPermissionRationale by remember { mutableStateOf(false) }
 
     val neededPermissions = remember {
@@ -165,8 +168,8 @@ fun MainScreen(
 
     fun requestStart() {
         if (!ui.ready) { showSettings = true; return }
-        val missing = neededPermissions.any { ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED }
-        if (missing) showPermissionRationale = true else viewModel.startSession(context)
+        val microphoneMissing = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED
+        if (microphoneMissing) showPermissionRationale = true else viewModel.startSession(context)
     }
 
     // Ending a walk is a single tap; the recap can be skipped from the snackbar instead of a hidden long-press.
@@ -186,15 +189,18 @@ fun MainScreen(
     Scaffold(
         snackbarHost = { ParloSnackbarHost(snackbar) },
         containerColor = if (live.isActive) Parlo.colors.walkGround else MaterialTheme.colorScheme.surface,
-        floatingActionButtonPosition = FabPosition.Center,
-        floatingActionButton = {
+        bottomBar = {
             if (firstRun || live.isActive) return@Scaffold
-            WalkFab(
-                state = if (ui.ready) WalkFabState.READY else WalkFabState.SETUP,
-                subLabel = if (ui.ready) walkFabSubLabel(cfg) else setupStep(ui.setup),
-                onClick = { if (ui.ready) startFromHome() else showSettings = true },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = ParloSpacing.space4).testTag("start_walk"),
-            )
+            Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
+                Box(Modifier.navigationBarsPadding().padding(horizontal = ParloSpacing.space4, vertical = ParloSpacing.space2)) {
+                    WalkFab(
+                        state = if (ui.ready) WalkFabState.READY else WalkFabState.SETUP,
+                        subLabel = if (ui.ready) walkFabSubLabel(cfg) else setupStep(ui.setup),
+                        onClick = { if (ui.ready) startFromHome() else showSettings = true },
+                        modifier = Modifier.fillMaxWidth().testTag("start_walk"),
+                    )
+                }
+            }
         },
         topBar = {
             if (firstRun) return@Scaffold
@@ -222,6 +228,9 @@ fun MainScreen(
                 modifier = Modifier.padding(padding),
                 languageChoice = {
                     LanguageJourneyPicker(cfg, ui.languages, { viewModel.selectLanguage(it) }, { showLanguagePicker = true })
+                },
+                onRetry = viewModel::refreshModels,
+                secondaryAction = {
                     TextButton(onClick = { showJournal = true }) { Text("Already learning with Parlo? Restore progress") }
                 },
             )
@@ -238,10 +247,19 @@ fun MainScreen(
             )
             return@Scaffold
         }
-        Column(
-            Modifier.fillMaxSize().padding(padding).padding(horizontal = ParloSpacing.space4).verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(ParloSpacing.space4),
+        HomeContent(
+            ui = ui,
+            onSelectLanguage = { viewModel.selectLanguage(it) },
+            onAddLanguage = { showLanguagePicker = true },
+            onWalkSettings = { showConfig = true },
+            onModeSelected = { guided -> viewModel.updateConfig {
+                if (guided) it.copy(followPlan = true) else it.copy(topic = "", topicTitle = "", scenario = Scenario.FREE, followPlan = false)
+            } },
+            onWordSelected = { selectedWord = it },
+            onOpenJourney = { showJournal = true },
+            onOpenVocab = onOpenVocab,
+            onOpenHistory = onOpenHistory,
+            modifier = Modifier.padding(padding),
         ) {
             val error = live.error
             if (error != null) {
@@ -260,44 +278,13 @@ fun MainScreen(
                 SetupCard(status = ui.setup, onOpenSettings = { showSettings = true }, onRefresh = viewModel::refreshModels)
             }
 
-            LanguageJourneyPicker(cfg, ui.languages, { viewModel.selectLanguage(it) }, { showLanguagePicker = true })
-            NextWalkCard(
-                cfg = cfg,
-                walk = lastWalk,
-                onTune = { showConfig = true },
-                onJustChat = { viewModel.updateConfig { it.copy(topic = "", topicTitle = "", scenario = Scenario.FREE, followPlan = false) } },
-                onContinuePlan = { viewModel.updateConfig { it.copy(followPlan = true) } },
-                onHarder = { viewModel.updateConfig { it.copy(level = it.level.harder()) } },
-                onOtherLanguage = { showLanguagePicker = true },
-            )
-            if (!live.isActive && lastWalk != null) {
-                LastWalkCard(
-                    walk = lastWalk,
-                    onDrop = { v ->
-                        viewModel.dropWord(v)
-                        scope.launch {
-                            val r = snackbar.showSnackbar("Dropped “${v.word}”", actionLabel = "Undo", duration = SnackbarDuration.Short)
-                            if (r == SnackbarResult.ActionPerformed) viewModel.restoreWord(v)
-                        }
-                    },
-                )
-            } else if (!live.isActive && live.transcript.isEmpty() && ui.suggestedVocab > 0) {
-                ReviewCard(count = ui.suggestedVocab, onReview = onOpenVocab)
-            }
-            JourneyStatus(ui, onOpen = { showJournal = true })
-
-            if (live.transcript.isNotEmpty() && lastWalk == null) {
-                TextButton(onClick = onOpenHistory) { Text("Read your conversation") }
-            }
-            // Clearance for the Start-walk FAB in the thumb zone.
-            Spacer(Modifier.height(ParloSize.fabLarge + ParloSpacing.space8))
         }
     }
 
     if (showPermissionRationale) {
         AlertDialog(
             onDismissRequest = { showPermissionRationale = false },
-            title = { Text("Before your first walk") },
+            title = { Text("Before we start") },
             text = {
                 Text(
                     "Parlo needs your microphone to hear you. Bluetooth (for earbud buttons) and notifications (for lock-screen controls) are optional; without earbuds the tutor plays through the speaker.",
@@ -308,6 +295,18 @@ fun MainScreen(
             },
             dismissButton = { TextButton(onClick = { showPermissionRationale = false }) { Text("Not now") } },
         )
+    }
+    selectedWord?.let { word ->
+        VocabularyWordSheet(word = word, onDismiss = { selectedWord = null },
+            onOpenVocab = { selectedWord = null; onOpenVocab() },
+            onRemove = {
+                selectedWord = null
+                viewModel.dropWord(word)
+                scope.launch {
+                    val result = snackbar.showSnackbar("Removed “${word.word}”", actionLabel = "Undo", duration = SnackbarDuration.Short)
+                    if (result == SnackbarResult.ActionPerformed) viewModel.restoreWord(word)
+                }
+            })
     }
     if (showJournal) {
         LearningJournalSheet(ui, viewModel::setGoal, viewModel::forgetSessionMemory,
@@ -411,14 +410,10 @@ private fun SetupCard(status: SetupStatus, onOpenSettings: () -> Unit, onRefresh
 /** Today's suggestion: the tutor's next walk (or today's settings) and quick tweaks. Starting is the FAB's job. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun NextWalkCard(
+internal fun NextWalkCard(
     cfg: SessionConfig,
     walk: LastWalk?,
     onTune: () -> Unit,
-    onJustChat: () -> Unit,
-    onContinuePlan: () -> Unit,
-    onHarder: () -> Unit,
-    onOtherLanguage: () -> Unit,
 ) {
     val suggested = cfg.followPlan && cfg.topicTitle.isBlank() && walk?.nextWalkTitle?.isNotBlank() == true && walk.language.equals(cfg.language, true)
     val title = when {
@@ -432,7 +427,7 @@ private fun NextWalkCard(
         Column(Modifier.padding(ParloSpacing.space5), verticalArrangement = Arrangement.spacedBy(ParloSpacing.space3)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Overline(
-                    if (suggested || cfg.topicTitle.isNotBlank()) "Your tutor suggests" else "Your next walk",
+                    "Today's walk",
                     color = scheme.secondary, icon = Icons.Rounded.Route, modifier = Modifier.weight(1f),
                 )
                 FilledTonalIconButton(onClick = onTune, modifier = Modifier.size(ParloSize.targetMin)) { Icon(Icons.Rounded.Tune, "Walk settings") }
@@ -441,19 +436,7 @@ private fun NextWalkCard(
             if (suggested && walk!!.focus.isNotBlank()) {
                 Text("Practise: ${walk.focus}", style = MaterialTheme.typography.bodyLarge, color = scheme.onSurfaceVariant)
             }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(ParloSpacing.space2)) {
-                AssistChip(onClick = onOtherLanguage, label = { Text(cfg.dialect.ifBlank { cfg.language }, maxLines = 1) }, leadingIcon = { Icon(Icons.Rounded.Place, null, Modifier.size(AssistChipDefaults.IconSize)) })
-                AssistChip(onClick = onTune, label = { Text(cfg.level.label) })
-                AssistChip(onClick = onHarder, enabled = cfg.level != Level.entries.last(), label = { Text("Make it harder") })
-            }
-            ConnectedChoice(
-                options = listOf(true, false),
-                selected = cfg.followPlan,
-                label = { if (it) "Continue my plan" else "Just chat" },
-                icon = { if (it) Icons.Rounded.Route else Icons.Rounded.Forum },
-                onSelect = { plan -> if (plan) onContinuePlan() else onJustChat() },
-            )
-            Text("Earbuds or out loud: tap Start walk and talk.", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+
         }
     }
 }
@@ -461,7 +444,7 @@ private fun NextWalkCard(
 /** Post-walk reward + the tutor's next-walk suggestion. Only real numbers: length and words saved. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun LastWalkCard(walk: LastWalk, onDrop: (VocabEntity) -> Unit) {
+internal fun LastWalkCard(walk: LastWalk, onWordSelected: (VocabEntity) -> Unit, onOpenVocab: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     Surface(shape = ParloShape.large, color = scheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth().testTag("last_walk")) {
         Column(Modifier.padding(ParloSpacing.space4), verticalArrangement = Arrangement.spacedBy(ParloSpacing.space3)) {
@@ -478,29 +461,24 @@ private fun LastWalkCard(walk: LastWalk, onDrop: (VocabEntity) -> Unit) {
             }
             if (walk.words.isNotEmpty()) {
                 val n = walk.words.size
-                Text("$n word${if (n == 1) "" else "s"} saved · tap one to drop it", style = MaterialTheme.typography.bodyMedium)
+                Text("$n word${if (n == 1) "" else "s"} saved · tap to explore", style = MaterialTheme.typography.bodyMedium)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(ParloSpacing.space2)) {
-                    walk.words.forEach { v ->
-                        InputChip(
-                            selected = false,
-                            onClick = { onDrop(v) },
-                            label = { Text(v.word, style = Parlo.type.phraseGloss) },
-                            trailingIcon = { Icon(Icons.Rounded.Close, "Drop ${v.word}", Modifier.size(InputChipDefaults.IconSize)) },
+                    walk.words.take(4).forEach { word ->
+                        AssistChip(
+                            onClick = { onWordSelected(word) },
+                            label = { Text(word.word, style = Parlo.type.phraseGloss, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            modifier = Modifier.widthIn(max = 200.dp).testTag("saved_word_${word.id}"),
                         )
                     }
                 }
-            } else if (!walk.reviewing) {
-                Text("No new words this time.", style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
-            }
-            if (walk.focus.isNotBlank()) {
-                Text("Work on: ${walk.focus}", style = MaterialTheme.typography.bodyMedium)
+                if (n > 4) TextButton(onClick = onOpenVocab) { Text("View all saved words") }
             }
         }
     }
 }
 
 @Composable
-private fun ReviewCard(count: Int, onReview: () -> Unit) {
+internal fun ReviewCard(count: Int, onReview: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     Surface(onClick = onReview, shape = ParloShape.large, color = scheme.secondaryContainer, contentColor = scheme.onSecondaryContainer, modifier = Modifier.fillMaxWidth().testTag("review_card")) {
         Row(Modifier.padding(start = ParloSpacing.space4, top = ParloSpacing.space2, bottom = ParloSpacing.space2, end = ParloSpacing.space2), verticalAlignment = Alignment.CenterVertically) {

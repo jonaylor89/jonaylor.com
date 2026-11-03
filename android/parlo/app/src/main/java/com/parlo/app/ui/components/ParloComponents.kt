@@ -207,13 +207,13 @@ fun WalkFab(
         Row(Modifier.padding(horizontal = 28.dp, vertical = ParloSpacing.space4), verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, null, Modifier.size(ParloSize.iconWalk))
             Spacer(Modifier.width(ParloSpacing.space4))
-            Column {
+            Column(Modifier.weight(1f)) {
                 Text(label, style = MaterialTheme.typography.titleLarge)
                 if (subLabel.isNotBlank()) {
                     Text(
                         subLabel,
                         style = if (setup) MaterialTheme.typography.bodyMedium else Parlo.type.phraseGloss.copy(fontSize = MaterialTheme.typography.bodyLarge.fontSize),
-                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis,
                     )
                 }
             }

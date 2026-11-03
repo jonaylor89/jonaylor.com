@@ -87,13 +87,12 @@ fun LanguageMonogram(language: String, modifier: Modifier = Modifier, size: Dp =
 }
 
 /**
- * Home's answer to "Which language today?": a connected group of saved languages. The selected one widens
- * to a full pill with its native name and accent; the rest show only their monogram.
+ * A compact saved-language choice. Every language keeps a readable name, not only a monogram;
+ * accent and difficulty belong in Walk settings rather than expanding the home switcher.
  */
 @Composable
 fun LanguageSegment(
     language: String,
-    detail: String,
     selected: Boolean,
     index: Int,
     count: Int,
@@ -108,25 +107,19 @@ fun LanguageSegment(
         color = container,
         contentColor = content,
         modifier = modifier
-            .heightIn(min = 60.dp)
+            .heightIn(min = ParloSize.targetMin)
             .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
-            .semantics { if (!selected) contentDescription = language }
+            .semantics(mergeDescendants = true) { contentDescription = language }
             .animateContentSize(ParloMotion.spatial()),
     ) {
         Row(
-            Modifier.padding(start = 8.dp, end = if (selected) 20.dp else 8.dp, top = 8.dp, bottom = 8.dp),
+            Modifier.padding(horizontal = ParloSpacing.space3, vertical = ParloSpacing.space2),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(ParloSpacing.space3),
         ) {
-            LanguageMonogram(language)
-            if (selected) {
-                Column(Modifier.widthIn(max = 200.dp)) {
-                    Text(nativeNameOf(language), style = Parlo.type.phraseLarge.copy(fontSize = 18.sp, lineHeight = 24.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (detail.isNotBlank()) {
-                        Text(detail.uppercase(), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-            }
+            LanguageMonogram(language, size = 24.dp)
+            Text(language, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 180.dp))
         }
     }
 }

@@ -204,8 +204,11 @@ class UiAuditTest {
         launch()
         if (key.isNotBlank()) { setKey(key); runCatching { waitText("Shopping at the market") } }
         shot("26_last_walk_recap")
-        rule.onNodeWithContentDescription("Drop madrugar").performClick()
-        shot("27_word_dropped_undo")
+        rule.onNodeWithText("madrugar").performScrollTo().performClick()
+        rule.onNodeWithText("to get up early").assertExists()
+        shot("27_word_details")
+        rule.onNodeWithText("Remove saved word").performClick()
+        shot("27_word_removed_undo")
     }
 
     @Test @Config(qualifiers = "+night")

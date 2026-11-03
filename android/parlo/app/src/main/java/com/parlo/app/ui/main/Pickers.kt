@@ -2,6 +2,8 @@ package com.parlo.app.ui.main
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -45,6 +47,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 
 /** Dropdown of suggestions that also accepts free text. */
@@ -128,25 +133,44 @@ fun <T> ConnectedChoice(
     icon: ((T) -> ImageVector)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
-    Row(modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(ParloSpacing.hair)) {
-        options.forEachIndexed { i, opt ->
-            val isSelected = opt == selected
+    val textStyle = MaterialTheme.typography.labelLarge
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val widestLabel = options.maxOfOrNull { measurer.measure(AnnotatedString(label(it)), style = textStyle).size.width } ?: 0
+    // Reserve an icon/check and padding for every option, so selection never clips a label.
+    val requiredWidth = (with(density) { widestLabel.toDp() } + 50.dp) * options.size + ParloSpacing.hair * (options.size - 1).coerceAtLeast(0)
+    BoxWithConstraints(modifier.fillMaxWidth().selectableGroup()) {
+        val stacked = requiredWidth > maxWidth
+        @Composable
+        fun Choice(index: Int, option: T, itemModifier: Modifier) {
+            val isSelected = option == selected
             val bg by animateColorAsState(if (isSelected) scheme.secondary else scheme.surfaceContainerHighest, ParloMotion.effects(), label = "choice")
             Surface(
-                shape = ParloShape.connected(i, options.size, isSelected),
+                shape = if (stacked) ParloShape.grouped(index, options.size) else ParloShape.connected(index, options.size, isSelected),
                 color = bg,
                 contentColor = if (isSelected) scheme.onSecondary else scheme.onSurface,
-                modifier = Modifier.weight(1f).heightIn(min = ParloSize.targetMin)
-                    .selectable(selected = isSelected, onClick = { onSelect(opt) }, role = Role.RadioButton),
+                modifier = itemModifier.heightIn(min = ParloSize.targetMin)
+                    .selectable(selected = isSelected, onClick = { onSelect(option) }, role = Role.RadioButton),
             ) {
-                Row(Modifier.padding(horizontal = ParloSpacing.space3), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                    val glyph = if (isSelected) Icons.Rounded.Check else icon?.invoke(opt)
+                Row(Modifier.padding(horizontal = ParloSpacing.space3, vertical = ParloSpacing.space3),
+                    horizontalArrangement = if (stacked) Arrangement.Start else Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically) {
+                    val glyph = if (isSelected) Icons.Rounded.Check else icon?.invoke(option)
                     if (glyph != null) {
                         Icon(glyph, null, Modifier.size(18.dp))
                         Spacer(Modifier.width(ParloSpacing.space2))
                     }
-                    Text(label(opt), style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                    Text(label(option), style = textStyle, modifier = Modifier.weight(1f, fill = false))
                 }
+            }
+        }
+        if (stacked) {
+            Column(verticalArrangement = Arrangement.spacedBy(ParloSpacing.hair)) {
+                options.forEachIndexed { i, option -> Choice(i, option, Modifier.fillMaxWidth()) }
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(ParloSpacing.hair)) {
+                options.forEachIndexed { i, option -> Choice(i, option, Modifier.weight(1f)) }
             }
         }
     }
