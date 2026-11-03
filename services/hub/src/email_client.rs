@@ -57,6 +57,8 @@ impl EmailClient {
             subject,
             html_body: html_content,
             text_body: text_content,
+            // Keep links direct instead of routing through Postmark's tracking domain.
+            track_links: "None",
             headers,
         };
         self.http_client
@@ -82,6 +84,7 @@ struct SendEmailRequest<'a> {
     subject: &'a str,
     html_body: &'a str,
     text_body: &'a str,
+    track_links: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     headers: Option<Vec<PostmarkHeader<'a>>>,
 }
@@ -166,6 +169,33 @@ mod tests {
         let _ = email_client
             .send_email(&email(), &subject(), &content(), &content(), None)
             .await;
+    }
+
+    #[tokio::test]
+    async fn send_email_disables_link_tracking_and_preserves_confirmation_links() {
+        let mock_server = MockServer::start().await;
+        let email_client = email_client(mock_server.uri());
+        let confirmation_url =
+            "https://hub.jonaylor.com/subscriptions/confirm?subscription_token=test-token";
+        let html = format!("<a href=\"{confirmation_url}\">Confirm</a>");
+
+        Mock::given(method("POST"))
+            .and(path("/email"))
+            .and(wiremock::matchers::body_partial_json(serde_json::json!({
+                "TrackLinks": "None",
+                "HtmlBody": html,
+                "TextBody": confirmation_url,
+            })))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let outcome = email_client
+            .send_email(&email(), &subject(), &html, confirmation_url, None)
+            .await;
+
+        assert_ok!(outcome);
     }
 
     #[tokio::test]
