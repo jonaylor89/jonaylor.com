@@ -20,7 +20,7 @@ use tower_sessions_redis_store::{
 };
 
 use crate::authentication::AuthenticatedUser;
-use crate::configuration::{DatabaseSettings, Settings};
+use crate::configuration::{DatabaseSettings, Settings, TipLinks};
 use crate::domain::VaultVisibility;
 use crate::email_client::EmailClient;
 use crate::memory::{
@@ -100,6 +100,7 @@ impl Application {
             db_pool: connection_pool.clone(),
             email_client: email_client.clone(),
             base_url: ApplicationBaseUrl(configuration.application.base_url.clone()),
+            tip_links: configuration.application.tip_links.clone(),
             hmac_secret: configuration
                 .application
                 .hmac_secret
@@ -158,6 +159,7 @@ pub struct AppState {
     pub db_pool: SqlitePool,
     pub email_client: EmailClient,
     pub base_url: ApplicationBaseUrl,
+    pub tip_links: Option<TipLinks>,
     pub hmac_secret: String,
     pub vault: VaultState,
     pub memory: MemoryEngine,
@@ -181,6 +183,12 @@ impl axum::extract::FromRef<AppState> for SqlitePool {
 impl axum::extract::FromRef<AppState> for EmailClient {
     fn from_ref(state: &AppState) -> Self {
         state.email_client.clone()
+    }
+}
+
+impl axum::extract::FromRef<AppState> for Option<TipLinks> {
+    fn from_ref(state: &AppState) -> Self {
+        state.tip_links.clone()
     }
 }
 

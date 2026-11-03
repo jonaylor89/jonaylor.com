@@ -19,6 +19,7 @@
             .divider { border-top-color: #374151 !important; }
             .footer-text { color: #9ca3af !important; }
             .fallback-link a { color: #d1d5db !important; }
+            .tip-line, .tip-line a { color: #d1d5db !important; }
         }
     </style>
 </head>
@@ -45,6 +46,8 @@
             </a>
         </div>
 
+        {{ tip|safe }}
+
         <hr class="divider" style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;">
 
         <p class="footer-text" style="color: #6b7280; font-size: 12px; margin: 0;">
@@ -52,6 +55,8 @@
         </p>
 {% when None %}
         <p class="body-text" style="color: #000000; font-size: 16px; margin: 0 0 8px 0;">You're already on my email list, so you'll keep hearing about new projects and posts. Appreciate you being here!</p>
+
+        {{ tip|safe }}
 
         <hr class="divider" style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;">
 

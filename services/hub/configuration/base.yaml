@@ -2,6 +2,13 @@ application:
   port: 8000
   hmac_secret: "super-long-and-secret-random-key-needed-to-verify-message-integrity"
   api_bearer_token: "dev-api-token"
+  # Tip links for newsletter and download emails. Omit to hide them.
+  # Override with APP_APPLICATION__TIP_LINKS__FIVE, __TEN, __TWENTY_FIVE and __OTHER.
+  # tip_links:
+  #   five: "https://buy.stripe.com/..."
+  #   ten: "https://buy.stripe.com/..."
+  #   twenty_five: "https://buy.stripe.com/..."
+  #   other: "https://buy.stripe.com/..."
 database:
   path: "./data/hub.db"
 email_client:

@@ -80,6 +80,34 @@ async fn download_is_recorded_and_thank_you_email_offers_subscription() {
 }
 
 #[tokio::test]
+async fn thank_you_email_offers_tip_links_for_the_downloaded_app() {
+    let app = spawn_app().await;
+    mount_email_ok(&app).await;
+
+    let response = post_download(
+        &app,
+        serde_json::json!({"email": "ursula@gmail.com", "app": "parlo"}),
+    )
+    .await;
+    assert_eq!(202, response.status().as_u16());
+
+    let emails = wait_for_emails(&app, 1).await;
+    let body: serde_json::Value = serde_json::from_slice(&emails[0].body).unwrap();
+
+    let html = body["HtmlBody"].as_str().unwrap();
+    assert!(html.contains("Enjoying Parlo? Leave a tip:"));
+    assert!(html.contains("<a href=\"https://tip.example.com/25\""));
+    assert!(body["TextBody"].as_str().unwrap().contains(
+        "Enjoying Parlo? Leave a tip:\n\
+         $5: https://tip.example.com/5\n\
+         $10: https://tip.example.com/10\n\
+         $25: https://tip.example.com/25\n\
+         Other amount: https://tip.example.com/other\n\n\
+         — Johannes"
+    ));
+}
+
+#[tokio::test]
 async fn confirmed_subscribers_get_a_thank_you_without_subscribe_prompt() {
     let app = spawn_app().await;
     mount_email_ok(&app).await;

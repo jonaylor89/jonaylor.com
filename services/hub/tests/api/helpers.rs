@@ -5,7 +5,7 @@ use once_cell::sync::Lazy;
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
-use hub::configuration::{DatabaseSettings, get_configuration};
+use hub::configuration::{DatabaseSettings, TipLinks, get_configuration};
 use hub::issue_delivery_queue::{ExecutionOutcome, try_execute_tasks};
 use hub::startup::Application;
 use hub::telemetry::{get_subscriber, init_subscriber};
@@ -327,6 +327,7 @@ impl TestApp {
                 &self.email_client,
                 &self.hmac_secret,
                 &self.base_url,
+                None,
             )
             .await
             .unwrap()
@@ -401,6 +402,12 @@ pub async fn spawn_app() -> TestApp {
         c.application.port = 0;
         c.email_client.base_url = email_server.uri();
         c.memory.enabled = false;
+        c.application.tip_links = Some(TipLinks {
+            five: "https://tip.example.com/5".into(),
+            ten: "https://tip.example.com/10".into(),
+            twenty_five: "https://tip.example.com/25".into(),
+            other: "https://tip.example.com/other".into(),
+        });
 
         c
     };

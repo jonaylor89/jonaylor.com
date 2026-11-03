@@ -160,6 +160,41 @@ pub struct ApplicationSettings {
     pub host: String,
     pub base_url: String,
     pub hmac_secret: Secret<String>,
+    /// Tip links shown in newsletter and download emails when set.
+    pub tip_links: Option<TipLinks>,
+}
+
+/// Payment links behind the tip amounts offered in emails.
+#[derive(serde::Deserialize, Clone)]
+pub struct TipLinks {
+    pub five: String,
+    pub ten: String,
+    pub twenty_five: String,
+    pub other: String,
+}
+
+impl TipLinks {
+    /// `prompt` must be trusted HTML; it comes from static text, not user input.
+    pub fn html_line(&self, prompt: &str) -> String {
+        let link = |url: &str, label: &str| {
+            format!("<a href=\"{url}\" style=\"color:#374151;font-weight:600\">{label}</a>")
+        };
+        format!(
+            "<p class=\"tip-line\" style=\"color:#374151;font-size:14px;text-align:center;margin:24px 0\">\
+             {prompt} Leave a tip: {} · {} · {} · {}</p>",
+            link(&self.five, "$5"),
+            link(&self.ten, "$10"),
+            link(&self.twenty_five, "$25"),
+            link(&self.other, "other"),
+        )
+    }
+
+    pub fn text_block(&self, prompt: &str) -> String {
+        format!(
+            "{prompt} Leave a tip:\n$5: {}\n$10: {}\n$25: {}\nOther amount: {}\n\n",
+            self.five, self.ten, self.twenty_five, self.other
+        )
+    }
 }
 
 #[derive(serde::Deserialize, Clone)]

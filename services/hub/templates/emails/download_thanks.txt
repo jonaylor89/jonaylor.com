@@ -14,4 +14,4 @@ You're getting this one-time email because you entered this address to download 
 {% when None %}
 You're already on my email list, so you'll keep hearing about new projects and posts. Appreciate you being here!
 {% endmatch %}
-— Johannes
+{{ tip }}— Johannes

@@ -9,8 +9,11 @@ use uuid::Uuid;
 use secrecy::ExposeSecret;
 
 use crate::{
-    configuration::Settings, domain::SubscriberEmail, email_client::EmailClient,
-    routes::generate_unsubscribe_url, startup::get_connection_pool,
+    configuration::{Settings, TipLinks},
+    domain::SubscriberEmail,
+    email_client::EmailClient,
+    routes::generate_unsubscribe_url,
+    startup::get_connection_pool,
 };
 
 // Number of tasks to process concurrently
@@ -21,6 +24,8 @@ const MAX_RETRY_ATTEMPTS: i32 = 5;
 
 // Minimum time between retry attempts (exponential backoff base)
 const RETRY_BACKOFF_MINUTES: i64 = 5;
+
+const TIP_PROMPT: &str = "Enjoying these?";
 
 type SqliteTransaction = Transaction<'static, Sqlite>;
 
@@ -57,7 +62,15 @@ pub async fn run_worker_until_stopped(configuration: Settings) -> Result<(), any
         .hmac_secret
         .expose_secret()
         .clone();
-    worker_loop(&connection_pool, &email_client, &hmac_secret, &base_url).await
+    let tip_links = configuration.application.tip_links.as_ref();
+    worker_loop(
+        &connection_pool,
+        &email_client,
+        &hmac_secret,
+        &base_url,
+        tip_links,
+    )
+    .await
 }
 
 async fn worker_loop(
@@ -65,9 +78,10 @@ async fn worker_loop(
     email_client: &EmailClient,
     hmac_secret: &str,
     base_url: &str,
+    tip_links: Option<&TipLinks>,
 ) -> Result<(), anyhow::Error> {
     loop {
-        match try_execute_tasks(pool, email_client, hmac_secret, base_url).await {
+        match try_execute_tasks(pool, email_client, hmac_secret, base_url, tip_links).await {
             Ok(ExecutionOutcome::EmptyQueue) => {
                 tokio::time::sleep(Duration::from_hours(24)).await;
             }
@@ -86,6 +100,7 @@ pub async fn try_execute_tasks(
     email_client: &EmailClient,
     hmac_secret: &str,
     base_url: &str,
+    tip_links: Option<&TipLinks>,
 ) -> Result<ExecutionOutcome, anyhow::Error> {
     let mut processed_any_batch = false;
 
@@ -112,6 +127,7 @@ pub async fn try_execute_tasks(
             let email_client_clone = email_client.clone();
             let hmac_secret = hmac_secret.to_string();
             let base_url = base_url.to_string();
+            let tip_links = tip_links.cloned();
 
             join_set.spawn(async move {
                 execute_single_task(
@@ -120,6 +136,7 @@ pub async fn try_execute_tasks(
                     task,
                     &hmac_secret,
                     &base_url,
+                    tip_links.as_ref(),
                 )
                 .await
             });
@@ -156,6 +173,20 @@ pub async fn try_execute_tasks(
     }
 }
 
+fn html_footer(tip_links: Option<&TipLinks>, unsubscribe_url: &str) -> String {
+    let tip = tip_links.map_or_else(String::new, |links| links.html_line(TIP_PROMPT));
+    format!(
+        "\n<hr style=\"border:none;border-top:1px solid #eee;margin:30px 0\">{tip}\
+         <p style=\"color:#999;font-size:12px;text-align:center\">\
+         <a href=\"{unsubscribe_url}\" style=\"color:#999\">Unsubscribe</a></p>"
+    )
+}
+
+fn text_footer(tip_links: Option<&TipLinks>, unsubscribe_url: &str) -> String {
+    let tip = tip_links.map_or_else(String::new, |links| links.text_block(TIP_PROMPT));
+    format!("\n\n---\n{tip}Unsubscribe: {unsubscribe_url}")
+}
+
 #[tracing::instrument(
     skip_all,
     fields(
@@ -169,6 +200,7 @@ async fn execute_single_task(
     mut task: DequeuedTask,
     hmac_secret: &str,
     base_url: &str,
+    tip_links: Option<&TipLinks>,
 ) -> Result<TaskExecutionResult, anyhow::Error> {
     Span::current()
         .record("newsletter_issue_id", display(task.issue_id))
@@ -201,14 +233,14 @@ async fn execute_single_task(
             let issue = get_issue(&pool, task.issue_id).await?;
 
             let html_with_footer = format!(
-                "{}\n<hr style=\"border:none;border-top:1px solid #eee;margin:30px 0\">\
-                 <p style=\"color:#999;font-size:12px;text-align:center\">\
-                 <a href=\"{}\" style=\"color:#999\">Unsubscribe</a></p>",
-                issue.html_content, unsubscribe_url
+                "{}{}",
+                issue.html_content,
+                html_footer(tip_links, &unsubscribe_url)
             );
             let text_with_footer = format!(
-                "{}\n\n---\nUnsubscribe: {}",
-                issue.text_content, unsubscribe_url
+                "{}{}",
+                issue.text_content,
+                text_footer(tip_links, &unsubscribe_url)
             );
 
             email_client

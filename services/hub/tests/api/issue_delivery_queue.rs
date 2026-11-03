@@ -1,4 +1,5 @@
 use chrono::Utc;
+use hub::configuration::TipLinks;
 use hub::issue_delivery_queue::{ExecutionOutcome, try_execute_tasks};
 use hub::routes::generate_unsubscribe_url;
 use sqlx::{Row, SqlitePool};
@@ -45,6 +46,7 @@ async fn try_execute_tasks_returns_empty_queue_when_there_is_nothing_to_process(
         &app.email_client,
         &app.hmac_secret,
         &app.base_url,
+        None,
     )
     .await
     .unwrap();
@@ -87,6 +89,7 @@ async fn try_execute_tasks_sends_all_queued_emails_and_removes_them_from_the_que
         &app.email_client,
         &app.hmac_secret,
         &app.base_url,
+        None,
     )
     .await
     .unwrap();
@@ -131,6 +134,73 @@ async fn try_execute_tasks_sends_all_queued_emails_and_removes_them_from_the_que
 }
 
 #[tokio::test]
+async fn try_execute_tasks_adds_tip_links_to_both_email_bodies_when_configured() {
+    let app = spawn_queue_worker_app().await;
+    let recipient = "alice@example.com";
+    let tip_links = TipLinks {
+        five: "https://tip.example.com/5".into(),
+        ten: "https://tip.example.com/10".into(),
+        twenty_five: "https://tip.example.com/25".into(),
+        other: "https://tip.example.com/other".into(),
+    };
+
+    let issue_id = create_issue(
+        &app.db_pool,
+        "Weekly digest",
+        "Plain body",
+        "<p>HTML body</p>",
+    )
+    .await;
+    enqueue_task(&app.db_pool, issue_id, recipient, 0, None, None).await;
+
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&app.email_server)
+        .await;
+
+    try_execute_tasks(
+        &app.db_pool,
+        &app.email_client,
+        &app.hmac_secret,
+        &app.base_url,
+        Some(&tip_links),
+    )
+    .await
+    .unwrap();
+
+    let requests = app.email_server.received_requests().await.unwrap();
+    let body: serde_json::Value =
+        serde_json::from_slice(&requests[0].body).expect("email request body should be valid JSON");
+    let unsubscribe_url = generate_unsubscribe_url(&app.base_url, recipient, &app.hmac_secret);
+
+    let html = body["HtmlBody"].as_str().unwrap();
+    assert!(html.contains("Enjoying these? Leave a tip:"));
+    for (url, label) in [
+        (&tip_links.five, "$5"),
+        (&tip_links.ten, "$10"),
+        (&tip_links.twenty_five, "$25"),
+        (&tip_links.other, "other"),
+    ] {
+        assert!(html.contains(&format!(
+            "<a href=\"{url}\" style=\"color:#374151;font-weight:600\">{label}</a>"
+        )));
+    }
+    assert_eq!(
+        body["TextBody"].as_str().unwrap(),
+        format!(
+            "Plain body\n\n---\nEnjoying these? Leave a tip:\n\
+             $5: https://tip.example.com/5\n\
+             $10: https://tip.example.com/10\n\
+             $25: https://tip.example.com/25\n\
+             Other amount: https://tip.example.com/other\n\n\
+             Unsubscribe: {unsubscribe_url}"
+        )
+    );
+}
+
+#[tokio::test]
 async fn try_execute_tasks_keeps_retryable_failures_in_the_queue_and_tracks_the_attempt() {
     let app = spawn_queue_worker_app().await;
     let email = "retry-me@example.com";
@@ -149,6 +219,7 @@ async fn try_execute_tasks_keeps_retryable_failures_in_the_queue_and_tracks_the_
         &app.email_client,
         &app.hmac_secret,
         &app.base_url,
+        None,
     )
     .await
     .unwrap();
@@ -202,6 +273,7 @@ async fn try_execute_tasks_respects_backoff_and_skips_recent_failures() {
         &app.email_client,
         &app.hmac_secret,
         &app.base_url,
+        None,
     )
     .await
     .unwrap();
@@ -251,6 +323,7 @@ async fn try_execute_tasks_moves_a_task_to_the_dead_letter_queue_after_the_final
         &app.email_client,
         &app.hmac_secret,
         &app.base_url,
+        None,
     )
     .await
     .unwrap();
@@ -289,6 +362,7 @@ async fn try_execute_tasks_moves_invalid_emails_to_the_dead_letter_queue_without
         &app.email_client,
         &app.hmac_secret,
         &app.base_url,
+        None,
     )
     .await
     .unwrap();
@@ -346,6 +420,7 @@ async fn try_execute_tasks_continues_processing_other_tasks_when_one_delivery_fa
         &app.email_client,
         &app.hmac_secret,
         &app.base_url,
+        None,
     )
     .await
     .unwrap();

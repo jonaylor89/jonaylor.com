@@ -7,6 +7,7 @@ use chrono::Utc;
 use sqlx::{Sqlite, SqlitePool, Transaction};
 use uuid::Uuid;
 
+use crate::configuration::TipLinks;
 use crate::domain::{NewSubscriber, SubscriberEmail, SubscriptionToken};
 use crate::email_client::EmailClient;
 use crate::email_templates::{DownloadThanksEmailHtml, DownloadThanksEmailText};
@@ -70,13 +71,14 @@ fn header_value(headers: &HeaderMap, name: header::HeaderName) -> Option<String>
 
 #[tracing::instrument(
     name = "API: Record download",
-    skip(pool, email_client, base_url, headers, body),
+    skip(pool, email_client, base_url, tip_links, headers, body),
     fields(app = %body.app)
 )]
 pub async fn api_record_download(
     State(pool): State<SqlitePool>,
     State(email_client): State<EmailClient>,
     State(base_url): State<ApplicationBaseUrl>,
+    State(tip_links): State<Option<TipLinks>>,
     headers: HeaderMap,
     Json(body): Json<RecordDownloadRequest>,
 ) -> Response {
@@ -132,8 +134,14 @@ pub async fn api_record_download(
     // the request path where a dropped connection can't cancel it.
     if let Some(subscribe_link) = email_to_send {
         tokio::spawn(async move {
-            if let Err(e) =
-                send_download_thanks_email(&email_client, &email, app, subscribe_link).await
+            if let Err(e) = send_download_thanks_email(
+                &email_client,
+                &email,
+                app,
+                subscribe_link,
+                tip_links.as_ref(),
+            )
+            .await
             {
                 tracing::error!(error.cause_chain = ?e, "Failed to send download thank-you email");
             }
@@ -225,11 +233,17 @@ async fn send_download_thanks_email(
     recipient: &SubscriberEmail,
     app: &DownloadableApp,
     subscribe_link: Option<String>,
+    tip_links: Option<&TipLinks>,
 ) -> Result<(), reqwest::Error> {
+    let tip_prompt = format!("Enjoying {}?", app.name);
+    let tip_html = tip_links.map_or_else(String::new, |links| links.html_line(&tip_prompt));
+    let tip_text = tip_links.map_or_else(String::new, |links| links.text_block(&tip_prompt));
+
     let html_body = DownloadThanksEmailHtml {
         app_name: app.name.to_string(),
         download_url: app.download_url.to_string(),
         subscribe_link: subscribe_link.clone(),
+        tip: tip_html,
     }
     .render()
     .expect("Failed to render HTML email template");
@@ -238,6 +252,7 @@ async fn send_download_thanks_email(
         app_name: app.name.to_string(),
         download_url: app.download_url.to_string(),
         subscribe_link,
+        tip: tip_text,
     }
     .render()
     .expect("Failed to render text email template");

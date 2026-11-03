@@ -48,6 +48,7 @@ pub struct DownloadThanksEmailHtml {
     pub app_name: String,
     pub download_url: String,
     pub subscribe_link: Option<String>,
+    pub tip: String,
 }
 
 #[derive(Template)]
@@ -56,4 +57,5 @@ pub struct DownloadThanksEmailText {
     pub app_name: String,
     pub download_url: String,
     pub subscribe_link: Option<String>,
+    pub tip: String,
 }
