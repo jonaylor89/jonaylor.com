@@ -81,10 +81,10 @@ test("existing Android downloads retain their app-specific asset naming", async 
   );
 });
 
-function configFromRedirect(response, action = "app") {
+function configFromRedirect(response) {
   assert.equal(response.status, 302);
   const location = response.headers.get("location");
-  const prefix = `https://apps.obtainium.imranr.dev/redirect?r=obtainium://${action}/`;
+  const prefix = "https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/";
   assert.ok(location.startsWith(prefix));
   return JSON.parse(decodeURIComponent(location.slice(prefix.length)));
 }
@@ -121,8 +121,13 @@ test("Obtainium links contain separate app IDs and monorepo-safe filters", async
   }
 });
 
-test("bulk Obtainium link and import file contain the same four configs", async () => {
-  const configs = configFromRedirect(await download("/obtainium/all"), "apps");
+test("bulk Obtainium link downloads JSON rather than using the unsupported apps redirect", async () => {
+  const bulk = await download("/obtainium/all");
+  assert.equal(bulk.status, 200);
+  assert.equal(bulk.headers.get("location"), null);
+  assert.match(bulk.headers.get("content-type"), /application\/json/);
+  assert.match(bulk.headers.get("content-disposition"), /attachment/);
+  const configs = await bulk.json();
   const response = await download("/obtainium.json");
   assert.match(response.headers.get("content-type"), /application\/json/);
   assert.match(response.headers.get("content-disposition"), /jonaylor-obtainium.json/);

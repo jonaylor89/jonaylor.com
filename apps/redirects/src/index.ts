@@ -83,7 +83,9 @@ const OBTAINIUM_APPS = [
 }));
 
 function obtainiumResponse(path: string): Response | null {
-	if (path === "/obtainium.json") {
+	// The external redirect service accepts app/add, but not Obtainium's apps action.
+	// Serve a file for bulk imports instead of sending users to an invalid redirect.
+	if (path === "/obtainium.json" || path === "/obtainium/all") {
 		return new Response(JSON.stringify(OBTAINIUM_APPS.map(({ config }) => config)), {
 			headers: {
 				"Content-Type": "application/json; charset=utf-8",
@@ -94,10 +96,8 @@ function obtainiumResponse(path: string): Response | null {
 	if (!path.startsWith("/obtainium/")) return null;
 	const slug = path.slice("/obtainium/".length);
 	const app = OBTAINIUM_APPS.find((app) => app.slug === slug);
-	if (!app && slug !== "all") return new Response("Unknown app", { status: 404 });
-	const action = app ? "app" : "apps";
-	const payload = app ? app.config : OBTAINIUM_APPS.map(({ config }) => config);
-	const deepLink = `obtainium://${action}/${encodeURIComponent(JSON.stringify(payload))}`;
+	if (!app) return new Response("Unknown app", { status: 404 });
+	const deepLink = `obtainium://app/${encodeURIComponent(JSON.stringify(app.config))}`;
 	return Response.redirect(`https://apps.obtainium.imranr.dev/redirect?r=${deepLink}`, 302);
 }
 
@@ -159,7 +159,7 @@ async function getLatestAsset(path: string, install: Install): Promise<ReleaseAs
 
 function downloadHelp(): Response {
 	return new Response(
-		"Use /paperclock.apk, /saintjohn.apk, /parlo.apk, or /prego.apk to download the latest Android release, or /fuego.dmg for Fuego for macOS. Use /obtainium/paperclock, /obtainium/saintjohn, /obtainium/parlo, /obtainium/prego, or /obtainium/all to add apps to Obtainium; /obtainium.json is the import file.",
+		"Use /paperclock.apk, /saintjohn.apk, /parlo.apk, or /prego.apk to download the latest Android release, or /fuego.dmg for Fuego for macOS. Use /obtainium/paperclock, /obtainium/saintjohn, /obtainium/parlo, /obtainium/prego, to add individual apps to Obtainium; /obtainium/all and /obtainium.json download the bulk import file.",
 		{
 			headers: { "Content-Type": "text/plain; charset=utf-8" },
 		},

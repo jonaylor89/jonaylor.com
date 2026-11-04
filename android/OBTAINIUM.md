@@ -9,7 +9,7 @@ Install [Obtainium](https://obtainium.imranr.dev/) on your Android device, then 
 | Parlo | [Add Parlo](https://downloads.jonaylor.com/obtainium/parlo) | `com.parlo.app` |
 | Prego | [Add Prego](https://downloads.jonaylor.com/obtainium/prego) | `dev.vcuram.prego` |
 
-[Add all four](https://downloads.jonaylor.com/obtainium/all), or download [the JSON import file](https://downloads.jonaylor.com/obtainium.json) and select it from Obtainium's Import/Export screen. The links open Obtainium's official redirect page and ask for confirmation before adding configs. They do not install APKs without your approval.
+To add all four, download [the bulk import file](https://downloads.jonaylor.com/obtainium/all) (also available at [/obtainium.json](https://downloads.jonaylor.com/obtainium.json)) in your phone's browser, then select the downloaded file from Obtainium's Import/Export screen. Individual app links open Obtainium's official redirect page and ask for confirmation before adding a config. The external redirect page does not support bulk imports. None of these links install APKs without your approval. Do not paste the setup links into Obtainium's Source URL field.
 
 ## First installation and automatic updates
 
