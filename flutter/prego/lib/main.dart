@@ -406,16 +406,6 @@ class _ResultSheet extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Results are random. Not medical advice.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: colors.pineSoft,
-                fontSize: 13,
-                height: 18 / 13,
-              ),
-            ),
           ],
         ),
       ),
