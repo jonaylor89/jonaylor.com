@@ -23,6 +23,7 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/android-apk.yml
+    secrets: inherit
     with:
       app: parlo
       display-name: Parlo

@@ -14,7 +14,7 @@ android {
         applicationId = "com.parlo.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
+        versionCode = providers.gradleProperty("releaseVersionCode").orElse("1").get().toInt()
         versionName = "0.1.0"
         buildConfigField("boolean", "IS_DEVELOPMENT", "false")
         vectorDrawables { useSupportLibrary = true }
@@ -22,7 +22,7 @@ android {
     }
 
     buildTypes {
-        // Keep debug/release identity unchanged: CI currently distributes assembleDebug.
+        // Development builds coexist with the signed release distributed through Obtainium.
         create("dev") {
             initWith(getByName("debug"))
             applicationIdSuffix = ".dev"

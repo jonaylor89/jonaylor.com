@@ -56,6 +56,51 @@ const INSTALLS: Record<string, Install> = {
 	},
 };
 
+// additionalSettings is a JSON string in Obtainium's import/share format.
+// Ignore Android version-name detection: our release tags contain app prefixes and
+// CI build numbers not present in the APK's human-readable versionName.
+const OBTAINIUM_APPS = [
+	{ slug: "paperclock", id: "com.paperclock", name: "Paper Clock", apk: "^PaperClock-.*\\.apk$", signedOnly: true },
+	{ slug: "saintjohn", id: "com.jonaylor.saintjohn", name: "Saint John", apk: "^app-release\\.apk$", signedOnly: false },
+	{ slug: "parlo", id: "com.parlo.app", name: "Parlo", apk: "^Parlo-.*\\.apk$", signedOnly: true },
+	{ slug: "prego", id: "dev.vcuram.prego", name: "Prego", apk: "^Prego-.*\\.apk$", signedOnly: false },
+].map(({ slug, id, name, apk, signedOnly }) => ({
+	slug,
+	config: {
+		id,
+		url: "https://github.com/jonaylor89/jonaylor.com",
+		author: "jonaylor89",
+		name,
+		additionalSettings: JSON.stringify({
+			filterReleaseTitlesByRegEx: `^${name} v${signedOnly ? ".* \\(signed\\)$" : ""}`,
+			apkFilterRegEx: apk,
+			verifyLatestTag: false,
+			fallbackToOlderReleases: true,
+			sortMethodChoice: "date",
+			noVersionDetection: true,
+		}),
+	},
+}));
+
+function obtainiumResponse(path: string): Response | null {
+	if (path === "/obtainium.json") {
+		return new Response(JSON.stringify(OBTAINIUM_APPS.map(({ config }) => config)), {
+			headers: {
+				"Content-Type": "application/json; charset=utf-8",
+				"Content-Disposition": 'attachment; filename="jonaylor-obtainium.json"',
+			},
+		});
+	}
+	if (!path.startsWith("/obtainium/")) return null;
+	const slug = path.slice("/obtainium/".length);
+	const app = OBTAINIUM_APPS.find((app) => app.slug === slug);
+	if (!app && slug !== "all") return new Response("Unknown app", { status: 404 });
+	const action = app ? "app" : "apps";
+	const payload = app ? app.config : OBTAINIUM_APPS.map(({ config }) => config);
+	const deepLink = `obtainium://${action}/${encodeURIComponent(JSON.stringify(payload))}`;
+	return Response.redirect(`https://apps.obtainium.imranr.dev/redirect?r=${deepLink}`, 302);
+}
+
 type ReleaseAsset = {
 	name: string;
 	downloadUrl: string;
@@ -114,7 +159,7 @@ async function getLatestAsset(path: string, install: Install): Promise<ReleaseAs
 
 function downloadHelp(): Response {
 	return new Response(
-		"Use /paperclock.apk, /saintjohn.apk, /parlo.apk, or /prego.apk to download the latest Android release, or /fuego.dmg for Fuego for macOS.",
+		"Use /paperclock.apk, /saintjohn.apk, /parlo.apk, or /prego.apk to download the latest Android release, or /fuego.dmg for Fuego for macOS. Use /obtainium/paperclock, /obtainium/saintjohn, /obtainium/parlo, /obtainium/prego, or /obtainium/all to add apps to Obtainium; /obtainium.json is the import file.",
 		{
 			headers: { "Content-Type": "text/plain; charset=utf-8" },
 		},
@@ -124,6 +169,10 @@ function downloadHelp(): Response {
 export default {
 	async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url);
+		if (url.hostname === "downloads.jonaylor.com") {
+			const obtainium = obtainiumResponse(url.pathname);
+			if (obtainium) return obtainium;
+		}
 		const install: Install | undefined = INSTALLS[url.pathname];
 
 		if (install) {

@@ -81,6 +81,61 @@ test("existing Android downloads retain their app-specific asset naming", async 
   );
 });
 
+function configFromRedirect(response, action = "app") {
+  assert.equal(response.status, 302);
+  const location = response.headers.get("location");
+  const prefix = `https://apps.obtainium.imranr.dev/redirect?r=obtainium://${action}/`;
+  assert.ok(location.startsWith(prefix));
+  return JSON.parse(decodeURIComponent(location.slice(prefix.length)));
+}
+
+test("Obtainium links contain separate app IDs and monorepo-safe filters", async () => {
+  const fixtures = [
+    ["paperclock", "com.paperclock", "Paper Clock v1.0 · build 8 (signed)", "PaperClock-v1.0-build.8.apk"],
+    ["saintjohn", "com.jonaylor.saintjohn", "Saint John v1.5", "app-release.apk"],
+    ["parlo", "com.parlo.app", "Parlo v0.1.0 · build 16 (signed)", "Parlo-v0.1.0-build.16.apk"],
+    ["prego", "dev.vcuram.prego", "Prego v1.0.0 · build 3", "Prego-v1.0.0-build.3.apk"],
+  ];
+  for (const [slug, id, title, apk] of fixtures) {
+    const config = configFromRedirect(await download(`/obtainium/${slug}`));
+    assert.equal(config.id, id);
+    assert.equal(config.url, "https://github.com/jonaylor89/jonaylor.com");
+    const settings = JSON.parse(config.additionalSettings);
+    assert.equal(settings.verifyLatestTag, false);
+    assert.equal(settings.fallbackToOlderReleases, true);
+    assert.equal(settings.noVersionDetection, true);
+    assert.equal(settings.sortMethodChoice, "date");
+    const titleFilter = new RegExp(settings.filterReleaseTitlesByRegEx);
+    const apkFilter = new RegExp(settings.apkFilterRegEx);
+    assert.ok(titleFilter.test(title));
+    assert.ok(apkFilter.test(apk));
+    assert.equal(apkFilter.test(`${apk}.sha256`), false);
+    for (const [, otherId, otherTitle, otherApk] of fixtures) {
+      if (otherId === id) continue;
+      assert.equal(titleFilter.test(otherTitle), false);
+      assert.equal(apkFilter.test(otherApk), false);
+    }
+    if (slug === "paperclock" || slug === "parlo") {
+      assert.equal(titleFilter.test(title.replace(" (signed)", "")), false);
+    }
+  }
+});
+
+test("bulk Obtainium link and import file contain the same four configs", async () => {
+  const configs = configFromRedirect(await download("/obtainium/all"), "apps");
+  const response = await download("/obtainium.json");
+  assert.match(response.headers.get("content-type"), /application\/json/);
+  assert.match(response.headers.get("content-disposition"), /jonaylor-obtainium.json/);
+  assert.deepEqual(await response.json(), configs);
+  assert.equal(new Set(configs.map((app) => app.id)).size, 4);
+});
+
+test("unknown Obtainium app is rejected and other host redirects remain unchanged", async () => {
+  assert.equal((await download("/obtainium/unknown")).status, 404);
+  const response = await worker.fetch(new Request("https://blog.jonaylor.com/obtainium/prego"));
+  assert.equal(response.headers.get("location"), "https://jonaylor.com/blog/obtainium/prego");
+});
+
 test("downloads help advertises the stable Prego APK route", async () => {
   const response = await download("/");
   assert.equal(response.status, 200);

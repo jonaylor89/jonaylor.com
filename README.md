@@ -60,7 +60,9 @@ pnpm android:saintjohn:build
 pnpm android:parlo:build
 ```
 
-Their GitHub Actions workflows build and publish app-specific releases with `paperclock-v*`, `saintjohn-v*`, and `parlo-v*` tags. Paper Clock and Parlo share the reusable [`android-apk.yml`](.github/workflows/android-apk.yml) workflow, which builds a debug APK on pull requests and publishes it as a GitHub Release on `main`.
+Their GitHub Actions workflows build and publish app-specific releases with `paperclock-v*`, `saintjohn-v*`, and `parlo-v*` tags. Paper Clock and Parlo share the reusable [`android-apk.yml`](.github/workflows/android-apk.yml) workflow, which checks debug and unsigned release APKs on pull requests, then signs and publishes the tested release APK on `main`. Release signing uses the existing repository Android signing secrets; release version codes are `1000 + github.run_number` (do not reset the workflow run counter).
+
+For installation and automatic updates on Android/GrapheneOS, see the [Obtainium setup guide](android/OBTAINIUM.md), including one-tap imports for all four Android/Flutter apps.
 
 ### macOS
 

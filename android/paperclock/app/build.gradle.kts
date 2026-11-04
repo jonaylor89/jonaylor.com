@@ -10,7 +10,7 @@ kapt { arguments { arg("room.schemaLocation", "$projectDir/schemas") } }
 android {
     namespace = "com.paperclock"
     compileSdk = 36
-    defaultConfig { applicationId = "com.paperclock"; minSdk = 26; targetSdk = 36; versionCode = 1; versionName = "1.0" }
+    defaultConfig { applicationId = "com.paperclock"; minSdk = 26; targetSdk = 36; versionCode = providers.gradleProperty("releaseVersionCode").orElse("1").get().toInt(); versionName = "1.0" }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_21; targetCompatibility = JavaVersion.VERSION_21 }
     kotlinOptions { jvmTarget = "21" }
