@@ -20,25 +20,19 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/fonts/DMSans-OFL.txt
-    - assets/fonts/Fraunces-OFL.txt
-    - assets/fonts/DMMono-OFL.txt
+    - assets/fonts/AtkinsonHyperlegible-OFL.txt
+    - assets/fonts/AtkinsonHyperlegibleMono-OFL.txt
+    - assets/fonts/Shrikhand-OFL.txt
   fonts:
-    - family: DM Mono
+    - family: Atkinson Hyperlegible
       fonts:
-        - asset: assets/fonts/DMMono-500.ttf
-          weight: 500
-    - family: DM Sans
-      fonts:
-        - asset: assets/fonts/DMSans-400.ttf
+        - asset: assets/fonts/AtkinsonHyperlegible-Regular.ttf
           weight: 400
-        - asset: assets/fonts/DMSans-500.ttf
-          weight: 500
-        - asset: assets/fonts/DMSans-600.ttf
-          weight: 600
-        - asset: assets/fonts/DMSans-700.ttf
+        - asset: assets/fonts/AtkinsonHyperlegible-Bold.ttf
           weight: 700
-    - family: Fraunces
+    - family: Atkinson Hyperlegible Mono
       fonts:
-        - asset: assets/fonts/Fraunces-600.ttf
-          weight: 600
+        - asset: assets/fonts/AtkinsonHyperlegibleMono-Variable.ttf
+    - family: Shrikhand
+      fonts:
+        - asset: assets/fonts/Shrikhand-Regular.ttf

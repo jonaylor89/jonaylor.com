@@ -10,7 +10,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   LicenseRegistry.addLicense(() async* {
-    for (final font in ['DMSans', 'Fraunces', 'DMMono']) {
+    for (final font in [
+      'AtkinsonHyperlegible',
+      'AtkinsonHyperlegibleMono',
+      'Shrikhand',
+    ]) {
       yield LicenseEntryWithLineBreaks([
         font,
       ], await rootBundle.loadString('assets/fonts/$font-OFL.txt'));
@@ -52,14 +56,15 @@ class _MyAppState extends State<MyApp> {
       theme: ThemeData(
         useMaterial3: true,
         brightness: _darkMode ? Brightness.dark : Brightness.light,
-        scaffoldBackgroundColor: colors.background,
-        fontFamily: 'DM Sans',
+        scaffoldBackgroundColor: colors.strip,
+        fontFamily: 'Atkinson Hyperlegible',
         colorScheme: ColorScheme.fromSeed(
-          seedColor: colors.accent,
+          seedColor: colors.dye,
           brightness: _darkMode ? Brightness.dark : Brightness.light,
-          surface: colors.surface,
-          primary: colors.accent,
-          onSurface: colors.ink,
+          surface: colors.plastic,
+          primary: colors.dye,
+          onPrimary: colors.onDye,
+          onSurface: colors.pine,
         ),
       ),
       home: MyHomePage(onChangeTheme: _changeTheme),
@@ -74,13 +79,25 @@ class _Palette {
       _Palette(dark: Theme.of(context).brightness == Brightness.dark);
 
   final bool dark;
-  Color get background => Color(dark ? 0xFF1B211E : 0xFFF4F1E7);
-  Color get surface => Color(dark ? 0xFF262F29 : 0xFFFFFDF6);
-  Color get ink => Color(dark ? 0xFFF7F3E8 : 0xFF282D26);
-  Color get muted => Color(dark ? 0xFFB5BCAF : 0xFF686D61);
-  Color get accent => Color(dark ? 0xFFF68C74 : 0xFFBA402F);
-  Color get onAccent => Color(dark ? 0xFF241D19 : 0xFFFFFDF6);
-  Color get blush => Color(dark ? 0xFF473A32 : 0xFFF5E2D6);
+
+  // Prego design system tokens.
+  Color get strip => Color(dark ? 0xFF0B2320 : 0xFFDCF5E7);
+  Color get plastic => Color(dark ? 0xFF14352F : 0xFFFBFFFD);
+  Color get window => Color(dark ? 0xFF1D463E : 0xFFC4EBD6);
+  Color get pine => Color(dark ? 0xFFE8FBF2 : 0xFF0F2A25);
+  Color get pineSoft => Color(dark ? 0xFFA6C8BC : 0xFF38544C);
+  Color get dye => Color(dark ? 0xFFFF74B4 : 0xFFB50E62);
+  Color get onDye => Color(dark ? 0xFF2B0518 : 0xFFFFFFFF);
+  Color get dyeDeep => Color(dark ? 0xFFA82A6C : 0xFF7D0A44);
+  Color get wash => Color(dark ? 0xFF4A1231 : 0xFFFFD6E7);
+  Color get stickShadow => Color(dark ? 0xFF04110F : 0xFF9CCDB4);
+
+  // The stick is a physical object, so it keeps its colors in both themes.
+  static const stickBody = Color(0xFFFBFFFD);
+  static const stickCap = Color(0xFF7FE0B8);
+  static const stickRib = Color(0xFF3FBF92);
+  static const stickWindow = Color(0xFFDCF5E7);
+  static const stickLine = Color(0xFFB50E62);
 }
 
 enum _Phase { ready, collecting, thinking, result }
@@ -160,7 +177,7 @@ class _MyHomePageState extends State<MyHomePage> {
           (colors.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
               .copyWith(
                 statusBarColor: Colors.transparent,
-                systemNavigationBarColor: colors.background,
+                systemNavigationBarColor: colors.strip,
               ),
       child: Scaffold(
         body: SafeArea(
@@ -224,12 +241,12 @@ class _MyHomePageState extends State<MyHomePage> {
                         children: [
                           TextSpan(
                             text: '.',
-                            style: TextStyle(color: colors.accent),
+                            style: TextStyle(color: colors.dye),
                           ),
                         ],
                       ),
                       textScaler: TextScaler.noScaling,
-                      style: _display(colors, 32),
+                      style: _display(colors, 34),
                     ),
                   ),
                 ),
@@ -241,9 +258,9 @@ class _MyHomePageState extends State<MyHomePage> {
           onPressed: widget.onChangeTheme,
           tooltip: colors.dark ? 'Switch to light mode' : 'Switch to dark mode',
           icon: Icon(
-            colors.dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-            size: 20,
-            color: colors.muted,
+            colors.dark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+            size: 24,
+            color: colors.pine,
           ),
         ),
       ],
@@ -265,19 +282,16 @@ class _MyHomePageState extends State<MyHomePage> {
       children: [
         _TestIllustration(
           active: active,
-          symbol: result ? (_isPregnant ? '+' : '−') : '?',
+          lines: switch (_phase) {
+            _Phase.ready || _Phase.collecting => 0,
+            _Phase.thinking => 1,
+            _Phase.result => _isPregnant ? 2 : 1,
+          },
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 32),
         if (result)
-          Semantics(
-            liveRegion: true,
-            child: Text(
-              _isPregnant ? 'Pregnant.' : 'Not pregnant.',
-              textAlign: TextAlign.center,
-              style: _display(colors, 40),
-            ),
-          )
-        else
+          _ResultSheet(pregnant: _isPregnant, count: status)
+        else ...[
           Semantics(
             label: 'Elapsed time',
             value: _formatDuration(_stopwatch.elapsed),
@@ -288,29 +302,34 @@ class _MyHomePageState extends State<MyHomePage> {
                 _formatDuration(_stopwatch.elapsed),
                 key: const ValueKey('elapsed-time'),
                 style: TextStyle(
-                  color: colors.ink,
-                  fontFamily: 'DM Mono',
-                  fontSize: 52,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: -2,
-                  height: 1.1,
+                  color: colors.pine,
+                  fontFamily: 'Atkinson Hyperlegible Mono',
+                  fontSize: 56,
+                  fontVariations: const [FontVariation('wght', 500)],
+                  letterSpacing: -1.12,
+                  height: 60 / 56,
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
             ),
           ),
-        const SizedBox(height: 10),
-        Semantics(
-          liveRegion: true,
-          child: Text(
-            status,
-            textAlign: TextAlign.center,
-            style: TextStyle(color: colors.muted, fontSize: 14, height: 1.5),
+          const SizedBox(height: 8),
+          Semantics(
+            liveRegion: true,
+            child: Text(
+              status,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: colors.pineSoft,
+                fontSize: 16,
+                height: 1.5,
+              ),
+            ),
           ),
-        ),
+        ],
         const SizedBox(height: 32),
         Align(
-          child: FilledButton(
+          child: _ActionButton(
             key: const ValueKey('primary-action'),
             onPressed: switch (_phase) {
               _Phase.ready => _start,
@@ -318,26 +337,12 @@ class _MyHomePageState extends State<MyHomePage> {
               _Phase.thinking => null,
               _Phase.result => _reset,
             },
-            style: FilledButton.styleFrom(
-              backgroundColor: colors.accent,
-              foregroundColor: colors.onAccent,
-              disabledBackgroundColor: colors.blush,
-              disabledForegroundColor: colors.muted,
-              minimumSize: const Size(184, 56),
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-              shape: const StadiumBorder(),
-              textStyle: const TextStyle(
-                fontFamily: 'DM Sans',
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            child: Text(switch (_phase) {
+            label: switch (_phase) {
               _Phase.ready => 'Start',
               _Phase.collecting => 'Reveal',
               _Phase.thinking => 'Thinking…',
               _Phase.result => 'Try again',
-            }, textAlign: TextAlign.center),
+            },
           ),
         ),
       ],
@@ -345,20 +350,183 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 }
 
-TextStyle _display(_Palette colors, double size) => TextStyle(
-  fontFamily: 'Fraunces',
+TextStyle _display(_Palette colors, double size, {Color? color}) => TextStyle(
+  fontFamily: 'Shrikhand',
   fontSize: size,
-  fontWeight: FontWeight.w600,
-  height: 1.12,
-  letterSpacing: -1.3,
-  color: colors.ink,
+  fontWeight: FontWeight.w400,
+  height: 1.14,
+  color: color ?? colors.pine,
 );
 
+class _ResultSheet extends StatelessWidget {
+  const _ResultSheet({required this.pregnant, required this.count});
+
+  final bool pregnant;
+  final String count;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = _Palette.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: pregnant ? colors.wash : colors.plastic,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            Semantics(
+              liveRegion: true,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  pregnant ? 'Pregnant.' : 'Not pregnant.',
+                  textAlign: TextAlign.center,
+                  style: _display(
+                    colors,
+                    44,
+                    color: pregnant ? colors.dye : colors.pine,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Semantics(
+              liveRegion: true,
+              child: Text(
+                count,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: colors.pine,
+                  fontFamily: 'Atkinson Hyperlegible Mono',
+                  fontSize: 20,
+                  fontVariations: const [FontVariation('wght', 500)],
+                  height: 1.3,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Results are random. Not medical advice.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: colors.pineSoft,
+                fontSize: 13,
+                height: 18 / 13,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionButton extends StatefulWidget {
+  const _ActionButton({super.key, required this.label, this.onPressed});
+
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  State<_ActionButton> createState() => _ActionButtonState();
+}
+
+class _ActionButtonState extends State<_ActionButton> {
+  static const _offset = 4.0;
+
+  bool _pressed = false;
+  bool _focused = false;
+
+  void _setPressed(bool value) {
+    if (value != _pressed) setState(() => _pressed = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = _Palette.of(context);
+    // The button presses into its offset, and stays down while it is disabled.
+    final sunk = _pressed || widget.onPressed == null;
+    final showFocus =
+        _focused &&
+        FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: _offset),
+      child: Listener(
+        onPointerDown: (_) => _setPressed(true),
+        onPointerUp: (_) => _setPressed(false),
+        onPointerCancel: (_) => _setPressed(false),
+        child: AnimatedContainer(
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 100),
+          curve: Curves.easeOut,
+          transform: Matrix4.translationValues(0, sunk ? _offset : 0, 0),
+          decoration: ShapeDecoration(
+            shape: const StadiumBorder(),
+            shadows: [
+              if (!sunk)
+                BoxShadow(
+                  color: colors.dyeDeep,
+                  offset: const Offset(0, _offset),
+                ),
+            ],
+          ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              FilledButton(
+                onPressed: widget.onPressed,
+                onFocusChange: (value) => setState(() => _focused = value),
+                style: FilledButton.styleFrom(
+                  backgroundColor: colors.dye,
+                  foregroundColor: colors.onDye,
+                  disabledBackgroundColor: colors.wash,
+                  disabledForegroundColor: colors.pineSoft,
+                  minimumSize: const Size(184, 56),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 16,
+                  ),
+                  shape: const StadiumBorder(),
+                  textStyle: const TextStyle(
+                    fontFamily: 'Atkinson Hyperlegible',
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                child: Text(widget.label, textAlign: TextAlign.center),
+              ),
+              if (showFocus)
+                Positioned.fill(
+                  left: -5,
+                  top: -5,
+                  right: -5,
+                  bottom: -5,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: ShapeDecoration(
+                        shape: StadiumBorder(
+                          side: BorderSide(color: colors.dye, width: 3),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _TestIllustration extends StatefulWidget {
-  const _TestIllustration({required this.active, required this.symbol});
+  const _TestIllustration({required this.active, required this.lines});
 
   final bool active;
-  final String symbol;
+  final int lines;
 
   @override
   State<_TestIllustration> createState() => _TestIllustrationState();
@@ -401,104 +569,24 @@ class _TestIllustrationState extends State<_TestIllustration>
   @override
   Widget build(BuildContext context) {
     final colors = _Palette.of(context);
-    // This is a decorative drawing, including its tiny printed wordmark.
-    return MediaQuery.withNoTextScaling(
-      child: ExcludeSemantics(
-        child: SizedBox(
-          height: 200,
-          child: AnimatedBuilder(
+    return ExcludeSemantics(
+      child: SizedBox(
+        height: 200,
+        // The dye develops: each result line fades in after the one before it.
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(end: widget.lines.toDouble()),
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 600),
+          builder: (context, developed, _) => AnimatedBuilder(
             animation: _animation,
-            builder: (context, child) => CustomPaint(
-              painter: _OrbitPainter(
+            builder: (context, _) => CustomPaint(
+              size: Size.infinite,
+              painter: _StickPainter(
                 colors: colors,
                 progress: _animation.value,
                 active: widget.active,
-              ),
-              child: Center(
-                child: Transform.rotate(
-                  angle: -0.18 + sin(_animation.value * pi * 2) * 0.025,
-                  child: child,
-                ),
-              ),
-            ),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: SizedBox(
-                width: 234,
-                height: 60,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFFDF6),
-                    borderRadius: BorderRadius.circular(30),
-                    border: Border.all(color: const Color(0xFFD5D7CB)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.09),
-                        offset: const Offset(0, 8),
-                        blurRadius: 0,
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 25),
-                      Container(
-                        width: 65,
-                        height: 31,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE7EBDF),
-                          border: Border.all(color: const Color(0xFFC8CEBD)),
-                          borderRadius: BorderRadius.circular(7),
-                        ),
-                        child: Text(
-                          widget.symbol,
-                          style: const TextStyle(
-                            fontSize: 23,
-                            height: 1,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF555F4C),
-                          ),
-                        ),
-                      ),
-                      const Spacer(),
-                      const Text(
-                        'prego.',
-                        style: TextStyle(
-                          fontFamily: 'Fraunces',
-                          fontSize: 12,
-                          color: Color(0xFF686D61),
-                        ),
-                      ),
-                      const SizedBox(width: 13),
-                      Container(
-                        width: 56,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFDF765F),
-                          borderRadius: BorderRadius.horizontal(
-                            right: Radius.circular(29),
-                          ),
-                        ),
-                        child: Center(
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: List.generate(
-                              3,
-                              (_) => Container(
-                                width: 2,
-                                height: 23,
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 3,
-                                ),
-                                color: const Color(0xFFC75F4B),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                developed: developed,
               ),
             ),
           ),
@@ -508,40 +596,94 @@ class _TestIllustrationState extends State<_TestIllustration>
   }
 }
 
-class _OrbitPainter extends CustomPainter {
-  const _OrbitPainter({
+/// Draws the app icon's stick, using the same 108-unit grid.
+class _StickPainter extends CustomPainter {
+  const _StickPainter({
     required this.colors,
     required this.progress,
     required this.active,
+    required this.developed,
   });
+
+  static const _scale = 2.4;
+  static const _gridCenter = 54.0;
+  static const _tilt = 20 * pi / 180;
+  static const _shadowDrop = 6.0;
 
   final _Palette colors;
   final double progress;
   final bool active;
+  final double developed;
+
+  RRect _rect(double x, double y, double width, double height, double radius) =>
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          (x - _gridCenter) * _scale,
+          (y - _gridCenter) * _scale,
+          width * _scale,
+          height * _scale,
+        ),
+        Radius.circular(radius * _scale),
+      );
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
-    canvas.drawCircle(center, 84, Paint()..color = colors.blush);
+    canvas.drawCircle(center, 84, Paint()..color = colors.window);
     if (active) {
-      final paint = Paint()
-        ..color = colors.accent
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..strokeCap = StrokeCap.round;
       canvas.drawArc(
         Rect.fromCircle(center: center, radius: 96),
         progress * pi * 2,
         pi / 3,
         false,
-        paint,
+        Paint()
+          ..color = colors.dye
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3
+          ..strokeCap = StrokeCap.round,
       );
     }
+
+    final tilt = _tilt + sin(progress * pi * 2) * 0.025;
+    final body = _rect(43.5, 23, 21, 62, 10.5);
+
+    canvas
+      ..save()
+      ..translate(center.dx, center.dy + _shadowDrop)
+      ..rotate(tilt)
+      ..drawRRect(body, Paint()..color = colors.stickShadow)
+      ..restore();
+
+    final rib = Paint()..color = _Palette.stickRib;
+    final cap = Paint()..color = _Palette.stickCap;
+    canvas
+      ..save()
+      ..translate(center.dx, center.dy)
+      ..rotate(tilt)
+      ..drawRRect(body, Paint()..color = _Palette.stickBody)
+      ..drawRRect(_rect(43.5, 67, 21, 18, 10.5), cap)
+      ..drawRRect(_rect(43.5, 67, 21, 8, 0), cap)
+      ..drawRRect(_rect(48.5, 72, 11, 2.3, 1.15), rib)
+      ..drawRRect(_rect(48.5, 77, 11, 2.3, 1.15), rib)
+      ..drawRRect(
+        _rect(47, 33, 14, 27, 4.5),
+        Paint()..color = _Palette.stickWindow,
+      );
+    for (final (index, y) in const [39.0, 49.0].indexed) {
+      final opacity = (developed - index).clamp(0.0, 1.0);
+      if (opacity == 0) continue;
+      canvas.drawRRect(
+        _rect(49.5, y, 9, 3.8, 1.9),
+        Paint()..color = _Palette.stickLine.withValues(alpha: opacity),
+      );
+    }
+    canvas.restore();
   }
 
   @override
-  bool shouldRepaint(covariant _OrbitPainter oldDelegate) =>
+  bool shouldRepaint(covariant _StickPainter oldDelegate) =>
       oldDelegate.progress != progress ||
       oldDelegate.active != active ||
+      oldDelegate.developed != developed ||
       oldDelegate.colors.dark != colors.dark;
 }

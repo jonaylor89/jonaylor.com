@@ -8,7 +8,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   late SharedPreferences preferences;
-  final action = find.byKey(const ValueKey('primary-action'));
+  final action = find.descendant(
+    of: find.byKey(const ValueKey('primary-action')),
+    matching: find.byType(FilledButton),
+  );
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
@@ -61,14 +64,16 @@ void main() {
   testWidgets(
     'timer digits keep a fixed width with the bundled monospace font',
     (tester) async {
-      final font = FontLoader('DM Mono')
-        ..addFont(rootBundle.load('assets/fonts/DMMono-500.ttf'));
+      final font = FontLoader('Atkinson Hyperlegible Mono')
+        ..addFont(
+          rootBundle.load('assets/fonts/AtkinsonHyperlegibleMono-Variable.ttf'),
+        );
       await font.load();
       await tester.pumpWidget(MyApp(preferences: preferences));
       final timer = tester.widget<Text>(
         find.byKey(const ValueKey('elapsed-time')),
       );
-      expect(timer.style!.fontFamily, 'DM Mono');
+      expect(timer.style!.fontFamily, 'Atkinson Hyperlegible Mono');
 
       double width(String value) {
         final painter = TextPainter(
