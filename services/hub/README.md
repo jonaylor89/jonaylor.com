@@ -1,18 +1,17 @@
 # Hub
 
-Personal services hub built with Rust, Axum, and PostgreSQL. Hosts the email newsletter, a pastebin for shareable text snippets, the pi-thread-vault (captured coding-agent sessions), and the unified admin portal.
+Personal services hub built with Rust, Axum, and SQLite, with Redis-backed sessions and optional LanceDB memory storage. Hosts the email newsletter, a pastebin for shareable text snippets, the pi-thread-vault (captured coding-agent sessions), and the unified admin portal.
 
 ## Setup
 
 ```bash
-# Start PostgreSQL and Redis
-./scripts/init_db.sh
+# Start Redis for sessions
 ./scripts/init_redis.sh
 
-# Run migrations
-sqlx migrate run
+# Prepare local embedded storage
+mkdir -p data
 
-# Run the application
+# Run the application; SQLite is created and migrated at startup
 cargo run
 ```
 
@@ -35,28 +34,9 @@ Use `--dry-run` to preview counts. Requires `bash`, `jq`, `curl`, and `shasum`/`
 
 ## Container Usage
 
-The container image does not include the `configuration/` directory. Mount it at runtime so the application can read `/app/configuration`.
+Use the maintained [`infra/services`](../../infra/services) Compose stack for deployment, persistent storage, Redis, and optional tunnel access.
 
-Example `docker compose` service:
-
-```yaml
-services:
-  app:
-    build: .
-    environment:
-      APP_ENVIRONMENT: production
-    volumes:
-      - ./configuration:/app/configuration:ro
-```
-
-Example `docker run`:
-
-```bash
-docker run \
-  -e APP_ENVIRONMENT=production \
-  -v "$(pwd)/configuration:/app/configuration:ro" \
-  <image-name>
-```
+The container reads `/app/configuration/base.yaml` and `/app/configuration/production.yaml` at runtime. The stack mounts both read-only, supplies secrets through local environment variables, and persists SQLite, vault blobs, and optional memory data under `/app/data`. No Postgres server is required.
 
 ## Jonaylor CLI
 

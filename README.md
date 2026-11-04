@@ -18,6 +18,16 @@ cd jonaylor.com
 pnpm install
 ```
 
+## Self-hosting
+
+[`infra/media`](infra/media) contains a portable Docker Compose media stack,
+a small validation/bootstrap script, and storage, migration, music import, and backup
+instructions. Deployment-specific settings stay in an ignored local `.env` file.
+
+[`infra/services`](infra/services) manages Hub, Redis, Gitea, Uptime Kuma, and an
+optional Cloudflare Tunnel. Both stacks use ordinary Docker Compose, pinned images,
+and private local configuration; workstation setup stays in the dotfiles repository.
+
 ## Pokémon Yellow
 
 `apps/pokemon-yellow` is a browser game with guest saves and optional Better Auth accounts,

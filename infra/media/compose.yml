@@ -1,0 +1,120 @@
+name: media
+
+# Images are pinned to immutable digests; update deliberately, separately from migration.
+services:
+  jellyfin:
+    image: jellyfin/jellyfin@sha256:333b647716631443a43c7fabac4b0c46b4e2f036bad19547e00958f10f721b85
+    restart: unless-stopped
+    user: "${PUID:?Set PUID}:${PGID:?Set PGID}"
+    environment:
+      TZ: ${TZ:?Set TZ}
+    ports:
+      - "${BIND_ADDRESS:?Set BIND_ADDRESS}:8096:8096"
+    volumes:
+      - type: bind
+        source: ${APPDATA_DIR:?Set APPDATA_DIR}/jellyfin/config
+        target: /config
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${APPDATA_DIR}/jellyfin/cache
+        target: /cache
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${MEDIA_DIR:?Set MEDIA_DIR}/tv
+        target: /data/tv
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${MEDIA_DIR:?Set MEDIA_DIR}/movies
+        target: /data/movies
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${MEDIA_DIR:?Set MEDIA_DIR}/music
+        target: /data/music
+        read_only: true
+        bind:
+          create_host_path: false
+
+  transmission:
+    image: ghcr.io/linuxserver/transmission@sha256:25e04da44850ac03f93c9a2cfc4275c67ff0973e49eca48b459b06e0b45d7b82
+    restart: unless-stopped
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+    ports:
+      - "${BIND_ADDRESS}:9091:9091"
+    volumes:
+      - type: bind
+        source: ${APPDATA_DIR}/transmission
+        target: /config
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${MEDIA_DIR}
+        target: /data
+        bind:
+          create_host_path: false
+
+  sonarr:
+    image: ghcr.io/linuxserver/sonarr@sha256:21c1c3d52248589bb064f5adafec18cad45812d7a01d317472955eef051e619b
+    restart: unless-stopped
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+    ports:
+      - "${BIND_ADDRESS}:8989:8989"
+    volumes:
+      - type: bind
+        source: ${APPDATA_DIR}/sonarr
+        target: /config
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${MEDIA_DIR}
+        target: /data
+        bind:
+          create_host_path: false
+
+  radarr:
+    image: ghcr.io/linuxserver/radarr@sha256:ca43905eaf2dd11425efdcfe184892e43806b1ae0a830440c825cecbc2629cfb
+    restart: unless-stopped
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+    ports:
+      - "${BIND_ADDRESS}:7878:7878"
+    volumes:
+      - type: bind
+        source: ${APPDATA_DIR}/radarr
+        target: /config
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${MEDIA_DIR}
+        target: /data
+        bind:
+          create_host_path: false
+
+  prowlarr:
+    image: ghcr.io/linuxserver/prowlarr@sha256:a8fe7b9c502f979146b6d0f22438b825c38e068241bb8a708c473062dffdbb03
+    restart: unless-stopped
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+    ports:
+      - "${BIND_ADDRESS}:9696:9696"
+    volumes:
+      - type: bind
+        source: ${APPDATA_DIR}/prowlarr
+        target: /config
+        bind:
+          create_host_path: false
