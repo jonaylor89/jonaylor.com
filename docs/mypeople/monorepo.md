@@ -65,8 +65,14 @@ Live Docker tests and private-device diagnostics remain opt-in; no personal
 credentials are supplied to CI. Optional OSINT/browser suites are not installed
 in the base CI job.
 
-Both workflows first call `mypeople-security.yml`, which scans a tracked snapshot
-of all three MyPeople directories using pinned Gitleaks with redacted output.
+[`macos-mypeople.yml`](../../.github/workflows/macos-mypeople.yml) runs on Mac app, CLI,
+or documentation changes, because the app depends on the engine's protocol. It runs the
+Swift tests, including one against the real Python engine with a throwaway database, and
+builds an unsigned Release. The CLI workflow also runs when the fixture it shares with the
+Swift tests changes. See the [Mac app's architecture](macos.md).
+
+All three workflows first call `mypeople-security.yml`, which scans a tracked snapshot
+of all four MyPeople directories using pinned Gitleaks with redacted output.
 It does not scan historical commits or unrelated monorepo projects.
 
 Android uses the shared `android-apk.yml`: JDK 25 for Gradle, JDK 17 for compilation,

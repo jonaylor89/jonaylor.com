@@ -20,6 +20,6 @@ jobs:
           SNAPSHOT="$(mktemp -d)"
           trap 'rm -rf "$SNAPSHOT"' EXIT
           # Export only tracked files, never ignored developer data or .git history.
-          git archive HEAD android/mypeople cli/mypeople docs/mypeople | tar -x -C "$SNAPSHOT"
+          git archive HEAD android/mypeople cli/mypeople docs/mypeople macos/mypeople | tar -x -C "$SNAPSHOT"
           docker run --rm -v "$SNAPSHOT:/scan:ro" \
             ghcr.io/gitleaks/gitleaks:v8.30.1 dir /scan --redact=100 --no-banner

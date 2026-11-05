@@ -20,6 +20,7 @@ from rich.spinner import Spinner
 from rich.table import Table
 from rich.text import Text
 
+from . import jobevents
 from .extract import ExtractionPlan, ExtractionUpdate
 
 ACCENT = "#67d5cf"
@@ -145,6 +146,8 @@ class ExtractionProgress:
             self.batch_started = None
         self.states[event.plan.person_id] = event  # reconcile estimates with actual unread work
         self.current = event
+        jobevents.emit("extract", phase=event.phase, person=safe(event.plan.name), person_id=event.plan.person_id,
+                       batch=event.batch, batches=event.plan.batches, eta=self.eta(), **self.totals())
         if event.phase == "done":
             totals = self.totals()
             text = (f"[{totals['people_done']}/{totals['people_total']}] {safe(event.plan.name)}: "

@@ -4,7 +4,7 @@ A memory for the people in your life: it keeps a living timeline of what's happe
 
 - [Pitch](../../docs/mypeople/pitch.md): the why, in story form.
 - [Brief](../../docs/mypeople/brief.md): concept, core objects (Person, Event, Interaction, Relationship, Moment), principles, and the hard problems.
-- [Android app](../../android/mypeople/README.md) · [Contacts migration and recovery](../../docs/mypeople/contacts.md) · [Local-first contact replication](../../docs/mypeople/contact-replication.md): offline contact editing/merging, causal peer reconciliation, Android integration, and encrypted backups.
+- [Android app](../../android/mypeople/README.md) · [Mac app](../../macos/mypeople/README.md) · [Contacts migration and recovery](../../docs/mypeople/contacts.md) · [Local-first contact replication](../../docs/mypeople/contact-replication.md): offline contact editing/merging, causal peer reconciliation, Android integration, and encrypted backups.
 
 This is the first prototype: a local, single-user CLI that proves the two riskiest ideas, **event extraction** and **moment ranking**, on your own data. Everything lives in one SQLite file (`~/.mypeople/mypeople.db`, or `$MYPEOPLE_DB`). Message text is sent to the configured model during `extract`, `note`, and `ask`. Optional public-profile discovery also sends minimal identity facts to Exa/the model and public usernames/URLs to scanned websites (see [Public profiles](#public-profiles)).
 

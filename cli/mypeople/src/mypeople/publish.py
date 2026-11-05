@@ -37,23 +37,35 @@ def _grouped(rows, key: str = "person_id") -> dict[int, list[sqlite3.Row]]:
     return out
 
 
-def records(conn: sqlite3.Connection, today: dt.date | None = None) -> tuple[dict[tuple[str, str], dict], dict[str, str]]:
-    """Everything the phone sees, keyed by (kind, id), plus the photo files they reference by hash."""
-    today = today or dt.date.today()
-    # Pick today's moments the way `mypeople today` does, so the phone and the CLI agree.
-    moments.today_moments(conn, today)
+def records(
+    conn: sqlite3.Connection, today: dt.date | None = None, *, people: set[int] | None = None, hash_photo=photo_hash,
+) -> tuple[dict[tuple[str, str], dict], dict[str, str]]:
+    """Everything the phone sees, keyed by (kind, id), plus the photo files they reference by hash.
 
-    people = conn.execute("SELECT * FROM people WHERE merged_into IS NULL AND is_me = 0").fetchall()
-    visible = {p["id"] for p in people}
-    aliases = _grouped(conn.execute("SELECT person_id, alias FROM aliases ORDER BY alias"))
+    `people` limits the result to those ids, for a caller that knows what an edit touched. That
+    skips the whole-database work: no moments are picked, and duplicate groups and contact
+    history are left out.
+    """
+    today = today or dt.date.today()
+    scoped = people is not None
+    ids = ", ".join(str(int(i)) for i in people) if scoped else ""
+    only = f" AND person_id IN ({ids})" if scoped else ""
+    if not scoped:
+        # Pick today's moments the way `mypeople today` does, so the phone and the CLI agree.
+        moments.today_moments(conn, today)
+
+    people_rows = conn.execute(
+        "SELECT * FROM people WHERE merged_into IS NULL AND is_me = 0" + (f" AND id IN ({ids})" if scoped else "")).fetchall()
+    visible = {p["id"] for p in people_rows}
+    aliases = _grouped(conn.execute(f"SELECT person_id, alias FROM aliases WHERE 1{only} ORDER BY alias"))
     identifiers = _grouped(conn.execute(
-        f"SELECT person_id, kind, value FROM identifiers WHERE kind NOT IN ({', '.join('?' * len(HIDDEN_IDENTIFIERS))}) "
+        f"SELECT person_id, kind, value FROM identifiers WHERE kind NOT IN ({', '.join('?' * len(HIDDEN_IDENTIFIERS))}){only} "
         "ORDER BY kind, value", HIDDEN_IDENTIFIERS))
     channels = _grouped(conn.execute(
-        "SELECT person_id, channel, COUNT(*) AS n, MIN(at) AS first, MAX(at) AS last FROM interactions "
+        f"SELECT person_id, channel, COUNT(*) AS n, MIN(at) AS first, MAX(at) AS last FROM interactions WHERE 1{only} "
         "GROUP BY person_id, channel ORDER BY n DESC"))
     best_photos = {r["person_id"]: r["path"] for r in conn.execute(
-        "SELECT person_id, path FROM photos p WHERE width = (SELECT MAX(width) FROM photos q WHERE q.person_id = p.person_id)")}
+        f"SELECT person_id, path FROM photos p WHERE width = (SELECT MAX(width) FROM photos q WHERE q.person_id = p.person_id){only}")}
 
     redirects: dict[int, list[str]] = {}
     for merged in conn.execute("SELECT id, contact_uid FROM people WHERE merged_into IS NOT NULL"):
@@ -62,12 +74,12 @@ def records(conn: sqlite3.Connection, today: dt.date | None = None) -> tuple[dic
     history = replica.load(conn)
     out: dict[tuple[str, str], dict] = {}
     files: dict[str, str] = {}
-    for p in people:
+    for p in people_rows:
         pid = p["id"]
         rel = relationships.infer(conn, pid, today)
         used = channels.get(pid, [])
         photo = None
-        if pid in best_photos and (photo := photo_hash(best_photos[pid])):
+        if pid in best_photos and (photo := hash_photo(best_photos[pid])):
             files[photo] = best_photos[pid]
         out[("person", str(pid))] = {
             "name": p["name"],
@@ -91,29 +103,31 @@ def records(conn: sqlite3.Connection, today: dt.date | None = None) -> tuple[dic
             "last_contact": max((c["last"] for c in used), default=None),
         }
 
-    for e in conn.execute("SELECT * FROM events WHERE status = 'active'"):
+    for e in conn.execute(f"SELECT * FROM events WHERE status = 'active'{only}"):
         if e["person_id"] in visible:
             out[("event", str(e["id"]))] = {
                 k: e[k] for k in ("person_id", "type", "value", "date", "confidence", "source", "evidence", "said_at", "created_at")
             }
 
     reviewable = {r["id"] for r in socials.suggestions(conn)}
-    for r in conn.execute("SELECT * FROM profiles WHERE status IN ('confirmed', 'suggested')"):
+    for r in conn.execute(f"SELECT * FROM profiles WHERE status IN ('confirmed', 'suggested'){only}"):
         if r["person_id"] in visible and (r["status"] == "confirmed" or r["id"] in reviewable):
             out[("profile", str(r["id"]))] = {
                 k: r[k] for k in ("person_id", "site", "url", "title", "status", "assessment", "reason", "confidence")
             }
 
     since = (today - dt.timedelta(days=MOMENT_DAYS)).isoformat()
-    for m in conn.execute("SELECT * FROM moments WHERE surfaced_on >= ?", (since,)):
+    for m in conn.execute(f"SELECT * FROM moments WHERE surfaced_on >= ?{only}", (since,)):
         if m["person_id"] in visible:
             out[("moment", m["key"])] = {k: m[k] for k in ("person_id", "kind", "reason", "context", "score", "surfaced_on", "status")}
 
+    if scoped:
+        return out, files
     for group in dupes.to_review(conn):
-        ids = sorted(r["id"] for r in group)
-        if all(i in visible for i in ids):
+        group_ids = sorted(r["id"] for r in group)
+        if all(i in visible for i in group_ids):
             clues = dupes.shared_clues([dupes.card(conn, r) for r in group], conn)
-            out[("dupes", "-".join(map(str, ids)))] = {"person_ids": ids, "clues": clues}
+            out[("dupes", "-".join(map(str, group_ids)))] = {"person_ids": group_ids, "clues": clues}
     for change in history.changes:
         out[("contact_change", change["id"])] = change
     return out, files

@@ -381,6 +381,8 @@ def serve(path: Path, password: str, source: str, *, minutes: int = 10, show: bo
     write_file(session_path, json.dumps(payload).encode())
     qrcode.make(json.dumps(payload, separators=(",", ":"))).save(qr_path)
     qr_path.chmod(0o600)
+    from . import jobevents
+    jobevents.emit("qr", path=str(qr_path), expires=expires)
     print(f"Bluetooth listener registered on RFCOMM channel {channel_id} (protocol v{version}).", flush=True)
     print(f"QR ready at {qr_path}. In MyPeople Settings, tap Scan Mac QR. Expires in {minutes} minutes.", flush=True)
     print("Approve OS pairing prompts. Keep this command running until both devices confirm sync.", flush=True)

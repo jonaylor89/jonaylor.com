@@ -869,6 +869,12 @@ def cmd_sync(conn, args) -> None:
         pass
 
 
+def cmd_app_server(conn, args) -> None:
+    from . import appserver
+
+    appserver.serve((args.db or db.default_path()).expanduser().resolve())
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mypeople", description=__doc__)
     parser.add_argument("--db", type=Path, help="database path (default ~/.mypeople/mypeople.db or $MYPEOPLE_DB)")
@@ -1063,6 +1069,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--host", default="127.0.0.1", help="address to listen on (default 127.0.0.1; use tailscale serve for HTTPS)")
     p.add_argument("--port", type=int, default=8765)
     p.set_defaults(func=cmd_server, needs_db=False)
+
+    p = sub.add_parser("app-server", help="the local engine behind the macOS app; speaks JSON over stdin/stdout")
+    p.set_defaults(func=cmd_app_server, needs_db=False)
     return parser
 
 

@@ -1,0 +1,69 @@
+name: MyPeople macOS
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "macos/mypeople/**"
+      - "cli/mypeople/**"
+      - "docs/mypeople/**"
+      - ".github/workflows/macos-mypeople.yml"
+      - ".github/workflows/mypeople-security.yml"
+  push:
+    branches: [main]
+    paths:
+      - "macos/mypeople/**"
+      - "cli/mypeople/**"
+      - "docs/mypeople/**"
+      - ".github/workflows/macos-mypeople.yml"
+      - ".github/workflows/mypeople-security.yml"
+
+concurrency:
+  group: macos-mypeople-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# Builds and tests without signing. There is no release workflow yet.
+jobs:
+  security:
+    uses: ./.github/workflows/mypeople-security.yml
+
+  test:
+    name: Build and test
+    needs: security
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      # Do not discover developer credentials or state during tests.
+      MYPEOPLE_ENV_FILE: /dev/null
+      MYPEOPLE_PI_AUTH: /dev/null
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.23"
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      # Includes a conversation with the real Python engine against a throwaway database.
+      - name: Tests
+        working-directory: macos/mypeople/MyPeopleKit
+        run: swift test
+
+      - name: Release build compiles
+        working-directory: macos/mypeople
+        run: |
+          xcodebuild -project MyPeople.xcodeproj -scheme MyPeople -configuration Release \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Check local build script
+        working-directory: macos/mypeople
+        run: bash -n scripts/build-local.sh

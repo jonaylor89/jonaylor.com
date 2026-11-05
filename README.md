@@ -104,6 +104,15 @@ pnpm macos:fuego:build
 
 [`macos-fuego.yml`](.github/workflows/macos-fuego.yml) runs its unit tests and an unsigned Release build. The manually dispatched [`macos-fuego-release.yml`](.github/workflows/macos-fuego-release.yml) signs, notarizes, and publishes `fuego-v*` releases; installed copies check for Sparkle updates at `downloads.jonaylor.com/fuego/appcast.xml`. Its website is [`apps/fuego`](apps/fuego).
 
+[MyPeople for macOS](macos/mypeople) is a SwiftUI app over the MyPeople CLI's own code. It needs Xcode 16 or later to build and macOS 15 or later to run.
+
+```bash
+pnpm macos:mypeople:check
+pnpm macos:mypeople:build
+```
+
+[`macos-mypeople.yml`](.github/workflows/macos-mypeople.yml) runs its tests, including one against the real Python engine, and an unsigned Release build. It has no release workflow yet.
+
 ### Flutter
 
 [Prego](flutter/prego) is an independent Flutter project, not a pnpm workspace.

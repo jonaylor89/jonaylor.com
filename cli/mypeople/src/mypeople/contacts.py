@@ -140,6 +140,81 @@ def contact_phone(card: dict, field: dict) -> tuple[str, str]:
     return phone(field["value"], field.get("region") or card.get("region"))
 
 
+VCARD_PROPERTIES = {"phone": "TEL", "email": "EMAIL", "address": "ADR", "website": "URL", "im": "IMPP", "anniversary": "ANNIVERSARY"}
+# Properties this exporter writes itself; anything else in a card's originals is carried through.
+VCARD_OWNED = {"BEGIN", "END", "VERSION", "FN", "N", "TEL", "EMAIL", "ADR", "URL", "IMPP", "ANNIVERSARY", "BDAY", "ORG", "TITLE",
+               "NOTE", "PHOTO", "X-ABLABEL", "X-SHERLOQ-FAVORITE", "X-SHERLOQ-CHANNEL", "X-SHERLOQ-REGION", "UID", "X-PHONETIC-FIRST-NAME",
+               "X-SHERLOQ-SOURCE-RECORD", "X-SHERLOQ-ORIGINAL-PHONE", "X-SHERLOQ-LEGACY-UNVERIFIED"}
+
+
+def _vcard_escape(value: str) -> str:
+    for char, escaped in (("\\", "\\\\"), ("\n", "\\n"), (";", "\\;"), (",", "\\,"), ("\r", "")):
+        value = value.replace(char, escaped)
+    return value
+
+
+def _vcard_fold(line: str) -> str:
+    """Fold by UTF-8 length, never inside a code point."""
+    out, used = [], 0
+    for char in line:
+        size = len(char.encode("utf-8", "replace"))
+        if used + size > 74:
+            out.append("\r\n ")
+            used = 1
+        out.append(char)
+        used += size
+    return "".join(out)
+
+
+def vcard_export(cards: list[dict]) -> str:
+    """vCard 3.0, matching VCards.export on Android, so a file from either side reads the same."""
+    result = []
+    for card in cards:
+        family, given, middle, prefix, suffix = (card.get(k, "") for k in ("family", "given", "middle", "prefix", "suffix"))
+        lines = ["BEGIN:VCARD", "VERSION:3.0", f"FN:{_vcard_escape(card['name'])}",
+                 "N:" + ";".join(map(_vcard_escape, (family, given, middle, prefix, suffix)))]
+        for i, field in enumerate(card.get("fields", [])):
+            prop = VCARD_PROPERTIES.get(field["kind"])
+            if prop is None:
+                continue
+            value = field["value"]
+            if field["kind"] == "phone":
+                number, extension = contact_phone(card, field)
+                if number:
+                    value = f"{number};ext={extension}" if extension else number
+            if field["kind"] == "address":
+                raw = field.get("structured") or f";;{_vcard_escape(value)};;;;"
+            else:
+                raw = _vcard_escape(value)
+            params = (";TYPE=PREF" if field.get("preferred") else "") + (f";X-SHERLOQ-REGION={field['region']}" if field.get("region") else "")
+            lines.append(f"item{i}.{prop}{params}:{raw}")
+            if field["kind"] == "phone" and value != field["value"]:
+                lines.append(f"item{i}.X-SHERLOQ-ORIGINAL-PHONE:{_vcard_escape(field['value'])}")
+            if field.get("label", "").strip():
+                lines.append(f"item{i}.X-ABLabel:{_vcard_escape(field['label'])}")
+        for prop, key in (("BDAY", "birthday"), ("ORG", "organization"), ("TITLE", "title"), ("NOTE", "notes"), ("X-SHERLOQ-CHANNEL", "preferred_channel"),
+                          ("X-SHERLOQ-REGION", "region"), ("X-PHONETIC-FIRST-NAME", "phonetic")):
+            if card.get(key):
+                lines.append(f"{prop}:{_vcard_escape(card[key])}")
+        if card.get("photo"):
+            lines.append(f"PHOTO;ENCODING=b;TYPE=JPEG:{card['photo']}")
+        if card.get("favorite"):
+            lines.append("X-SHERLOQ-FAVORITE:1")
+        if card.get("legacy_unverified"):
+            lines.append("X-SHERLOQ-LEGACY-UNVERIFIED:1")
+        # Unknown properties survive import, edit and export instead of silently disappearing.
+        seen = set()
+        for original in card.get("originals", []):
+            for line in original.replace("\r\n", "\n").replace("\n ", "").replace("\n\t", "").split("\n"):
+                name = line.split(":", 1)[0].split(";", 1)[0].rsplit(".", 1)[-1].upper()
+                if ":" in line and name not in VCARD_OWNED and line not in seen:
+                    seen.add(line)
+                    lines.append(line)
+        lines.append("END:VCARD")
+        result.append("".join(_vcard_fold(line) + "\r\n" for line in lines))
+    return "".join(result)
+
+
 def rebuild_keys(conn, person_id, card):
     conn.execute("DELETE FROM contact_keys WHERE person_id=?", (person_id,))
     for f in card.get("fields", []):
