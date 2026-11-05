@@ -81,6 +81,20 @@ android {
     }
 }
 
+val validateReleaseWeatherKey = tasks.register("validateReleaseWeatherKey") {
+    group = "verification"
+    description = "Require a weather API key before packaging a release"
+    doLast {
+        check(weatherApiKey.isNotBlank()) {
+            "Set OPENWEATHER_API_KEY in the build environment or user Gradle properties before releasing"
+        }
+    }
+}
+
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    dependsOn(validateReleaseWeatherKey)
+}
+
 dependencies {
     // Core
     implementation(libs.androidx.core.ktx)

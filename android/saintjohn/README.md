@@ -60,9 +60,15 @@ The APK will be generated at `app/build/outputs/apk/debug/app-debug.apk`
 ### Local credentials
 
 Weather requires an `OPENWEATHER_API_KEY` supplied through the build environment or
-user-level `~/.gradle/gradle.properties`. No shared demo key is bundled. Do not put
-credentials in tracked project files. BuildConfig values are extractable from an
-APK; use restricted provider credentials or a backend proxy for production.
+user-level `~/.gradle/gradle.properties`. The release workflow injects the repository's
+`OPENWEATHER_API_KEY` Actions secret into BuildConfig, bundling it in the APK. Update
+that secret with `gh secret set OPENWEATHER_API_KEY` from this repository when rotating
+the key. Release builds reject a missing key, and CI checks it before bumping versions.
+Debug builds can omit it when not exercising weather.
+
+Do not put credentials in tracked project files. Bundled BuildConfig values are
+extractable from an APK; use provider restrictions and sufficient quota, or a backend
+proxy when the credential must remain private.
 
 Release signing uses `KEYSTORE_FILE` and its existing password/alias environment
 variables, or an ignored `keystore.properties` file at the Android project root.
