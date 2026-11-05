@@ -1,0 +1,55 @@
+# Sherlock false-positive exclusions, bundled for offline use.
+# Source: https://raw.githubusercontent.com/sherlock-project/sherlock/refs/heads/exclusions/false_positive_exclusions.txt
+# Snapshot: 2026-10-26. Refresh alongside scanner dependency updates.
+7Cups
+Airliners
+Apple Developer
+Apple Discussions
+Archive.org
+Bandcamp
+Blogger
+CGTrader
+Championat
+Chatujme.cz
+Codolio
+DeviantArt
+Discord.bio
+Envato Forum
+GaiaOnline
+GeeksforGeeks
+Giphy
+HackerNews
+Hashnode
+Houzz
+Hubski
+Instapaper
+Linktree
+Minecraft
+ObservableHQ
+Odysee
+PCGamer
+Rarible
+Realmeye
+Reddit
+ReverbNation
+RocketTube
+Scribd
+Shelf
+SlideShare
+Splice
+Spotify
+Trakt
+TryHackMe
+Velomania
+Weblate
+YandexMusic
+authorSTREAM
+dailykos
+fixya
+hunting
+interpals
+mercadolivre
+opennet
+phpRU
+social.tchncs.de
+svidbook

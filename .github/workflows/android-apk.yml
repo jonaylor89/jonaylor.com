@@ -22,6 +22,11 @@ on:
       java-version:
         required: true
         type: string
+      toolchain-java-version:
+        description: Optional additional JDK for Gradle compilation toolchains
+        required: false
+        type: string
+        default: ""
       android-platform:
         description: Android SDK platform level to install
         required: true
@@ -60,11 +65,25 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      - name: Set up compilation JDK ${{ inputs.toolchain-java-version }}
+        id: toolchain
+        if: inputs.toolchain-java-version != ''
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.toolchain-java-version }}
+
       - name: Set up JDK ${{ inputs.java-version }}
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: ${{ inputs.java-version }}
+
+      - name: Register compilation toolchain with Gradle
+        if: inputs.toolchain-java-version != ''
+        env:
+          TOOLCHAIN_JAVA_HOME: ${{ steps.toolchain.outputs.path }}
+        run: printf '\norg.gradle.java.installations.paths=%s\n' "$TOOLCHAIN_JAVA_HOME" >> gradle.properties
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3

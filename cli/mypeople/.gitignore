@@ -1,0 +1,23 @@
+.venv/
+__pycache__/
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+dist/
+reports/
+private/
+exports/
+*.log
+*.jsonl
+*.vcf
+*.mbox
+*.sherloq
+!tests/fixtures/*.sherloq
+.pytest_cache/
+.env*
+
+# Google OAuth client downloads
+client_secret*.json

@@ -1,0 +1,57 @@
+name: MyPeople CLI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "cli/mypeople/**"
+      - "android/mypeople/**"
+      - "docs/mypeople/**"
+      - ".github/workflows/mypeople-cli.yml"
+      - ".github/workflows/mypeople-security.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "cli/mypeople/**"
+      - "android/mypeople/**"
+      - "docs/mypeople/**"
+      - ".github/workflows/mypeople-cli.yml"
+      - ".github/workflows/mypeople-security.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  security:
+    uses: ./.github/workflows/mypeople-security.yml
+  check:
+    needs: security
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cli/mypeople
+    env:
+      # Do not discover developer credentials or state during tests.
+      MYPEOPLE_ENV_FILE: /dev/null
+      MYPEOPLE_PI_AUTH: /dev/null
+      MYPEOPLE_DB: /tmp/mypeople-test.db
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.23"
+          enable-cache: true
+          cache-dependency-glob: cli/mypeople/uv.lock
+      - name: Install pinned Python
+        run: uv python install
+      - name: Install locked dependencies
+        run: uv sync --locked
+      - name: Run synthetic tests
+        run: uv run --locked pytest
+      - name: Smoke-test CLI entry point
+        run: uv run --locked mypeople --help
+      - name: Build Python distributions
+        run: uv build

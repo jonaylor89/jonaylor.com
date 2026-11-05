@@ -1,0 +1,22 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+
+# Private runtime data and exports; only synthetic test resources belong here.
+private/
+exports/
+reports/
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.jsonl
+*.vcf
+*.mbox
+*.sherloq
+!app/src/test/resources/*.sherloq
+.kotlin/

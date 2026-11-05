@@ -30,9 +30,17 @@
 - Use Dart formatting and Flutter analysis, not Biome, for Flutter source.
 
 ## Android apps (android/*)
-- Each app (`paperclock`, `saintjohn`, `parlo`) is an independent Gradle project with its own wrapper, version catalog, and JDK; run `./gradlew` from the app directory.
+- Each app (`paperclock`, `saintjohn`, `parlo`, `mypeople`) is an independent Gradle project with its own wrapper, version catalog, and JDK; run `./gradlew` from the app directory.
 - Paper Clock and Parlo CI call the reusable `.github/workflows/android-apk.yml`; Saint John has its own signed release workflow.
 - Parlo QA: `./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug` (JDK 17, SDK platform 35).
+
+## Python CLI (cli/mypeople)
+- Independent uv project, outside pnpm/Turbo. Use its `.python-version` and `uv.lock`.
+- QA from the root: `pnpm mypeople:check`; packaging: `cd cli/mypeople && uv build`.
+- Android/Python protocol fixtures live in `android/mypeople/app/src/test/resources`; run both suites for protocol changes.
+- MyPeople Android uses JDK 25 to run Gradle, a JDK 17 compilation toolchain, and SDK 37.0. CI uses the reusable APK workflow.
+- Never import personal databases, exports, private reports, `.env`, or keystores. Credentials default to `~/.mypeople/secrets.ini` (override with `MYPEOPLE_ENV_FILE`).
+- Migration and signing safety: `docs/mypeople/monorepo.md`.
 
 ## macOS apps (macos/*)
 - Fuego (`macos/fuego`) is an Xcode project; run `xcodebuild` from its directory. Its static website is `apps/fuego`.

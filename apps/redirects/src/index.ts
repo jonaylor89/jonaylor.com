@@ -38,6 +38,11 @@ const INSTALLS: Record<string, Install> = {
 		tagPrefix: "parlo-v",
 		assetName: (tag) => `Parlo-v${tag.slice("parlo-v".length)}.apk`,
 	},
+	"/mypeople.apk": {
+		name: "MyPeople",
+		tagPrefix: "mypeople-v",
+		assetName: (tag) => `MyPeople-v${tag.slice("mypeople-v".length)}.apk`,
+	},
 	"/prego.apk": {
 		name: "Prego",
 		tagPrefix: "prego-v",
@@ -63,6 +68,7 @@ const OBTAINIUM_APPS = [
 	{ slug: "paperclock", id: "com.paperclock", name: "Paper Clock", apk: "^PaperClock-.*\\.apk$", signedOnly: true },
 	{ slug: "saintjohn", id: "com.jonaylor.saintjohn", name: "Saint John", apk: "^app-release\\.apk$", signedOnly: false },
 	{ slug: "parlo", id: "com.parlo.app", name: "Parlo", apk: "^Parlo-.*\\.apk$", signedOnly: true },
+	{ slug: "mypeople", id: "app.sherloq", name: "MyPeople", apk: "^MyPeople-.*\\.apk$", signedOnly: true },
 	{ slug: "prego", id: "dev.vcuram.prego", name: "Prego", apk: "^Prego-.*\\.apk$", signedOnly: false },
 ].map(({ slug, id, name, apk, signedOnly }) => ({
 	slug,
@@ -159,7 +165,7 @@ async function getLatestAsset(path: string, install: Install): Promise<ReleaseAs
 
 function downloadHelp(): Response {
 	return new Response(
-		"Use /paperclock.apk, /saintjohn.apk, /parlo.apk, or /prego.apk to download the latest Android release, or /fuego.dmg for Fuego for macOS. Use /obtainium/paperclock, /obtainium/saintjohn, /obtainium/parlo, /obtainium/prego, to add individual apps to Obtainium; /obtainium/all and /obtainium.json download the bulk import file.",
+		"Use /paperclock.apk, /saintjohn.apk, /parlo.apk, /prego.apk, or /mypeople.apk to download the latest Android release, or /fuego.dmg for Fuego for macOS. Use /obtainium/paperclock, /obtainium/saintjohn, /obtainium/parlo, /obtainium/prego, /obtainium/mypeople, to add individual apps to Obtainium; /obtainium/all and /obtainium.json download the bulk import file.",
 		{
 			headers: { "Content-Type": "text/plain; charset=utf-8" },
 		},

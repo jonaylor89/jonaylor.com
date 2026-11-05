@@ -1,3 +1,13 @@
 .turbo
 node_modules/
 .claude/
+
+# Credentials must never enter the monorepo (including new native/Python apps).
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+*.p12
+*.pfx
+client_secret*.json

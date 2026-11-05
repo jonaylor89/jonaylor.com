@@ -1,0 +1,119 @@
+"""The phone-safe view of the database that `mypeople sync` publishes to the server.
+
+People with their nicknames, numbers, emails and relationship stats; their facts and where
+each came from; public profiles; photos; recent moments; and duplicate groups to review.
+Message text stays on this Mac, apart from the short quotes facts carry as evidence.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import hashlib
+import json
+import sqlite3
+from pathlib import Path
+
+from . import dupes, moments, relationships, socials, identity
+
+HIDDEN_IDENTIFIERS = ("google",)  # resource names mean nothing outside the Google API
+MOMENT_DAYS = 30  # how far back the phone sees moments
+
+
+def digest(data: dict) -> str:
+    return hashlib.sha1(json.dumps(data, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
+def photo_hash(path: str) -> str | None:
+    try:
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def _grouped(rows, key: str = "person_id") -> dict[int, list[sqlite3.Row]]:
+    out: dict[int, list[sqlite3.Row]] = {}
+    for r in rows:
+        out.setdefault(r[key], []).append(r)
+    return out
+
+
+def records(conn: sqlite3.Connection, today: dt.date | None = None) -> tuple[dict[tuple[str, str], dict], dict[str, str]]:
+    """Everything the phone sees, keyed by (kind, id), plus the photo files they reference by hash."""
+    today = today or dt.date.today()
+    # Pick today's moments the way `mypeople today` does, so the phone and the CLI agree.
+    moments.today_moments(conn, today)
+
+    people = conn.execute("SELECT * FROM people WHERE merged_into IS NULL AND is_me = 0").fetchall()
+    visible = {p["id"] for p in people}
+    aliases = _grouped(conn.execute("SELECT person_id, alias FROM aliases ORDER BY alias"))
+    identifiers = _grouped(conn.execute(
+        f"SELECT person_id, kind, value FROM identifiers WHERE kind NOT IN ({', '.join('?' * len(HIDDEN_IDENTIFIERS))}) "
+        "ORDER BY kind, value", HIDDEN_IDENTIFIERS))
+    channels = _grouped(conn.execute(
+        "SELECT person_id, channel, COUNT(*) AS n, MIN(at) AS first, MAX(at) AS last FROM interactions "
+        "GROUP BY person_id, channel ORDER BY n DESC"))
+    best_photos = {r["person_id"]: r["path"] for r in conn.execute(
+        "SELECT person_id, path FROM photos p WHERE width = (SELECT MAX(width) FROM photos q WHERE q.person_id = p.person_id)")}
+
+    redirects: dict[int, list[str]] = {}
+    for merged in conn.execute("SELECT id, contact_uid FROM people WHERE merged_into IS NOT NULL"):
+        redirects.setdefault(identity.canonical(conn, merged["id"]), []).append(merged["contact_uid"])
+    from . import replica
+    history = replica.load(conn)
+    out: dict[tuple[str, str], dict] = {}
+    files: dict[str, str] = {}
+    for p in people:
+        pid = p["id"]
+        rel = relationships.infer(conn, pid, today)
+        used = channels.get(pid, [])
+        photo = None
+        if pid in best_photos and (photo := photo_hash(best_photos[pid])):
+            files[photo] = best_photos[pid]
+        out[("person", str(pid))] = {
+            "name": p["name"],
+            "contact_uid": p["contact_uid"],
+            "contact_aliases": redirects.get(pid, []),
+            "card": json.loads(p["contact_data"]) if p["contact_data"] else None,
+            "trashed": bool(p["trashed"]),
+            "can_undo_merge": (not history.contact(p["contact_uid"]) or len(history.contact(p["contact_uid"]).members) == 1) and conn.execute("SELECT 1 FROM contact_merge_undo WHERE keep_id=? AND undone=0", (pid,)).fetchone() is not None,
+            "contact_conflicts": history.contact(p["contact_uid"]).conflicts if history.contact(p["contact_uid"]) else {},
+            "aliases": [a["alias"] for a in aliases.get(pid, [])],
+            "identifiers": [{"kind": i["kind"], "value": i["value"]} for i in identifiers.get(pid, [])],
+            "photo": photo,
+            "category": rel.category,
+            "closeness": round(rel.closeness, 2),
+            "cadence_days": rel.cadence_days,
+            "trend": rel.trend,
+            "days_365": rel.days_365,
+            "muted": rel.muted,
+            "channels": [{"channel": c["channel"], "count": c["n"]} for c in used],
+            "first_contact": min((c["first"] for c in used), default=None),
+            "last_contact": max((c["last"] for c in used), default=None),
+        }
+
+    for e in conn.execute("SELECT * FROM events WHERE status = 'active'"):
+        if e["person_id"] in visible:
+            out[("event", str(e["id"]))] = {
+                k: e[k] for k in ("person_id", "type", "value", "date", "confidence", "source", "evidence", "said_at", "created_at")
+            }
+
+    reviewable = {r["id"] for r in socials.suggestions(conn)}
+    for r in conn.execute("SELECT * FROM profiles WHERE status IN ('confirmed', 'suggested')"):
+        if r["person_id"] in visible and (r["status"] == "confirmed" or r["id"] in reviewable):
+            out[("profile", str(r["id"]))] = {
+                k: r[k] for k in ("person_id", "site", "url", "title", "status", "assessment", "reason", "confidence")
+            }
+
+    since = (today - dt.timedelta(days=MOMENT_DAYS)).isoformat()
+    for m in conn.execute("SELECT * FROM moments WHERE surfaced_on >= ?", (since,)):
+        if m["person_id"] in visible:
+            out[("moment", m["key"])] = {k: m[k] for k in ("person_id", "kind", "reason", "context", "score", "surfaced_on", "status")}
+
+    for group in dupes.to_review(conn):
+        ids = sorted(r["id"] for r in group)
+        if all(i in visible for i in ids):
+            clues = dupes.shared_clues([dupes.card(conn, r) for r in group], conn)
+            out[("dupes", "-".join(map(str, ids)))] = {"person_ids": ids, "clues": clues}
+    for change in history.changes:
+        out[("contact_change", change["id"])] = change
+    return out, files

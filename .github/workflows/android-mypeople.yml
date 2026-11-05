@@ -1,0 +1,49 @@
+name: MyPeople Android APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/mypeople/**"
+      - "cli/mypeople/**"
+      - "docs/mypeople/**"
+      - ".github/workflows/android-mypeople.yml"
+      - ".github/workflows/android-apk.yml"
+      - ".github/workflows/mypeople-security.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "android/mypeople/**"
+      - "cli/mypeople/**"
+      - "docs/mypeople/**"
+      - ".github/workflows/android-mypeople.yml"
+      - ".github/workflows/android-apk.yml"
+      - ".github/workflows/mypeople-security.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  security:
+    uses: ./.github/workflows/mypeople-security.yml
+  apk:
+    needs: security
+    permissions:
+      contents: write
+    uses: ./.github/workflows/android-apk.yml
+    secrets:
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+    with:
+      app: mypeople
+      display-name: MyPeople
+      asset-name: MyPeople
+      tag-prefix: mypeople-v
+      java-version: "25"
+      toolchain-java-version: "17"
+      android-platform: "37.0"
+      build-tools: 36.0.0
+      checks: testDebugUnitTest lintDebug

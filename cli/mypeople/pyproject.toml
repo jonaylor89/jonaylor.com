@@ -1,0 +1,40 @@
+[project]
+name = "mypeople"
+version = "0.1.0"
+description = "A memory for the people in your life"
+readme = "README.md"
+authors = [
+    { name = "Johannes Naylor", email = "me@jonaylor.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=2.1.0",
+    "cryptography>=46",
+    "phonenumbers>=8.13,<10",
+    "pydantic>=2.14.1",
+    "rich>=14,<16",
+]
+
+# Pin the scanner APIs, particularly Sherlock's internal Python entry point.
+[project.optional-dependencies]
+browser = ["playwright>=1.58,<2"]
+osint = [
+    "maigret==0.6.6",
+    "sherlock-project==0.16.2",
+]
+bluetooth = [
+    "pyobjc-framework-iobluetooth>=11 ; sys_platform == 'darwin'",
+    "qrcode[pil]>=8",
+]
+
+[project.scripts]
+mypeople = "mypeople:main"
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

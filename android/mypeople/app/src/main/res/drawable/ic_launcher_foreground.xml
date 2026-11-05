@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Two lives, one connection. Matches the in-app memory mark. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:strokeColor="#F8F7F2" android:strokeWidth="3"
+        android:fillColor="#00000000"
+        android:pathData="M46,48m-14,0a14,14 0,1 1,28 0a14,14 0,1 1,-28 0M62,58m-14,0a14,14 0,1 1,28 0a14,14 0,1 1,-28 0" />
+    <path android:fillColor="#F8F7F2"
+        android:pathData="M62,42m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+</vector>

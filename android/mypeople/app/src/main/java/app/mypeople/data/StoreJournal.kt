@@ -1,0 +1,170 @@
+package app.mypeople.data
+
+import kotlinx.serialization.json.*
+import java.io.File
+import java.io.FileOutputStream
+import java.io.RandomAccessFile
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
+
+/** Small, checksummed, fsynced transactions over typed binary checkpoints.
+ * The old store.json is read once for migration and retained untouched for recovery.
+ * Only an incomplete final frame is recoverable; a damaged complete frame is never discarded.
+ */
+internal class StoreJournal(private val directory: File) {
+    private val checkpoint = File(directory, "store.json")
+    private val journal = File(directory, "store.journal")
+    private val binary = File(directory, "store.bin")
+    private var sequence = 0L
+    private var frames = 0
+    var cachedRecords: Records? = null
+        private set
+    var checkpointWritten = false
+        private set
+    private fun hash(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes)
+
+    fun load(): DiskState {
+        val migrate = !binary.exists() && checkpoint.exists()
+        var state = when {
+            binary.exists() -> StoreCheckpoint.snapshot(binary.readBytes()).also { cachedRecords = it.view }.state
+            checkpoint.exists() -> json.decodeFromString<DiskState>(checkpoint.readText())
+            else -> DiskState()
+        }
+        sequence = state.journalSequence
+        if (journal.exists()) RandomAccessFile(journal, "rw").use { file ->
+            while (file.filePointer < file.length()) {
+                val start = file.filePointer
+                if (file.length() - start < 4) { file.setLength(start); break }
+                val size = file.readInt()
+                require(size in 1..(128 * 1024 * 1024)) { "Damaged local transaction length." }
+                if (file.length() - file.filePointer < size + 32L) { file.setLength(start); break }
+                val bytes = ByteArray(size); file.readFully(bytes)
+                val digest = ByteArray(32); file.readFully(digest)
+                require(hash(bytes).contentEquals(digest)) { "Damaged local transaction." }
+                val patch = json.parseToJsonElement(bytes.toString(Charsets.UTF_8)).jsonObject
+                val next = patch.getValue("journalSequence").jsonPrimitive.long
+                if (next > sequence) {
+                    require(next == sequence + 1) { "Missing local transaction." }
+                    if (patch.keys.any { it in setOf("records", "pending", "replica") }) cachedRecords = null
+                    val meta = patch["replica"]?.jsonObject
+                    var replica = state.replica
+                    if (meta != null) {
+                        val old = if (patch["replica_reset"]?.jsonPrimitive?.boolean == true) emptyList() else replica.changes
+                        val additions = patch["replica_changes"]?.let { json.decodeFromJsonElement<List<ContactChange>>(it) }.orEmpty()
+                        replica = replica.copy(
+                            enabled = meta["enabled"]?.jsonPrimitive?.boolean ?: replica.enabled,
+                            changes = if (additions.isEmpty() && old === replica.changes) old else old + additions,
+                            remoteHeads = meta["remoteHeads"]?.let { json.decodeFromJsonElement(it) } ?: replica.remoteHeads,
+                            localIds = meta["localIds"]?.let { json.decodeFromJsonElement(it) } ?: replica.localIds,
+                            recordHashes = meta["recordHashes"]?.let { json.decodeFromJsonElement(it) } ?: replica.recordHashes,
+                            publisher = if ("publisher" in meta) meta["publisher"]?.jsonPrimitive?.contentOrNull else replica.publisher)
+                    }
+                    fun nullable(key: String, fallback: String?): String? = if (key in patch) patch[key]?.jsonPrimitive?.contentOrNull else fallback
+                    state = state.copy(
+                        records = patch["records"]?.let { json.decodeFromJsonElement(it) } ?: state.records,
+                        pending = patch["pending"]?.let { json.decodeFromJsonElement(it) } ?: state.pending,
+                        failedEdits = patch["failedEdits"]?.let { json.decodeFromJsonElement(it) } ?: state.failedEdits,
+                        notices = patch["notices"]?.let { json.decodeFromJsonElement(it) } ?: state.notices,
+                        replica = replica, journalSequence = next,
+                        cursor = patch["cursor"]?.jsonPrimitive?.long ?: state.cursor,
+                        nextLocalId = patch["nextLocalId"]?.jsonPrimitive?.int ?: state.nextLocalId,
+                        offlineRevision = patch["offlineRevision"]?.jsonPrimitive?.long ?: state.offlineRevision,
+                        offlineSource = nullable("offlineSource", state.offlineSource),
+                        lastSync = nullable("lastSync", state.lastSync), lastError = nullable("lastError", state.lastError))
+                    sequence = next
+                }
+                frames++
+            }
+        }
+        // Decode the legacy JSON only once. Keep it intact as recovery evidence;
+        // store.bin + subsequent journal frames become the authoritative local state.
+        if (migrate) runCatching { checkpoint(state) }
+        return state
+    }
+
+    fun cacheView(state: DiskState, view: Records) {
+        if (!binary.exists() && !checkpoint.exists() && journal.length() == 0L) return
+        checkpoint(state, view)
+        cachedRecords = view; checkpointWritten = false
+    }
+
+    private fun checkpoint(state: DiskState, view: Records? = null) {
+        directory.mkdirs()
+        val temp = File(directory, "store.bin.tmp")
+        FileOutputStream(temp).use { stream ->
+            stream.write(StoreCheckpoint.encode(state.copy(journalSequence = sequence), view))
+            stream.fd.sync()
+        }
+        Files.move(temp.toPath(), binary.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        // Old frames can be replayed idempotently if killed between rename and truncation.
+        // The rename is the commit point. A failed cleanup must not report a committed
+        // direct checkpoint as a failed edit; old frames are skipped by sequence on read.
+        runCatching { FileOutputStream(journal).use { it.fd.sync() }; frames = 0 }
+        checkpointWritten = true
+    }
+
+    fun save(previous: DiskState, next: DiskState) {
+        checkpointWritten = false
+        directory.mkdirs()
+        // Dense legacy DAGs can have a megabyte-sized parent array shared by hundreds
+        // of changes. Do not expand that into a giant JSON tree/string just to journal
+        // an import: the typed checkpoint interns these arrays and commits atomically.
+        var newEdges = 0L
+        if (previous.replica.changes !== next.replica.changes) {
+            val old = previous.replica.changes.map { it.id }.toSet()
+            newEdges += next.replica.changes.filterNot { it.id in old }.sumOf { it.parents.size.toLong() }
+        }
+        if (previous.records.contactChanges !== next.records.contactChanges) {
+            newEdges += next.records.contactChanges.filterKeys { it !in previous.records.contactChanges }.values.sumOf { it.parents.size.toLong() }
+        }
+        if (newEdges > 4096) {
+            val before = sequence
+            sequence++
+            try { checkpoint(next) } catch (error: Exception) { sequence = before; throw error }
+            return
+        }
+        // Avoid serializing the whole address book for an outbox/status/notice update.
+        val patch = buildJsonObject {
+            put("journalSequence", sequence + 1)
+            if (previous.records !== next.records) put("records", json.encodeToJsonElement(next.records))
+            if (previous.pending !== next.pending) put("pending", json.encodeToJsonElement(next.pending))
+            if (previous.failedEdits !== next.failedEdits) put("failedEdits", json.encodeToJsonElement(next.failedEdits))
+            if (previous.notices !== next.notices) put("notices", json.encodeToJsonElement(next.notices))
+            if (previous.replica !== next.replica) {
+                put("replica", buildJsonObject {
+                    put("enabled", next.replica.enabled)
+                    put("publisher", next.replica.publisher?.let(::JsonPrimitive) ?: JsonNull)
+                    if (previous.replica.remoteHeads !== next.replica.remoteHeads) put("remoteHeads", json.encodeToJsonElement(next.replica.remoteHeads))
+                    if (previous.replica.localIds !== next.replica.localIds) put("localIds", json.encodeToJsonElement(next.replica.localIds))
+                    if (previous.replica.recordHashes !== next.replica.recordHashes) put("recordHashes", json.encodeToJsonElement(next.replica.recordHashes))
+                })
+                val oldIds = previous.replica.changes.map { it.id }.toSet()
+                val newIds = next.replica.changes.map { it.id }.toSet()
+                val reset = !newIds.containsAll(oldIds)
+                put("replica_reset", reset)
+                put("replica_changes", json.encodeToJsonElement(if (reset) next.replica.changes else next.replica.changes.filterNot { it.id in oldIds }))
+            }
+            put("cursor", next.cursor); put("nextLocalId", next.nextLocalId)
+            put("lastSync", next.lastSync?.let(::JsonPrimitive) ?: JsonNull)
+            put("lastError", next.lastError?.let(::JsonPrimitive) ?: JsonNull)
+            put("offlineSource", next.offlineSource?.let(::JsonPrimitive) ?: JsonNull)
+            put("offlineRevision", next.offlineRevision)
+        }
+        val bytes = patch.toString().toByteArray(Charsets.UTF_8)
+        val start = journal.length()
+        try {
+            FileOutputStream(journal, true).use { stream ->
+                val out = java.io.DataOutputStream(stream)
+                out.writeInt(bytes.size); out.write(bytes); out.write(hash(bytes)); out.flush(); stream.fd.sync()
+            }
+        } catch (e: java.io.IOException) {
+            RandomAccessFile(journal, "rw").use { it.setLength(start); it.fd.sync() }
+            throw e
+        }
+        sequence++; frames++
+        // Checkpoint only after a sizeable journal, never on every contact edit.
+        // A failed checkpoint is harmless: the durable transaction above is sufficient.
+        if (frames >= 256 || journal.length() > 256L * 1024) runCatching { checkpoint(next) }
+    }
+}

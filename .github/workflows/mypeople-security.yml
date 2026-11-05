@@ -1,0 +1,25 @@
+name: MyPeople secret scan (reusable)
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Scan tracked MyPeople snapshot (never print secret values)
+        shell: bash
+        run: |
+          set -euo pipefail
+          SNAPSHOT="$(mktemp -d)"
+          trap 'rm -rf "$SNAPSHOT"' EXIT
+          # Export only tracked files, never ignored developer data or .git history.
+          git archive HEAD android/mypeople cli/mypeople docs/mypeople | tar -x -C "$SNAPSHOT"
+          docker run --rm -v "$SNAPSHOT:/scan:ro" \
+            ghcr.io/gitleaks/gitleaks:v8.30.1 dir /scan --redact=100 --no-banner

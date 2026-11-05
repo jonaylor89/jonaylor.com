@@ -2,7 +2,7 @@
 
 Personal websites, experiments, and self-hosted services maintained by [Johannes Naylor](https://jonaylor.com).
 
-JavaScript apps live in [`apps`](apps), native Android apps in [`android`](android), native macOS apps in [`macos`](macos), Flutter apps in [`flutter`](flutter), and self-contained Rust services in [`services`](services).
+JavaScript apps live in [`apps`](apps), native Android apps in [`android`](android), native macOS apps in [`macos`](macos), Python CLIs in [`cli`](cli), Flutter apps in [`flutter`](flutter), and self-contained Rust services in [`services`](services).
 
 ## Getting started
 
@@ -11,6 +11,7 @@ JavaScript apps live in [`apps`](apps), native Android apps in [`android`](andro
 - Node.js 22.12 or later
 - [pnpm](https://pnpm.io/) 10.32.1 (the version pinned by `packageManager`)
 - Rust and Cargo, only when working on a service
+- uv, only when working on `cli/mypeople` (Python is pinned by that project's `.python-version`)
 
 ```bash
 git clone https://github.com/jonaylor89/jonaylor.com.git
@@ -68,11 +69,30 @@ The Android apps are independent Gradle projects and are not pnpm workspaces. Th
 pnpm android:paperclock:build
 pnpm android:saintjohn:build
 pnpm android:parlo:build
+pnpm android:mypeople:build
 ```
 
-Their GitHub Actions workflows build and publish app-specific releases with `paperclock-v*`, `saintjohn-v*`, and `parlo-v*` tags. Paper Clock and Parlo share the reusable [`android-apk.yml`](.github/workflows/android-apk.yml) workflow, which checks debug and unsigned release APKs on pull requests, then signs and publishes the tested release APK on `main`. Release signing uses the existing repository Android signing secrets; release version codes are `1000 + github.run_number` (do not reset the workflow run counter).
+Their GitHub Actions workflows build and publish app-specific releases with `paperclock-v*`, `saintjohn-v*`, `parlo-v*`, and `mypeople-v*` tags. Paper Clock, Parlo, and MyPeople share the reusable [`android-apk.yml`](.github/workflows/android-apk.yml) workflow, which checks debug and unsigned release APKs on pull requests, then signs and publishes the tested release APK on `main`. Release signing uses the existing repository Android signing secrets; release version codes are `1000 + github.run_number` (do not reset the workflow run counter).
 
-For installation and automatic updates on Android/GrapheneOS, see the [Obtainium setup guide](android/OBTAINIUM.md), including one-tap imports for all four Android/Flutter apps.
+For installation and automatic updates on Android/GrapheneOS, see the [Obtainium setup guide](android/OBTAINIUM.md), including one-tap imports for all five Android/Flutter apps.
+
+### MyPeople CLI (Python)
+
+[`cli/mypeople`](cli/mypeople) is an independent uv project, outside pnpm/Turbo.
+
+```bash
+cd cli/mypeople
+uv sync --locked
+uv run --locked mypeople --help
+uv run --locked pytest
+uv build
+```
+
+From the root, use `pnpm mypeople --help` or `pnpm mypeople:check`.
+The scoped CI runs synthetic tests and builds Python distributions without personal
+credentials. See [migration, configuration, and Android signing safety](docs/mypeople/monorepo.md)
+before switching an existing phone installation. Private credentials are loaded
+from `~/.mypeople/secrets.ini` or an explicit `MYPEOPLE_ENV_FILE`, never from the checkout.
 
 ### macOS
 

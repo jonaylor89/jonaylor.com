@@ -63,6 +63,27 @@ test("Prego returns 404 when only other apps have releases", async () => {
   assert.match(await response.text(), /Prego has no published release yet/);
 });
 
+test("MyPeople downloads use only MyPeople releases and preserve the CI asset name", async () => {
+  advertiseTags([
+    "parlo-v99.0.0-build.99",
+    "mypeople-v0.2-build.2",
+    "mypeople-v0.2-build.10",
+  ]);
+  const response = await download("/mypeople.apk");
+  assert.equal(response.status, 302);
+  assert.equal(
+    response.headers.get("location"),
+    "https://github.com/jonaylor89/jonaylor.com/releases/download/mypeople-v0.2-build.10/MyPeople-v0.2-build.10.apk",
+  );
+});
+
+test("MyPeople returns 404 before its first release, not another app's APK", async () => {
+  advertiseTags(["parlo-v99.0.0-build.99", "prego-v1.0.0-build.9"]);
+  const response = await download("/mypeople.apk");
+  assert.equal(response.status, 404);
+  assert.match(await response.text(), /MyPeople has no published release yet/);
+});
+
 test("GitHub failure returns a retryable error, not a broken APK redirect", async () => {
   mock.method(globalThis, "fetch", async () => new Response("", { status: 503 }));
   mock.method(console, "error", () => {});
@@ -94,6 +115,7 @@ test("Obtainium links contain separate app IDs and monorepo-safe filters", async
     ["paperclock", "com.paperclock", "Paper Clock v1.0 · build 8 (signed)", "PaperClock-v1.0-build.8.apk"],
     ["saintjohn", "com.jonaylor.saintjohn", "Saint John v1.5", "app-release.apk"],
     ["parlo", "com.parlo.app", "Parlo v0.1.0 · build 16 (signed)", "Parlo-v0.1.0-build.16.apk"],
+    ["mypeople", "app.sherloq", "MyPeople v0.2 · build 5 (signed)", "MyPeople-v0.2-build.5.apk"],
     ["prego", "dev.vcuram.prego", "Prego v1.0.0 · build 3", "Prego-v1.0.0-build.3.apk"],
   ];
   for (const [slug, id, title, apk] of fixtures) {
@@ -115,7 +137,7 @@ test("Obtainium links contain separate app IDs and monorepo-safe filters", async
       assert.equal(titleFilter.test(otherTitle), false);
       assert.equal(apkFilter.test(otherApk), false);
     }
-    if (slug === "paperclock" || slug === "parlo") {
+    if (slug === "paperclock" || slug === "parlo" || slug === "mypeople") {
       assert.equal(titleFilter.test(title.replace(" (signed)", "")), false);
     }
   }
@@ -132,7 +154,7 @@ test("bulk Obtainium link downloads JSON rather than using the unsupported apps 
   assert.match(response.headers.get("content-type"), /application\/json/);
   assert.match(response.headers.get("content-disposition"), /jonaylor-obtainium.json/);
   assert.deepEqual(await response.json(), configs);
-  assert.equal(new Set(configs.map((app) => app.id)).size, 4);
+  assert.equal(new Set(configs.map((app) => app.id)).size, 5);
 });
 
 test("unknown Obtainium app is rejected and other host redirects remain unchanged", async () => {
