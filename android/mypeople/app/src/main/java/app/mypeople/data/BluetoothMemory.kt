@@ -101,7 +101,7 @@ class BluetoothMemory(private val context: Context, private val files: OfflineFi
                     heartbeat(); progress(BluetoothProgress(BluetoothPhase.SENDING_EDITS, done, size))
                 }
                 progress(BluetoothProgress(BluetoothPhase.WAITING_FOR_MAC))
-                // Enrichment may take time. This phase is explicit, not an endless Connecting label.
+                // An older queued request may take time. This phase is explicit, not an endless Connecting label.
                 deadline.set(System.nanoTime() + TimeUnit.MINUTES.toNanos(20))
             }
             val digest = FileOutputStream(temp).use { output ->

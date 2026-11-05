@@ -4,10 +4,9 @@ import Observation
 import SwiftUI
 
 enum Screen: String, Hashable, CaseIterable, Identifiable {
-    case today, feed, upcoming, people, ask
+    case today, upcoming, people
     case profiles, duplicates, conflicts
-    case importData, readMessages, photos, discover
-    case phone, sync, google
+    case importData, phone
     case activity
 
     var id: String { rawValue }
@@ -15,20 +14,13 @@ enum Screen: String, Hashable, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .today: "Today"
-        case .feed: "Feed"
         case .upcoming: "Upcoming"
         case .people: "People"
-        case .ask: "Ask"
         case .profiles: "Profiles"
         case .duplicates: "Duplicates"
         case .conflicts: "Conflicts"
-        case .importData: "Import"
-        case .readMessages: "Read Messages"
-        case .photos: "Photos"
-        case .discover: "Discover"
+        case .importData: "Import vCard"
         case .phone: "Phone"
-        case .sync: "Sync"
-        case .google: "Google"
         case .activity: "Activity"
         }
     }
@@ -36,20 +28,13 @@ enum Screen: String, Hashable, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .today: "sun.max"
-        case .feed: "text.quote"
         case .upcoming: "calendar"
         case .people: "person.2"
-        case .ask: "questionmark.bubble"
         case .profiles: "person.crop.circle.badge.questionmark"
         case .duplicates: "square.on.square"
         case .conflicts: "arrow.triangle.branch"
         case .importData: "square.and.arrow.down"
-        case .readMessages: "text.magnifyingglass"
-        case .photos: "photo.on.rectangle"
-        case .discover: "globe"
         case .phone: "iphone.radiowaves.left.and.right"
-        case .sync: "arrow.triangle.2.circlepath"
-        case .google: "person.crop.rectangle.stack"
         case .activity: "list.bullet.rectangle"
         }
     }
@@ -250,9 +235,6 @@ final class AppModel {
                 await client.stop()
                 return
             }
-            if let backend = UserDefaults.standard.string(forKey: "llmBackend"), !backend.isEmpty {
-                let _: NoReply? = try? await client.call("settings.llm", ["backend": .string(backend)])
-            }
             let snapshot: ViewSnapshot = try await client.call("view.snapshot")
             guard generation == self.generation else { return }
             records = Records(snapshot: snapshot.records)
@@ -425,14 +407,6 @@ final class AppModel {
         }
     }
 
-    func setBackend(_ backend: String) {
-        perform { [self] in
-            let _: NoReply = try await call("settings.llm", ["backend": .string(backend)])
-            UserDefaults.standard.set(backend, forKey: "llmBackend")
-            refreshStatus()
-        }
-    }
-
     // MARK: Interface
 
     func show(_ text: String, isError: Bool = false) {
@@ -463,33 +437,12 @@ final class AppModel {
     func name(_ id: Int) -> String { records.people[id]?.name ?? "Person #\(id)" }
 
     private func jobTitle(kind: String, params: JSONValue) -> String {
-        let person = params["person_id"]?.int.map(name)
         switch kind {
-        case "import":
-            let names = ["imessage": "iMessage", "whatsapp": "WhatsApp", "vcf": "vCard file", "gvoice": "Google Voice", "mbox": "mail archive", "twitter": "X",
-                         "linkedin": "LinkedIn", "google": "Google Contacts"]
-            let source = params["source"]?.string ?? ""
-            return "Import \(names[source] ?? source.prefix(1).uppercased() + source.dropFirst())"
-        case "extract":
-            if params["dry_run"]?.bool == true { return "Estimate message reading" }
-            return person.map { "Read messages: \($0)" } ?? "Read messages"
-        case "note": return person.map { "Note: \($0)" } ?? "Note"
-        case "ask": return "Ask"
-        case "socials_find": return person.map { "Find profiles: \($0)" } ?? "Find profiles"
-        case "photos":
-            if params["login"]?.bool == true { return "Sign in: \(params["source"]?.string ?? "photos")" }
-            return "Photos: \(params["source"]?.string ?? "all")"
-        case "instagram_links": return "Instagram links"
-        case "google_login": return "Google sign-in"
-        case "google_sync": return params["apply"]?.bool == true ? "Google sync" : "Google preview"
-        case "sync": return "Sync"
+        case "import_vcf": return "Import vCard"
         case "transfer_qr": return "Phone pairing"
         case "transfer_export": return "Export memory file"
         case "transfer_import": return "Import phone edits"
         case "transfer_merge": return "Merge memory file"
-        case "recover_phones": return params["apply"]?.bool == true ? "Recover phone numbers" : "Preview phone recovery"
-        case "server_run": return "Sync server"
-        case "signal_export": return "Export Signal"
         default: return kind
         }
     }

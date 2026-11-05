@@ -24,16 +24,6 @@ private struct GeneralSettings: View {
 
     var body: some View {
         Form {
-            Section("Model") {
-                if let llm = model.status?.llm {
-                    Picker("Reads messages and answers questions with", selection: Binding(get: { llm.backend }, set: { model.setBackend($0) })) {
-                        ForEach(llm.choices, id: \.self) { Text($0).tag($0) }
-                    }
-                    Muted(llm.local ? "\(llm.model), running on this Mac. Nothing leaves it." : "\(llm.model). Anything it reads is sent to that service.", font: .caption)
-                } else {
-                    Muted("Available once the engine is running.")
-                }
-            }
             Section("You") {
                 if let me {
                     LabeledContent("You are") { Text(verbatim: "\(me.name) (#\(me.id))") }
@@ -148,31 +138,16 @@ private struct SystemSettings: View {
                     LabeledContent("CLI", value: status.version)
                     LabeledContent("Python", value: status.python)
                 }
-                Section("Permissions") {
-                    row("Full Disk Access", status.fullDiskAccess != false, status.fullDiskAccess == nil ? "Nothing to read yet" : nil)
-                    if status.fullDiskAccess == false { FullDiskAccessNote() }
-                }
-                Section("Optional features") {
+                Section("Phone exchange") {
                     row("Bluetooth pairing", status.extras.bluetooth)
-                    row("Dedicated browser", status.extras.browser)
-                    row("Username search", status.extras.osint)
-                    row("Docker, for FlareSolverr", status.docker)
-                    row("SQLCipher, for Signal", status.sqlcipher)
-                    if !status.extras.bluetooth || !status.extras.browser || !status.extras.osint {
+                    row("Transfer passphrase", status.transferKey)
+                    if !status.extras.bluetooth {
                         HStack {
                             Text(verbatim: EngineLocator.installHint).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
                             Spacer()
                             Button("Copy") { copyToPasteboard(EngineLocator.installHint) }
                         }
                     }
-                }
-                Section("Credentials") {
-                    Muted("Whether each is present. Values are never shown, and they live in \(status.secrets.path).", font: .caption)
-                    ForEach(status.secrets.keys.sorted { $0.key < $1.key }, id: \.key) { key, present in row(key, present) }
-                    row("Google", status.google.signedIn)
-                    row("Sync server", status.sync.configured)
-                    row("Transfer passphrase", status.transferKey)
-                    row("Pi sign-in, for Codex", status.piAuth)
                 }
             } else {
                 Muted("Available once the engine is running.")

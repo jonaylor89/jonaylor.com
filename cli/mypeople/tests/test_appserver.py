@@ -19,8 +19,6 @@ import pytest
 
 from mypeople import appjobs, appserver, db, jobevents, publish, replica
 from mypeople.events import add_event
-from mypeople.extract import ExtractionPlan, ExtractionUpdate
-from mypeople.extraction_progress import ExtractionProgress
 from mypeople.importers.common import add_interaction
 
 FIXTURE = Path(__file__).parents[3] / "macos/mypeople/MyPeopleKit/Tests/MyPeopleKitTests/Fixtures/engine-view.json"
@@ -66,7 +64,7 @@ class Engine:
     def __init__(self, home: Path, script: str | None = None):
         self.db = home / ".mypeople" / "mypeople.db"
         self.env = {**os.environ, "HOME": str(home), "MYPEOPLE_DB": str(self.db), "MYPEOPLE_ENV_FILE": str(home / "secrets.ini"),
-                    "MYPEOPLE_PI_AUTH": str(home / "no-auth.json"), "MYPEOPLE_SYNC_CONFIG": str(home / "sync.json")}
+                    "MYPEOPLE_PI_AUTH": str(home / "no-auth.json")}
         argv = [sys.executable, "-c", script, str(self.db)] if script else [sys.executable, "-m", "mypeople", "app-server"]
         self.process = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=self.env)
         self.frames: queue.Queue = queue.Queue()
@@ -588,7 +586,10 @@ def test_a_merge_can_be_undone_from_the_view_until_the_records_move_on(home, see
     keep = e.call("people.merge", ids=[seeded["Ada Lovelace"], seeded["Ada"]])["person_id"]
     uid = e.view()[("person", str(keep))]["contact_uid"]
     e.call("contact.patch", uid=uid, values={"favorite": True})
-    assert e.view()[("person", str(keep))]["can_undo_merge"] is False
+    # Saving can move the merged contact's root to the other record, whichever way its UUIDs fall.
+    # Either way there's one Ada, with no leftover copy of the record that lost.
+    ada = [d for (kind, _), d in e.view().items() if kind == "person" and d["name"].startswith("Ada")]
+    assert len(ada) == 1 and ada[0]["can_undo_merge"] is False
     assert e.error("edit.apply", kind="merge_undo", payload={"person_id": keep})["code"] == "invalid"
     e.close()
 
@@ -610,88 +611,39 @@ def test_merging_someone_with_themselves_is_refused(home, seeded):
     e.close()
 
 
-def test_x_archive_review_names_a_conversation(home, tmp_path):
-    root = tmp_path / "x"
-    data = root / "data"
-    data.mkdir(parents=True)
-    (data / "account.js").write_text('window.YTD.account.part0 = [{"account": {"accountId": "1", "username": "me"}}]')
-    (data / "direct-messages.js").write_text('window.YTD.direct_messages.part0 = ' + json.dumps([{"dmConversation": {
-        "conversationId": "1-2", "messages": [{"messageCreate": {"senderId": "1", "recipientId": "2", "text": "hi", "createdAt": "2024-01-01T10:00:00.000Z", "id": "9"}}]}}]))
-    e = Engine(home)
-    [conversation] = e.call("twitter.unnamed", root=str(root))["conversations"]
-    assert conversation["account_id"] == "2" and conversation["messages"][0]["mine"] is True
-    assert e.error("twitter.name", account_id="2")["code"] == "invalid"
-    assert e.call("twitter.name", account_id="2", name="Ada Lovelace", handle="ada")["person_id"]
-    assert e.call("twitter.unnamed", root=str(root))["conversations"] == []
-    assert e.error("twitter.unnamed", root=str(tmp_path / "missing"))["code"] == "invalid"
-    e.close()
-
-
-# --- secrets ------------------------------------------------------------------------------
-
-def test_status_reports_that_a_secret_exists_but_never_its_value(home):
+def test_status_says_nothing_about_models_or_credentials(home):
     (home / "secrets.ini").write_text("EXA_API_KEY=value-that-must-not-leak\n")
-    (home / "sync.json").write_text(json.dumps({"url": "https://sync.example.test", "token": "token-that-must-not-leak"}))
     e = Engine(home)
     status = e.call("system.status")
-    dump = json.dumps(status)
-    assert "must-not-leak" not in dump
-    assert status["secrets"]["keys"]["EXA_API_KEY"] is True and status["secrets"]["keys"]["AUTUMN_API_KEY"] is False
-    assert status["sync"] == {"configured": True, "url": "https://sync.example.test"}
-    assert status["full_disk_access"] is None  # a throwaway HOME has no Messages database
+    assert "must-not-leak" not in json.dumps(status)
+    assert set(status) == {"db", "version", "python", "transfer_key", "extras"}
     e.close()
 
 
-def test_sync_setup_stores_the_token_privately_without_echoing_it(home):
+def test_a_note_is_saved_as_written_without_a_model(home, seeded, monkeypatch):
+    monkeypatch.setenv("MYPEOPLE_LLM", "nonexistent-backend")  # any model call would fail
     e = Engine(home)
-    assert e.call("system.status")["sync"]["configured"] is False
-    assert e.error("sync.setup", url="ftp://nope", token="t")["code"] == "invalid"
-    result = e.call("sync.setup", url="https://sync.example.test/", token="token-value")
-    assert "token-value" not in json.dumps(result) and not any("token-value" in json.dumps(f) for f in e.log)
-    config = home / "sync.json"
-    assert json.loads(config.read_text())["token"] == "token-value" and config.stat().st_mode & 0o077 == 0
+    e.call("edit.apply", kind="note", payload={"person_id": seeded["Grace Hopper"], "text": "  Her daughter starts school in May  "})
+    notes = [r for r in e.call("view.snapshot")["records"] if r["kind"] == "event" and r["data"]["type"] == "note"]
+    assert [(n["data"]["value"], n["data"]["source"]) for n in notes] == [("Her daughter starts school in May", "manual")]
     e.close()
 
 
-def test_server_devices(home):
+@pytest.mark.parametrize("method", ["sync.setup", "server.devices", "server.addDevice", "settings.llm", "dupes.judge", "twitter.unnamed"])
+def test_the_engine_no_longer_offers(home, method):
     e = Engine(home)
-    data = str(home / "server")
-    assert e.call("server.devices", data=data) == {"data": data, "exists": False, "devices": []}
-    assert not (home / "server").exists(), "looking must not create a server"
-    token = e.call("server.addDevice", data=data, name="pixel", role="phone")["token"]
-    assert len(token) > 20
-    assert e.error("server.addDevice", data=data, name="pixel", role="phone")["code"] == "invalid"
-    assert e.error("server.addDevice", data=data, name="mac", role="tablet")["code"] == "invalid"
-    assert [d["name"] for d in e.call("server.devices", data=data)["devices"]] == ["pixel"]
-    assert e.call("server.removeDevice", data=data, name="pixel") == {"removed": True}
+    assert e.error(method)["code"] in ("unknown_method", "invalid", "not_found")
     e.close()
 
 
 # --- jobs ---------------------------------------------------------------------------------
 
 EVERY_JOB = {
-    "import": [{"source": s, "path": "/tmp/x", "since": "2024-01-01"} for s in appjobs.IMPORT_SOURCES]
-              + [{"source": "imessage"}, {"source": "mbox", "path": "/tmp/m", "me": ["a@example.test", "b@example.test"]},
-                 {"source": "twitter", "path": "/tmp/x", "names": "/tmp/names.txt"}],
-    "extract": [{}, {"person_id": 3}, {"limit": 10, "since": "2024-01-01"}, {"all": True, "reverse": True}, {"dry_run": True}],
-    "note": [{"person_id": 3, "text": "her daughter starts school"}, {"person_id": 3, "text": "-starts with a dash"}],
-    "ask": [{"question": "who do I know in Lisbon?"}, {"question": "--help"}],
-    "socials_find": [{}, {"person_id": 3}, {"closest": 3, "again": True}, {"autumn": True, "autumn_timeout": 60, "osint": True},
-                     {"osint_only": True, "person_id": 3, "usernames": ["ada", "ada2"], "osint_timeout": 10}, {"flaresolverr": True, "flaresolverr_timeout": 30}],
-    "photos": [{}, {"source": "whatsapp", "path": "/tmp/w"}, {"source": "social", "limit": 10, "dry_run": True},
-               {"source": "instagram", "person_id": 3, "again": True, "delay": 1.5, "max_failures": 5, "browser": True},
-               {"source": "linkedin", "login": True}, {"source": "gravatar", "limit": 2}],
-    "instagram_links": [{}, {"person_id": 3, "limit": 2, "dry_run": True, "again": True, "delay": 4.0}],
-    "google_login": [{}],
-    "google_sync": [{}, {"apply": True, "photos": True, "no_notes": True, "create": True},
-                    {"person_ids": [1, 2], "min_messages": 5, "show": 50, "show_notes": True, "show_fields": True}],
-    "sync": [{}, {"no_enrich": True, "full": True}, {"watch": 60}],
-    "transfer_qr": [{}, {"minutes": 5, "no_photos": True, "no_enrich": True}],
+    "import_vcf": [{"path": "/tmp/c.vcf"}],
+    "transfer_qr": [{}, {"minutes": 5, "no_photos": True}],
     "transfer_export": [{"path": "/tmp/m.sherloq", "no_photos": True}, {"path": "/tmp/m.sherloq", "send": True}],
-    "transfer_import": [{"path": "/tmp/e.sherloq", "no_enrich": True}],
+    "transfer_import": [{"path": "/tmp/e.sherloq"}],
     "transfer_merge": [{"path": "/tmp/m.sherloq"}],
-    "recover_phones": [{}, {"google": True, "apply": True}],
-    "server_run": [{}, {"host": "127.0.0.1", "port": 9000, "data": "/tmp/server"}],
 }
 
 
@@ -702,8 +654,8 @@ def test_every_job_kind_is_covered_here():
 @pytest.mark.parametrize("kind,params", [(k, p) for k, cases in EVERY_JOB.items() for p in cases])
 def test_every_job_builds_a_command_line_the_cli_accepts(kind, params):
     # build_argv checks with the real parser, so the CLI's options can't drift from this table.
-    argv = appjobs.build_argv(kind, params, db_path=Path("/tmp/t.db"), llm="ds4")
-    assert argv[:3] == [sys.executable, "-m", "mypeople"] and argv[3:7] == ["--db", "/tmp/t.db", "--llm", "ds4"]
+    argv = appjobs.build_argv(kind, params, db_path=Path("/tmp/t.db"))
+    assert argv[:3] == [sys.executable, "-m", "mypeople"] and argv[3:5] == ["--db", "/tmp/t.db"]
 
 
 def test_job_options_mean_what_they_say():
@@ -712,87 +664,81 @@ def test_job_options_mean_what_they_say():
     def parse(kind, **params):
         return build_parser().parse_args(appjobs.build_argv(kind, params, db_path=Path("/tmp/t.db"))[3:])
 
-    assert parse("note", person_id=3, text="--dashes stay text").text == ["--dashes stay text"]
-    assert parse("ask", question="--help").question == ["--help"]
-    extract = parse("extract", person_id=3, dry_run=True)
-    assert (extract.person, extract.dry_run, extract.progress) == ("3", True, "plain")
-    google = parse("google_sync", apply=True, person_ids=[1, 2], min_messages=0)
-    assert (google.apply, google.person, google.min_messages) == (True, ["1", "2"], 0)
-    assert parse("server_run", port=0).port == 0
     assert parse("transfer_qr").no_open is True  # the app shows the QR itself
-    assert parse("socials_find", person_id=3, usernames=["ada"]).usernames == ["ada"]
+    assert parse("import_vcf", path="/tmp/c.vcf").source == "vcf"
+
+
+def test_the_app_can_never_start_a_model():
+    # An older phone can still queue a request, so both ways in have to leave it for the CLI.
+    for kind, params in (("transfer_qr", {}), ("transfer_import", {"path": "/tmp/e.sherloq"})):
+        assert "--no-enrich" in appjobs.build_argv(kind, params, db_path=Path("/tmp/t.db"))
+    assert not {"extract", "note", "ask", "socials_find", "photos", "google_sync", "sync", "server_run"} & set(appjobs.JOBS)
 
 
 @pytest.mark.parametrize("kind,params", [
     ("nonsense", {}),
-    ("import", {"source": "nonsense"}),
-    ("import", {"source": "vcf", "since": "yesterday"}),
-    ("ask", {}),
-    ("note", {"text": "no person"}),
-    ("note", {"person_id": "Ada", "text": "a name is not an id"}),
-    ("extract", {"limit": "many"}),
-    ("socials_find", {"autumn": True, "osint_only": True, "person_id": 3, "closest": "x"}),
-    ("photos", {"source": "nonsense"}),
+    ("import_vcf", {}),
     ("transfer_export", {}),
-    ("server_run", {"port": "http"}),
-    ("google_sync", {"person_ids": "1"}),
+    ("transfer_qr", {"minutes": "soon"}),
+    ("extract", {}),
+    ("sync", {}),
 ])
 def test_invalid_job_requests_are_refused(kind, params):
     with pytest.raises(appjobs.JobError):
         appjobs.build_argv(kind, params, db_path=Path("/tmp/t.db"))
 
 
-def test_the_signal_export_job_runs_its_own_module():
-    argv = appjobs.build_argv("signal_export", {"output": "/tmp/s.jsonl"}, db_path=Path("/tmp/t.db"))
-    assert argv == [sys.executable, "-m", "mypeople.importers.signal_export", "/tmp/s.jsonl"]
-
-
 def test_a_job_runs_streams_and_refreshes_the_view(home, seeded):
     e = Engine(home)
-    job = e.call("job.start", kind="extract", params={"dry_run": True})
-    e.wait_event("job.started", lambda p: p["id"] == job["id"] and p["kind"] == "extract")
+    vcf = home / "people.vcf"
+    vcf.write_text("BEGIN:VCARD\nVERSION:3.0\nFN:Katherine Johnson\nEMAIL:katherine@example.test\nEND:VCARD\n")
+    job = e.call("job.start", kind="import_vcf", params={"path": str(vcf)})
+    e.wait_event("job.started", lambda p: p["id"] == job["id"] and p["kind"] == "import_vcf")
     finished = e.wait_event("job.finished", lambda p: p["id"] == job["id"])
     assert finished["status"] == "succeeded" and finished["code"] == 0
-    assert e.wait_event("job.output", lambda p: p["id"] == job["id"] and "unread messages" in p["line"])
+    e.wait_event("view.delta", lambda p: any(r["data"].get("name") == "Katherine Johnson" for r in p["upserts"]))
     e.close()
 
 
 def test_a_failing_job_reports_the_clis_own_message(home):
     e = Engine(home)
-    job = e.call("job.start", kind="import", params={"source": "gvoice"})
+    job = e.call("job.start", kind="import_vcf", params={"path": str(home / "missing.vcf")})
     finished = e.wait_event("job.finished", lambda p: p["id"] == job["id"])
-    assert finished["status"] == "failed" and finished["code"] == 1
-    assert "Takeout" in finished["message"]
+    assert finished["status"] == "failed" and finished["message"]
     e.close()
 
 
-def test_free_text_stays_out_of_job_announcements():
-    assert appjobs._public({"person_id": 3, "text": "private note", "question": "private question"}) == {"person_id": 3}
-
-
-def test_cancel_is_ctrl_c_and_singletons_stay_single(home, tmp_path):
+def test_cancel_is_ctrl_c(home, tmp_path):
+    fifo = tmp_path / "blocks-until-written.vcf"
+    os.mkfifo(fifo)  # reading this waits forever, like a long-running job
     e = Engine(home)
-    params = {"data": str(tmp_path / "server"), "port": 0}
-    job = e.call("job.start", kind="server_run", params=params)
-    e.wait_event("job.output", lambda p: p["id"] == job["id"] and "Serving" in p["line"])
-    assert e.error("job.start", kind="server_run", params=params)["code"] == "invalid"
+    job = e.call("job.start", kind="import_vcf", params={"path": str(fifo)})
     e.call("job.cancel", id=job["id"])
-    finished = e.wait_event("job.finished", lambda p: p["id"] == job["id"])
-    assert finished["status"] == "cancelled"
+    assert e.wait_event("job.finished", lambda p: p["id"] == job["id"])["status"] == "cancelled"
     e.call("job.cancel", id=job["id"])  # harmless once it's over
-    # And the slot is free again.
-    again = e.call("job.start", kind="server_run", params=params)
-    e.call("job.cancel", id=again["id"])
-    e.wait_event("job.finished", lambda p: p["id"] == again["id"])
     e.close()
+
+
+def test_singletons_stay_single_until_they_finish(tmp_path, monkeypatch):
+    monkeypatch.setattr(appjobs, "build_argv", lambda *a, **k: [sys.executable, "-c", "input()"])
+    finished = queue.Queue()
+    runner = appjobs.JobRunner(lambda name, params: finished.put(params) if name == "job.finished" else None, tmp_path / "t.db")
+    first = runner.start("transfer_qr", {})
+    with pytest.raises(appjobs.JobError):
+        runner.start("transfer_qr", {})
+    runner.write(first["id"], "done")
+    assert finished.get(timeout=TIMEOUT)["id"] == first["id"]
+    runner.write(runner.start("transfer_qr", {})["id"], "done")  # the slot is free again
+    assert finished.get(timeout=TIMEOUT)
 
 
 def test_closing_the_app_stops_running_jobs(home, tmp_path):
+    fifo = tmp_path / "blocks-until-written.vcf"
+    os.mkfifo(fifo)
     e = Engine(home)
-    job = e.call("job.start", kind="server_run", params={"data": str(tmp_path / "server"), "port": 0})
-    e.wait_event("job.output", lambda p: p["id"] == job["id"] and "Serving" in p["line"])
+    e.call("job.start", kind="import_vcf", params={"path": str(fifo)})
     e.close()  # asserts a clean exit, which waits for the job
-    out = subprocess.run(["pgrep", "-f", str(tmp_path / "server")], capture_output=True, text=True).stdout
+    out = subprocess.run(["pgrep", "-f", str(fifo)], capture_output=True, text=True).stdout
     assert out.strip() == ""
 
 
@@ -823,16 +769,6 @@ def test_job_events_are_silent_unless_asked_for(capsys, monkeypatch):
     assert jobevents.parse(line) == {"kind": "qr", "path": "/tmp/x"}
     assert jobevents.parse("ordinary output") is None
     assert jobevents.parse(jobevents.PREFIX + "not json") is None
-
-
-def test_extraction_reports_counts_and_never_message_text(capsys, monkeypatch):
-    monkeypatch.setenv(jobevents.ENV, "1")
-    plan = ExtractionPlan(3, "Ada", messages=40, batches=2, work=4000)
-    with ExtractionProgress([plan], "codex", "model", "plain", refresh=False) as progress:
-        progress.update(ExtractionUpdate(plan, "batch_done", batch=1, messages_done=20, batches_done=1, work_done=2000, events=2, batch_work=2000, first_at="secret-first", last_at="secret-last"))
-    events = [e for line in capsys.readouterr().out.splitlines() if (e := jobevents.parse(line))]
-    assert events[-1]["messages_done"] == 20 and events[-1]["messages_total"] == 40 and events[-1]["person"] == "Ada"
-    assert "secret" not in json.dumps(events)
 
 
 # --- the cross-language contract ----------------------------------------------------------

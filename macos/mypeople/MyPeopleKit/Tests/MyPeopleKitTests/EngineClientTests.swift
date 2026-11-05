@@ -140,10 +140,10 @@ struct EngineClientTests {
         let transport = FakeTransport()
         let log = EventLog()
         let client = client(transport, log: log)
-        transport.deliver(#"{"event":"job.started","params":{"id":1,"kind":"ask","params":{}}}"#)
+        transport.deliver(#"{"event":"job.started","params":{"id":1,"kind":"transfer_qr","params":{}}}"#)
         transport.deliver(#"{"event":"job.output","params":{"id":1,"line":"hello"}}"#)
         transport.deliver(#"{"event":"job.progress","params":{"id":1,"event":{"kind":"qr","path":"/x"}}}"#)
-        transport.deliver(#"{"event":"job.finished","params":{"id":1,"kind":"ask","code":0,"status":"succeeded","message":"hello"}}"#)
+        transport.deliver(#"{"event":"job.finished","params":{"id":1,"kind":"transfer_qr","code":0,"status":"succeeded","message":"hello"}}"#)
         transport.deliver(#"{"event":"view.state","params":{"refreshing":false,"error":null}}"#)
         transport.respond = { frame, t in t.deliver("{\"id\":\(frame["id"]!.int!),\"result\":{}}") }
         let _: NoReply = try await client.call("ping")

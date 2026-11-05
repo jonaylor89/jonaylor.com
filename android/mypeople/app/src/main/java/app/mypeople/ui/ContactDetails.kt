@@ -154,7 +154,7 @@ fun ContactDetails(person: Person, id: Int, graph: AppGraph, edit: () -> Unit) {
                                 else -> (choice.value as? JsonPrimitive)?.contentOrNull.orEmpty().ifEmpty { "(empty)" }.take(160)
                             }
                             OutlinedButton(onClick = { scope.launch {
-                                try { graph.store.resolveContact(person.contact_uid, field, choice.change); graph.sync.afterEdit() }
+                                try { graph.store.resolveContact(person.contact_uid, field, choice.change) }
                                 catch (e: Exception) { Toast.makeText(context, graph.editError(e), Toast.LENGTH_LONG).show() }
                             } }, modifier = Modifier.fillMaxWidth()) { Text("Keep $value") }
                         }

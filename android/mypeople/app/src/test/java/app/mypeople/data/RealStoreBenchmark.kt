@@ -86,7 +86,6 @@ class RealStoreBenchmark {
         time("contactCard all") { view.people.values.forEach { it.contactCard() } }
         time("phoneCallTarget all") { view.people.values.forEach { p -> val c = p.contactCard(); c.fields.firstOrNull { it.kind == "phone" }?.let { f -> phoneCallTarget(f.value, f.region.ifEmpty { c.region }) } } }
         time("home today") { view.today(today) }
-        time("home feed") { view.feed(today) }
         time("home upcoming") { view.upcoming(today) }
         time("eventsFor one person") { view.eventsFor(target.key) }
         Unit

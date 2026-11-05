@@ -53,9 +53,23 @@ class LogicTest {
         val base = Records(dupes = mapOf("1-2" to Dupes(listOf(1, 2)), "1-2-3" to Dupes(listOf(1, 2, 3))))
         assertEquals(setOf("1-2-3"), optimistic(base, listOf(op("distinct", """{"person_ids":[1,2]}"""))).dupes.keys)
     }
-    @Test fun `enrichment is queued without fabricating facts`() {
+    @Test fun `a note shows on the contact at once as your own words`() {
+        val note = optimistic(Records(people), listOf(op("note", """{"person_id":1,"text":"  Remember  "}"""))).events.values.single()
+        assertEquals("Remember", note.value)
+        assertTrue(note.isNote && note.isManual)
+        assertEquals("Added by you", note.origin)
+    }
+    @Test fun `every fact says whether you wrote it or it was derived`() {
+        fun event(type: String, source: String) = Event(1, type, "x", source = source)
+        assertTrue(event("job", "manual").isManual && !event("job", "manual").isNote)
+        assertFalse(event("family", "note").isManual)
+        assertEquals("Derived from your note", event("family", "note").origin)
+        assertEquals("Imported from a vCard", event("job", "vcard").origin)
+        assertEquals("Derived from imessage", event("job", "imessage").origin)
+    }
+    @Test fun `requests queued by an older version are kept without fabricating facts`() {
         val base = Records(people)
-        assertEquals(base, optimistic(base, listOf(op("note", """{"person_id":1,"text":"Remember"}"""), op("extract", """{"person_id":1}"""), op("photos", "{}"), op("find_profiles", """{"person_id":1}"""))))
+        assertEquals(base, optimistic(base, listOf(op("extract", """{"person_id":1}"""), op("photos", "{}"), op("find_profiles", """{"person_id":1}"""))))
     }
     @Test fun `current profile matches Python source preference date and creation fallback`() {
         val oldConversation = e(date = "2020", source = "imessage")
@@ -78,17 +92,6 @@ class LogicTest {
         assertEquals("", normalizeDate("--13-02"))
         assertEquals("", normalizeDate("2026-13"))
         assertEquals("", normalizeDate("words"))
-    }
-    @Test fun `feed uses said at not event date excludes imports and bounds dates`() {
-        val records = Records(people, events = mapOf(
-            "old-event" to e(date = "2000", said = "2026-10-26 10:00:00"),
-            "unknown" to e(said = null), "old-said" to e(said = "2026-01-01"),
-            "vcard" to e(source = "vcard"), "google" to e(source = "google"), "linkedin" to e(source = "linkedin"),
-            "newer" to e(said = "2026-10-27"), "future" to e(said = "2027-01-01"), "orphan" to e(pid = 99),
-            "boundary" to e(said = now.minusDays(90).toString()),
-        ))
-        assertEquals(listOf("newer", "old-event", "boundary"), records.feed(now).map { it.key })
-        assertEquals(LocalDate.of(2026, 10, 26), weekOf("2026-10-27"))
     }
     @Test fun `today is new only today first then last seven days`() {
         fun m(date: String, status: String = "new") = Moment(1, "life", "Reason", surfaced_on = date, status = status)
@@ -126,33 +129,6 @@ class LogicTest {
         assertEquals(3, r.search("example.com").single().key)
         assertEquals("(555) 123-4567", formatPhone("5551234567"))
     }
-    @Test fun `paging follows server cursors through ops-only pages and deletes`() = runBlocking {
-        val calls = mutableListOf<Long>()
-        val first = RecordChange("person", "1", json.encodeToJsonElement(Person("A")))
-        val pending = op("rename", """{"person_id":1,"name":"B"}""")
-        var disk = DiskState(pending = listOf(pending))
-        pullChanges(0, { since ->
-            calls += since
-            when (since) {
-                0L -> Changes(5, true, listOf(first), emptyList())
-                5L -> Changes(12, true, emptyList(), listOf(OpState(1, pending.client_id, pending.kind, pending.payload, "pending")))
-                else -> Changes(20, false, listOf(RecordChange("person", "1", null)), listOf(OpState(1, pending.client_id, pending.kind, pending.payload, "done")))
-            }
-        }, { disk = disk.receive(it) })
-        assertEquals(listOf(0L, 5L, 12L), calls)
-        assertEquals(20, disk.cursor.toInt())
-        assertTrue(disk.records.people.isEmpty())
-        assertTrue(disk.pending.isEmpty())
-    }
-    @Test fun `paging refuses nonadvancing or backward cursor before applying`() = runBlocking {
-        for (cursor in listOf(4L, 5L)) {
-            var applied = false
-            try {
-                pullChanges(5, { Changes(cursor, true, emptyList(), emptyList()) }, { applied = true })
-                fail("Expected invalid cursor")
-            } catch (_: IllegalStateException) { assertFalse(applied) }
-        }
-    }
     @Test fun `failed op rolls back overlay preserves server and surfaces message once`() {
         val op = op("rename", """{"person_id":1,"name":"B"}""")
         val disk = DiskState(records = Records(people), pending = listOf(op))
@@ -162,10 +138,5 @@ class LogicTest {
         assertEquals("Sam", optimistic(next.records, next.pending).people[1]?.name)
         assertEquals("name is missing", next.notices.single().message)
         assertEquals(next.notices, next.receive(page).notices)
-    }
-    @Test fun `HTTP restricted to emulator and HTTPS origins only`() {
-        assertNull(validateServerUrl("https://host.tailnet.ts.net"))
-        assertNull(validateServerUrl("http://10.0.2.2:8765"))
-        listOf("http://host", "http://127.0.0.1:8765", "https://u:p@host", "https://host/path", "https://host?token=x", "https://host/#fragment", "garbage").forEach { assertNotNull(it, validateServerUrl(it)) }
     }
 }

@@ -1,10 +1,13 @@
 package app.mypeople.data
 
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
 // What the Mac publishes (see src/mypeople/publish.py). Ids are the Mac's database ids.
+
+val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
 @Serializable
 data class Identifier(val kind: String, val value: String)
@@ -74,7 +77,7 @@ data class Moment(
 @Serializable
 data class Dupes(val person_ids: List<Int>, val clues: List<String> = emptyList())
 
-// The sync protocol (see src/mypeople/server.py).
+// What a Mac sends back with fresh memory: records and the outcome of queued edits.
 
 @Serializable
 data class RecordChange(val kind: String, val id: String, val data: JsonElement? = null)

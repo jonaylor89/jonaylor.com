@@ -34,7 +34,7 @@ class MergeInternationalTest {
         val context = instrumentation.targetContext
         val graph = (context.applicationContext as MyPeopleApp).graph
         graph.store.initialize()
-        check(graph.store.state.value.records.people.isEmpty() && graph.store.state.value.pending.isEmpty() && !graph.settings.configured) { "Use a fresh disposable emulator." }
+        check(graph.store.state.value.records.people.isEmpty() && graph.store.state.value.pending.isEmpty()) { "Use a fresh disposable emulator." }
         for (permission in listOf(Manifest.permission.READ_CONTACTS, Manifest.permission.WRITE_CONTACTS)) instrumentation.uiAutomation.grantRuntimePermission(context.packageName, permission)
         graph.settings.contactsEnabled = false
         val uk = ContactCard("Alex QA", region = "GB", notes = "Original notes", fields = listOf(ContactField("phone", "020 7946 0018 ext 42", "UK"), ContactField("phone", "03-1234-5678", "Japan", region = "JP"), ContactField("phone", "06 6982", "Italy", region = "IT")))

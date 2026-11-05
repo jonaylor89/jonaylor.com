@@ -108,8 +108,6 @@ private struct DuplicateGroupCard: View {
     @State private var cards: [DupeCards.Card] = []
     @State private var selected: Set<Int> = []
     @State private var confirming: [Int]?
-    @State private var verdict: DupeVerdict?
-    @State private var judging = false
     @State private var error: String?
 
     private var ids: [Int] { group.personIds.filter { model.records.people[$0] != nil } }
@@ -127,20 +125,11 @@ private struct DuplicateGroupCard: View {
                     Label { Text(clue).fixedSize(horizontal: false, vertical: true) } icon: { Image(systemName: "lightbulb") }
                         .font(.callout).foregroundStyle(Kin.onSurfaceVariant)
                 }
-                if let verdict { verdictView(verdict) }
                 if let error { Text(error).foregroundStyle(Kin.error).font(.callout) }
                 HStack {
                     Button("Merge Selected (\(selected.count))") { confirming = Array(selected) }.disabled(selected.count < 2)
                     Button("Merge All \(ids.count)") { confirming = ids }
                     Button("Not the Same Person") { distinct() }
-                    Spacer()
-                    Button { Task { await judge() } } label: {
-                        if judging { ProgressView().controlSize(.small) } else { Label("Ask the Model", systemImage: "sparkles") }
-                    }
-                    .disabled(judging)
-                    .help(model.status?.llm.local == true
-                        ? "Your model on this Mac compares these records."
-                        : "Sends these names, facts and sample messages to \(model.status?.llm.model ?? "your configured model").")
                 }
             }
         }
@@ -184,31 +173,9 @@ private struct DuplicateGroupCard: View {
         .background(selected.contains(id) ? Kin.secondaryContainer : Kin.surfaceContainer, in: RoundedRectangle(cornerRadius: 10))
     }
 
-    private func verdictView(_ verdict: DupeVerdict) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("\(verdict.sameperson ? "Probably the same person" : "Probably different people") · \(Int((verdict.confidence * 100).rounded()))%").font(.callout.weight(.semibold))
-            Muted(verdict.reason)
-            Muted("The model's view, for you to weigh. It changes nothing.", font: .caption)
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Kin.surfaceContainer, in: RoundedRectangle(cornerRadius: 10))
-    }
-
     private func load() async {
         guard ids.count >= 2 else { return }
         cards = (try? await model.call("dupes.cards", ["ids": JSONValue(ints: ids)], as: DupeCards.self))?.cards ?? []
-    }
-
-    private func judge() async {
-        judging = true
-        defer { judging = false }
-        do {
-            verdict = try await model.call("dupes.judge", ["ids": JSONValue(ints: ids)])
-            error = nil
-        } catch {
-            self.error = error.localizedDescription
-        }
     }
 
     private func merge(_ chosen: [Int]) {

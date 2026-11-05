@@ -6,11 +6,11 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.MonthDay
 import java.time.format.DateTimeFormatter
-import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 
 val eventTypes = listOf("birthday", "job", "education", "move", "engagement", "wedding", "birth", "loss", "health", "trip", "achievement", "plan", "interest", "family", "promise", "other")
 val categories = listOf("family", "partner", "friend", "work", "acquaintance", "unknown")
+// extract, find_profiles and photos stay valid so requests queued by an older version still send.
 val opKinds = setOf("contact_change", "contact_save", "contact_trash", "contact_restore", "merge_undo", "rename", "alias_add", "alias_remove", "event_add", "event_forget", "relationship", "profile_status", "merge", "distinct", "moment_status", "note", "extract", "find_profiles", "photos")
 
 @Serializable
@@ -75,6 +75,7 @@ fun optimistic(base: Records, pending: List<PendingOp>): Records {
             "alias_add" -> if (person != null && person.aliases.none { it.equals(p.text("alias"), true) }) people[pid!!] = person.copy(aliases = person.aliases + p.text("alias"))
             "alias_remove" -> if (person != null) people[pid!!] = person.copy(aliases = person.aliases.filterNot { it.equals(p.text("alias"), true) })
             "event_add" -> if (pid != null && person != null) events[(-index - 1).toString()] = Event(pid, p.text("type"), p.text("value"), normalizeDate(p.text("date")), source = "manual", created_at = op.created_at, said_at = op.created_at)
+            "note" -> if (pid != null && person != null) events[(-index - 1).toString()] = Event(pid, "note", p.text("text").trim(), source = "manual")
             "event_forget" -> events.remove(p.text("event_id"))
             "relationship" -> if (person != null) people[pid!!] = person.copy(
                 category = p["category"]?.let { if (it == JsonNull) base.people[pid]?.category else p.text("category") } ?: person.category,
@@ -137,6 +138,18 @@ fun formatDate(raw: String?): String {
         else -> s
     }
 }
+/** Written by you, as opposed to read from messages or imported. */
+val Event.isManual: Boolean get() = source == "manual"
+val Event.isNote: Boolean get() = type == "note"
+/** Where this came from, in words. Keep in step with `origin` in Derivations.swift. */
+val Event.origin: String get() = when (source) {
+    "manual" -> "Added by you"
+    "note" -> "Derived from your note"
+    "vcard" -> "Imported from a vCard"
+    "google" -> "Imported from Google"
+    "linkedin" -> "Imported from LinkedIn"
+    else -> "Derived from $source"
+}
 fun whenKnown(e: Event): String = if (e.date.isEmpty() || e.date.startsWith("--")) e.created_at.take(10) else e.date
 fun currentProfile(events: Collection<Event>): Map<String, Event> = events.filter { it.type in setOf("job", "move", "education") }
     .groupBy { it.type }.mapValues { (_, es) -> es.maxWith(compareBy<Event> { it.source != "vcard" }.thenBy { whenKnown(it) }) }
@@ -168,11 +181,6 @@ fun Records.today(today: LocalDate): List<Map.Entry<String, Moment>> = moments.e
     val d = day(m.surfaced_on)
     m.status == "new" && people[m.person_id]?.trashed == false && d != null && d <= today && d >= today.minusDays(7)
 }.sortedWith(compareByDescending<Map.Entry<String, Moment>> { it.value.surfaced_on == today.toString() }.thenByDescending { it.value.surfaced_on }.thenByDescending { it.value.score })
-fun Records.feed(today: LocalDate): List<Map.Entry<String, Event>> = events.entries.filter { (_, e) ->
-    val d = day(e.said_at)
-    people[e.person_id]?.trashed == false && e.source !in setOf("vcard", "linkedin", "google") && d != null && d >= today.minusDays(90) && d <= today
-}.sortedByDescending { it.value.said_at }
-fun weekOf(raw: String): LocalDate? = day(raw)?.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
 data class Upcoming(val eventId: String, val event: Event, val on: LocalDate, val label: String)
 fun Records.upcoming(today: LocalDate): List<Upcoming> = events.mapNotNull { (id, e) ->
     val person = people[e.person_id] ?: return@mapNotNull null
@@ -196,14 +204,3 @@ fun Records.upcoming(today: LocalDate): List<Upcoming> = events.mapNotNull { (id
 }.sortedWith(compareBy<Upcoming> { it.on }.thenBy { people[it.event.person_id]?.name })
 
 fun formatPhone(raw: String): String = if (raw.length == 10 && raw.all(Char::isDigit)) "(${raw.take(3)}) ${raw.substring(3, 6)}-${raw.takeLast(4)}" else raw
-
-/** A cursor is committed only with the page it describes. Never infer it from record ids. */
-suspend fun pullChanges(initial: Long, fetch: suspend (Long) -> Changes, apply: suspend (Changes) -> Unit) {
-    var cursor = initial
-    do {
-        val page = fetch(cursor)
-        check(page.cursor >= cursor && (!page.more || page.cursor > cursor)) { "The server returned a non-advancing cursor." }
-        apply(page)
-        cursor = page.cursor
-    } while (page.more)
-}

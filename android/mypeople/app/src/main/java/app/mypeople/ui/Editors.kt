@@ -85,7 +85,7 @@ fun PersonEditor(mode: String, id: Int, person: Person, graph: AppGraph, close: 
                     if (mode == "Add fact") Choice("Type", type, eventTypes) { type = it }
                     OutlinedTextField(text, { text = it }, label = { Text(when (mode) { "Rename" -> "Name"; "Nicknames" -> "Nickname"; "Add note" -> "What would you like to remember?"; else -> "Fact" }) }, minLines = if (mode == "Add note") 3 else 1, modifier = Modifier.fillMaxWidth())
                     if (mode == "Add fact") OutlinedTextField(date, { date = it }, label = { Text("Date (optional)") }, supportingText = { Text("YYYY, YYYY-MM, YYYY-MM-DD or --MM-DD") }, isError = !dateValid, singleLine = true)
-                    if (mode == "Add note") Text("Your Mac will turn this note into facts when it next syncs. Until then the note stays queued.", style = MaterialTheme.typography.bodySmall)
+                    if (mode == "Add note") Text("Saved on this contact as you wrote it, and sent to your Mac at your next sync.", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }

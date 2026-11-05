@@ -279,9 +279,6 @@ struct JobPanel: View {
                         Button("Stop") { model.cancel(job) }.help("Stops as Ctrl-C does. Finished work is kept, and a later run picks up where this one stopped.")
                     }
                 }
-                if let progress = job.progress, progress["kind"]?.string == "extract" {
-                    ExtractProgressView(event: progress)
-                }
                 if job.status == .failed, !job.message.isEmpty {
                     Text(job.message).font(.callout).foregroundStyle(Kin.error).textSelection(.enabled)
                 }
@@ -311,33 +308,6 @@ struct JobLog: View {
                 .background(Kin.surface, in: RoundedRectangle(cornerRadius: 8))
                 .onChange(of: job.lines.count, initial: true) { proxy.scrollTo("end", anchor: .bottom) }
             }
-        }
-    }
-}
-
-struct ExtractProgressView: View {
-    var event: JSONValue
-
-    var body: some View {
-        let total = event["messages_total"]?.double ?? 0
-        let done = event["messages_done"]?.double ?? 0
-        VStack(alignment: .leading, spacing: 4) {
-            if total > 0 {
-                ProgressView(value: min(done, total), total: total).tint(Kin.primary)
-            }
-            HStack {
-                if let person = event["person"]?.string, !person.isEmpty {
-                    Text(person).lineLimit(1)
-                }
-                Spacer()
-                let people = "\(event["people_done"]?.int ?? 0)/\(event["people_total"]?.int ?? 0) people"
-                let messages = "\(Int(done).formatted())/\(Int(total).formatted()) messages"
-                let facts = "\(event["events"]?.int ?? 0) new facts"
-                Text("\(people) · \(messages) · \(facts)").monospacedDigit()
-                if let eta = event["eta"]?.string, !eta.isEmpty { Text("· \(eta)") }
-            }
-            .font(.caption)
-            .foregroundStyle(Kin.onSurfaceVariant)
         }
     }
 }

@@ -64,9 +64,10 @@ A lost download can safely be retried without applying an edit twice. Peer-speci
 include receipts for that uploaded outbox, not unrelated historical operation payloads. Edits created after
 the upload snapshot remain queued for the next session.
 
-Notes and enrichment run with the Mac’s normal configuration. `--no-enrich` defers those
-requests, and retryable model/network failures also remain queued. The phone reports
-remaining requests rather than claiming they were all applied.
+Phones no longer send model-backed requests, but one queued by an older version still applies.
+The CLI runs it with the Mac’s normal configuration. `--no-enrich` defers it, the Mac app always
+passes that flag so the app never calls a model, and retryable model/network failures also remain
+queued. The phone reports remaining requests rather than claiming they were all applied.
 
 ### Optional manual reverse-transfer fallback
 
@@ -109,8 +110,7 @@ already has, avoiding unchanged retransmission. Originals on the Mac are unchang
   master clock. Contact histories are joined across peers; switching collections/transports
   is blocked while there are unacknowledged edits.
 - Canonical records, revision, pending operations, and receipts are persisted in one atomic
-  phone transaction. In file mode, automatic server sync is disabled. The optional HTTPS
-  server workflow remains available, with the same outbox protection when switching back.
+  phone transaction.
 - Encrypted files use `SHERLOQ1`, 16-byte salt, 12-byte nonce, PBKDF2-HMAC-SHA256
   (200,000 iterations), and AES-256-GCM with the magic as authenticated associated data.
   Authenticated plaintext is a bounded ZIP containing `manifest.json` and content-addressed
@@ -127,8 +127,7 @@ already has, avoiding unchanged retransmission. Originals on the Mac are unchang
   Updated Android still reads v1/v2 offers; older APKs reject v3 instead of misreading it.
   Legacy v1 QRs remain download-only. Generate a fresh QR after upgrading both clients.
 - On the Mac, an edit and its UUID receipt commit together, even when the underlying edit
-  implementation calls `commit()`. Exporting a snapshot does not touch normal server-sync
-  cursors or operation IDs.
+  implementation calls `commit()`. Exporting a snapshot does not touch operation IDs.
 
 Repeated bootstrap parent arrays use a checksummed `contact_frontiers` table in transfer
 manifest format 2. Readers expand shared arrays directly, without materializing a giant

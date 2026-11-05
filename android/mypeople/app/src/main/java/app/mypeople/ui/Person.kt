@@ -8,6 +8,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -81,14 +82,6 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
                         listOf("Rename", "Nicknames", "Add fact", "Add note", "Relationship settings").forEach { label ->
                             DropdownMenuItem(text = { Text(label) }, onClick = { menu = false; dialog = label })
                         }
-                        HorizontalDivider()
-                        listOf("extract" to "Read new messages", "find_profiles" to "Find profiles", "photos" to "Refresh photos").forEach { (kind, label) ->
-                            val pending = state.pending.any { it.kind == kind && (kind == "photos" || it.payload.int("person_id") == id) }
-                            DropdownMenuItem(enabled = !pending, text = { Text(if (pending) "$label · Requested" else label) }, onClick = {
-                                menu = false
-                                graph.edit(kind, buildJsonObject { put("person_id", id) })
-                            })
-                        }
                     }
                 }
             }
@@ -99,7 +92,7 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
         }
         val events = remember(records, id) { records.eventsFor(id).entries.toList() }
         val profile = remember(events) { currentProfile(events.map { it.value }) }
-        LazyColumn(state = list, contentPadding = PaddingValues(start = KinSpace.s4, end = KinSpace.s4, bottom = KinSpace.s8)) {
+        LazyColumn(state = list, modifier = Modifier.testTag("person-list"), contentPadding = PaddingValues(start = KinSpace.s4, end = KinSpace.s4, bottom = KinSpace.s8)) {
             item { ContactHero(person, profile, graph) }
             item { Box(Modifier.padding(top = KinSpace.s4)) { ContactActions(person, edit = { editContact = true }) } }
             item {
@@ -140,52 +133,42 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
                 }
             }
             item {
-                Section("The story so far")
-                Text("Every fact has a source. Tap to look closer.", Modifier.padding(bottom = KinSpace.s3), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Section("Notes and facts")
+                Text("Tap one to see where it came from.", Modifier.padding(bottom = KinSpace.s3), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (events.isEmpty()) item {
-                Text("No facts yet. Add one above, or ask your Mac to read new messages below.", Modifier.padding(vertical = KinSpace.s4), style = MaterialTheme.typography.bodyMedium)
+                Text("Nothing yet. Add a note or a fact from the menu.", Modifier.padding(vertical = KinSpace.s4), style = MaterialTheme.typography.bodyMedium)
             }
             itemsIndexed(events, key = { _, entry -> entry.key }) { index, (eventId, event) ->
                 Surface(Modifier.padding(bottom = KinSpace.half), shape = segmentShape(index, events.size), color = journalSurfaceColor()) {
-                    Column(Modifier.fillMaxWidth().combinedClickable(onClickLabel = "View evidence", onLongClickLabel = "Forget fact", onClick = { evidenceKey = eventId; evidence = event }, onLongClick = { if (!eventId.startsWith("-")) forget = eventId }).padding(KinSpace.s4), verticalArrangement = Arrangement.spacedBy(KinSpace.s2)) {
+                    Column(Modifier.fillMaxWidth().combinedClickable(onClickLabel = "View where it came from", onLongClickLabel = if (event.isNote) "Forget note" else "Forget fact", onClick = { evidenceKey = eventId; evidence = event }, onLongClick = { if (!eventId.startsWith("-")) forget = eventId }).padding(KinSpace.s4), verticalArrangement = Arrangement.spacedBy(KinSpace.s2)) {
                         Text(formatDate(event.date), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(event.value, style = MaterialTheme.typography.bodyLarge)
                         Row(horizontalArrangement = Arrangement.spacedBy(KinSpace.s2), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.FormatQuote, null, Modifier.size(16.dp), tint = LocalPersonPalette.current?.accent ?: MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("${event.type} · ${event.source}${if (eventId.startsWith("-")) " · Waiting for your Mac" else ""}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Icon(if (event.isManual) Icons.Outlined.Edit else Icons.Outlined.FormatQuote, null, Modifier.size(16.dp), tint = LocalPersonPalette.current?.accent ?: MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("${if (event.isNote) "" else "${event.type} · "}${event.origin}${if (eventId.startsWith("-")) " · Not yet on your Mac" else ""}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                }
-            }
-            item {
-                Section("Tend to this memory")
-                Text("Your Mac does the reading. This phone only requests it.", Modifier.padding(bottom = KinSpace.s3), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            items(listOf("extract" to "Read new messages", "find_profiles" to "Find profiles", "photos" to "Refresh photos")) { (kind, label) ->
-                val pending = state.pending.any { it.kind == kind && (kind == "photos" || it.payload.int("person_id") == id) }
-                OutlinedButton(modifier = Modifier.fillMaxWidth().padding(bottom = KinSpace.s2), enabled = !pending, onClick = { graph.edit(kind, buildJsonObject { put("person_id", id) }) }) {
-                    Text(if (pending) "$label\nRequested · waiting for your Mac" else label)
                 }
             }
         }
         if (editContact) ContactEditor(graph, id, person.contactCard(), close = { editContact = false })
         dialog?.let { mode -> PersonEditor(mode, id, person, graph) { dialog = null } }
         evidence?.let { event ->
-            AlertDialog(onDismissRequest = { evidence = null }, icon = { Icon(Icons.Outlined.FormatQuote, null) }, title = { Text("Behind this fact") }, text = {
+            AlertDialog(onDismissRequest = { evidence = null }, icon = { Icon(Icons.Outlined.FormatQuote, null) }, title = { Text(if (event.isNote) "Your note" else "Behind this fact") }, text = {
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text(event.value, style = MaterialTheme.typography.bodyLarge)
                     Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.secondaryContainer) {
-                        Text(event.evidence?.takeIf { it.isNotBlank() }?.let { "“$it”" } ?: "No evidence quote was published for this fact.", Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium)
+                        Text(event.evidence?.takeIf { it.isNotBlank() }?.let { "“$it”" } ?: if (event.isManual) "Your own words." else "No evidence quote was published for this fact.", Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium)
                     }
-                    Text("${event.source} · said on ${formatDate(event.said_at?.take(10))}", style = MaterialTheme.typography.bodySmall)
+                    Text("${event.origin} · ${if (event.isManual) "on" else "said on"} ${formatDate(event.said_at?.take(10))}", style = MaterialTheme.typography.bodySmall)
                 }
             }, confirmButton = { TextButton(onClick = { evidence = null }) { Text("Close") } }, dismissButton = {
-                if (evidenceKey?.startsWith("-") == false) TextButton(onClick = { forget = evidenceKey; evidence = null }) { Text("Forget fact", color = MaterialTheme.colorScheme.error) }
+                if (evidenceKey?.startsWith("-") == false) TextButton(onClick = { forget = evidenceKey; evidence = null }) { Text(if (event.isNote) "Forget note" else "Forget fact", color = MaterialTheme.colorScheme.error) }
             })
         }
         forget?.let { eventId ->
-            AlertDialog(onDismissRequest = { forget = null }, title = { Text("Forget this fact?") }, text = { Text("It will be marked as wrong when your Mac next syncs.") },
+            AlertDialog(onDismissRequest = { forget = null }, title = { Text("Forget this?") }, text = { Text("It stays forgotten on your Mac after your next sync.") },
                 confirmButton = { TextButton(onClick = { graph.edit("event_forget", buildJsonObject { put("event_id", eventId.toInt()) }); forget = null }) { Text("Forget", color = MaterialTheme.colorScheme.error) } },
                 dismissButton = { TextButton(onClick = { forget = null }) { Text("Cancel") } })
         }

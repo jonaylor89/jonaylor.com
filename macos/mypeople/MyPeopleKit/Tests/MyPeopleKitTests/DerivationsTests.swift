@@ -44,23 +44,15 @@ struct DerivationsTests {
         #expect(normalizeDate("2024-01-") == "")
     }
 
-    @Test func feedUsesSaidAtExcludesImportsAndBoundsDates() {
-        let records = Records(people: people, events: [
-            "old-event": e(date: "2000", said: "2026-10-26 10:00:00"),
-            "unknown": e(said: nil), "old-said": e(said: "2026-01-01"),
-            "vcard": e(source: "vcard"), "google": e(source: "google"), "linkedin": e(source: "linkedin"),
-            "newer": e(said: "2026-10-27"), "future": e(said: "2027-01-01"), "orphan": e(pid: 99),
-            "boundary": e(said: now.adding(days: -90).description),
-        ])
-        #expect(records.feed(now).map(\.id) == ["newer", "old-event", "boundary"])
-        #expect(weekOf("2026-10-27") == LocalDay(year: 2026, month: 10, day: 26))
-    }
-
-    @Test func feedGroupsByMondayMostRecentFirst() {
-        let records = Records(people: people, events: ["a": e(said: "2026-10-27"), "b": e(said: "2026-10-26"), "c": e(said: "2026-10-25")])
-        let weeks = records.feedByWeek(now)
-        #expect(weeks.map(\.week.description) == ["2026-10-26", "2026-10-19"])
-        #expect(weeks[0].events.map(\.id) == ["a", "b"])
+    @Test func everyFactSaysWhetherYouWroteItOrItWasDerived() {
+        func event(_ type: String, _ source: String) -> Event { Event(personId: 1, type: type, value: "x", source: source) }
+        #expect(event("note", "manual").isManual && event("note", "manual").isNote)
+        #expect(event("note", "manual").origin == "Added by you")
+        #expect(event("job", "manual").isManual && !event("job", "manual").isNote)
+        #expect(!event("family", "note").isManual)
+        #expect(event("family", "note").origin == "Derived from your note")
+        #expect(event("job", "vcard").origin == "Imported from a vCard")
+        #expect(event("job", "imessage").origin == "Derived from imessage")
     }
 
     @Test func todayIsNewOnlyTodayFirstThenLastSevenDays() {

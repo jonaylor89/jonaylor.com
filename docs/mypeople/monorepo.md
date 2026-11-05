@@ -35,7 +35,6 @@ reports, or `.env`. History was not audited or imported.
 
 The existing database and private configuration under `~/.mypeople` remain in
 place. No database migration is required just because source files moved.
-The optional server's default data is under `~/.mypeople-server`.
 
 The old source-tree `.env` is no longer automatically loaded. Either move it
 manually to `~/.mypeople/secrets.ini` (do not overwrite an existing file), or set
@@ -44,7 +43,7 @@ owner (`chmod 600`). Explicit environment variables take precedence.
 Pi auth remains read-only at its configured external location.
 
 Never commit OAuth clients/tokens, browser profiles, pairing QR images,
-transfer keys, server credentials, contact/message exports, or personal fixtures.
+transfer keys, contact/message exports, or personal fixtures.
 Encrypted exports still contain private data and do not belong in source control.
 Ignore rules and Gitleaks are defense in depth, not proof of absence of personal
 data. If a real secret ever enters history, revoke/rotate it; deleting the current

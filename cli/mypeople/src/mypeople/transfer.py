@@ -297,10 +297,34 @@ class _Transaction:
         return getattr(self.conn, name)
 
 
+def _merge_facts(conn: sqlite3.Connection, manifest: dict) -> None:
+    """Add facts this database doesn't have, under the contact they belong to.
+
+    One-way and add-only. A fact forgotten here keeps its rejected row, so it can't come back,
+    but forgetting a fact on the other Mac doesn't remove it here.
+    """
+    from .events import NOTE, add_event
+    from .extract import NOTE_READ
+
+    records = manifest.get("records", [])
+    uids = {r["id"]: r["data"].get("contact_uid") for r in records if r.get("kind") == "person"}
+    for r in records:
+        if r.get("kind") != "event":
+            continue
+        e = r["data"]
+        uid = uids.get(str(e.get("person_id")))
+        row = conn.execute("SELECT id FROM people WHERE contact_uid = ? AND merged_into IS NULL", (uid,)).fetchone() if uid else None
+        if row is None or not isinstance(e.get("value"), str) or not e["value"].strip():
+            continue
+        add_event(conn, row["id"], e.get("type"), e["value"], e.get("date") or None, float(e.get("confidence", 1.0)),
+                  str(e.get("source") or ""), NOTE_READ if e.get("type") == NOTE else None,  # read where it was written
+                  e.get("evidence"), e.get("said_at"))
+
+
 def merge_snapshot(conn: sqlite3.Connection, path: Path, password: str) -> int:
     """Join an empty CLI to a collection, or reconcile another peer's contact history.
 
-    Published facts are a Mac-derived view, not portable authoritative message data.
+    Facts and notes come along, matched to people by contact. Messages stay behind.
     An existing unrelated address book is never implicitly combined with this one.
     """
     from . import replica
@@ -321,6 +345,7 @@ def merge_snapshot(conn: sqlite3.Connection, path: Path, password: str) -> int:
             if not combined.past(manifest.get("contact_heads", [])).issuperset(c["id"] for c in manifest.get("contact_history", [])):
                 raise ValueError("Invalid contact history frontier")
             conn.execute("UPDATE transfer_state SET source=? WHERE slot=1", (manifest["source"],))
+            _merge_facts(conn, manifest)
         return len(combined.changes) - len(history.changes)
     except (ValueError, TypeError) as exc:
         raise TransferError(str(exc)) from exc

@@ -2,7 +2,7 @@ import Foundation
 
 // The wire format of `mypeople app-server`: see cli/mypeople/src/mypeople/appserver.py.
 
-public let engineProtocolVersion = 1
+public let engineProtocolVersion = 2
 
 public enum EngineError: Error, Equatable, LocalizedError {
     /// A refusal from the engine. `code` is conflict, invalid, not_found, busy, database, model or internal.
@@ -153,55 +153,18 @@ public struct EditReply: Sendable, Decodable { public var message: String? }
 public struct StartedJob: Sendable, Decodable { public var id: Int }
 
 public struct SystemStatus: Sendable, Decodable {
-    public struct LLM: Sendable, Decodable {
-        public var backend: String
-        public var model: String
-        public var local: Bool
-        public var choices: [String]
-    }
-    public struct Secrets: Sendable, Decodable {
-        public var path: String
-        public var exists: Bool
-        public var keys: [String: Bool]
-    }
     public struct Extras: Sendable, Decodable {
         public var bluetooth: Bool
-        public var browser: Bool
-        public var osint: Bool
-    }
-    public struct Sources: Sendable, Decodable {
-        public var imessage: Bool
-        public var whatsapp: Bool
-        public var mino: Bool
-    }
-    public struct Google: Sendable, Decodable {
-        public var client: Bool
-        public var signedIn: Bool
-        enum CodingKeys: String, CodingKey { case client; case signedIn = "signed_in" }
-    }
-    public struct Sync: Sendable, Decodable {
-        public var configured: Bool
-        public var url: String?
     }
     public var db: String
     public var version: String
     public var python: String
-    public var llm: LLM
-    public var secrets: Secrets
-    public var piAuth: Bool
     public var transferKey: Bool
-    /// False: refused. Nil: nothing on this Mac to test it against.
-    public var fullDiskAccess: Bool?
     public var extras: Extras
-    public var docker: Bool
-    public var sqlcipher: Bool
-    public var sources: Sources
-    public var google: Google
-    public var sync: Sync
 
     enum CodingKeys: String, CodingKey {
-        case db, version, python, llm, secrets, extras, docker, sqlcipher, sources, google, sync
-        case piAuth = "pi_auth", transferKey = "transfer_key", fullDiskAccess = "full_disk_access"
+        case db, version, python, extras
+        case transferKey = "transfer_key"
     }
 }
 
@@ -269,38 +232,6 @@ public struct DupeCards: Sendable, Decodable {
     }
     public var cards: [Card]
     public var clues: [String]
-}
-
-public struct DupeVerdict: Sendable, Decodable {
-    public var sameperson: Bool
-    public var confidence: Double
-    public var reason: String
-    enum CodingKeys: String, CodingKey { case confidence, reason; case sameperson = "same_person" }
-}
-
-public struct UnnamedConversations: Sendable, Decodable {
-    public struct Conversation: Sendable, Decodable, Identifiable {
-        public struct Message: Sendable, Decodable { public var at: String; public var mine: Bool; public var text: String }
-        public var accountId: String
-        public var link: String
-        /// Authors of tweets they sent you, which can identify who this is.
-        public var tweetsShared: [String]
-        public var messages: [Message]
-        public var id: String { accountId }
-        enum CodingKeys: String, CodingKey { case link, messages; case accountId = "account_id", tweetsShared = "tweets_shared" }
-    }
-    public var conversations: [Conversation]
-}
-
-public struct ServerDevices: Sendable, Decodable {
-    public struct Device: Sendable, Decodable, Identifiable {
-        public var name: String
-        public var role: String
-        public var id: String { name }
-    }
-    public var data: String
-    public var exists: Bool
-    public var devices: [Device]
 }
 
 public struct ContactHistory: Sendable, Decodable {

@@ -23,8 +23,8 @@ def test_qr_applies_upload_before_fresh_snapshot_and_retries_once(tmp_path, monk
         assert not path.exists()  # Do not serve a stale snapshot generated before edits.
         op = {"client_id": "22222222-2222-4222-8222-222222222222", "kind": "event_add",
               "payload": {"person_id": person, "type": "job", "value": "Synthetic phone edit", "date": "2026"}}
-        deferred = {"client_id": "33333333-3333-4333-8333-333333333333", "kind": "note",
-                    "payload": {"person_id": person, "text": "Synthetic queued note"}}
+        deferred = {"client_id": "33333333-3333-4333-8333-333333333333", "kind": "extract",
+                    "payload": {"person_id": person}}
         encrypted = transfer.encrypt(transfer.pack({"format": 1, "type": "edits", "source": source, "ops": [op, deferred]}), password)
         protocol = bluetooth.SessionProtocol("synthetic-token", 9999999999, version=2)
         assert protocol.feed(b"SHERLOQ2 synthetic-token\n" + bluetooth.frame_header(encrypted, upload=True) + encrypted) == "uploaded"

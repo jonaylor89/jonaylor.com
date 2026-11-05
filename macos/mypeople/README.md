@@ -1,8 +1,12 @@
 # MyPeople for macOS
 
-A native Mac app for [MyPeople](../../cli/mypeople/README.md). It does what the
-[Android app](../../android/mypeople/README.md) does, plus what only the CLI can: imports, reading
-messages, finding profiles, photos, Google sync, and running the sync server.
+A native Mac app for [MyPeople](../../cli/mypeople/README.md). Like the
+[Android app](../../android/mypeople/README.md), it's for reading and writing your contacts: their
+details, notes and facts, plus reviewing duplicates, conflicts and suggested profiles. It also runs
+the Mac's side of the QR and Bluetooth exchange with your phone.
+
+Importing messages, reading them for facts, finding profiles, collecting photos and Google sync stay
+in the [CLI](../../cli/mypeople/README.md). Their results show up here on each contact.
 
 It works on the same database as the CLI, `~/.mypeople/mypeople.db`, and contains no logic that can
 change your data: every edit goes through the CLI's own code, which the app runs as a background
@@ -15,7 +19,7 @@ Requires macOS 15 or later, and the CLI.
 There is no signed download yet, so build it yourself with Xcode 16 or later:
 
 ```bash
-uv tool install --from './cli/mypeople[bluetooth,browser,osint]' mypeople
+uv tool install --from './cli/mypeople[bluetooth]' mypeople
 macos/mypeople/scripts/build-local.sh
 ```
 
@@ -27,10 +31,6 @@ update the app, because the app refuses a CLI whose protocol doesn't match and s
 
 ## Permissions
 
-- **Full Disk Access** is needed to import from Messages and to read other apps' message stores.
-  Grant it to MyPeople, not your terminal. The Import screen links to the right pane. The grant is
-  tied to the app's signature, so `build-local.sh` uses your Apple Development identity if you have
-  one. With an ad-hoc signature, you have to grant it again after each build.
 - **Bluetooth** is requested when you first exchange data with your phone.
 
 ## Development
@@ -50,7 +50,6 @@ To try the app without touching your real data, point everything at a throwaway 
 mkdir -p /tmp/mypeople-demo
 env HOME=/tmp/mypeople-demo MYPEOPLE_DB=/tmp/mypeople-demo/mypeople.db \
   MYPEOPLE_ENV_FILE=/dev/null MYPEOPLE_PI_AUTH=/dev/null \
-  MYPEOPLE_SYNC_CONFIG=/tmp/mypeople-demo/sync.json \
   path/to/MyPeople.app/Contents/MacOS/MyPeople
 ```
 

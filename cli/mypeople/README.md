@@ -378,7 +378,7 @@ Confirmed links appear in `mypeople show`. Suggestions and diagnostic evidence a
 | `today [--date D] [--preview]` | Up to 5 moments, each with a reason. Each moment is shown once. |
 | `people [query]` | Everyone, by inferred closeness, with trend and cadence. |
 | `show PERSON [--evidence]` | Current profile, relationship, and timeline, with the source of every fact. |
-| `note PERSON TEXT…` | Quick capture: "her daughter Maya starts kindergarten in September". |
+| `note PERSON TEXT…` | Quick capture: "her daughter Maya starts kindergarten in September". Saves your words on the contact, then reads them for facts. If the model is unavailable the note is kept, and `extract` reads it later. |
 | `socials find [PERSON \| --person PERSON] [--closest N] [--osint \| --osint-only] [--flaresolverr]` / `socials review [--all]` | Discover public profiles, collect ownership evidence, then review; OSINT-only skips Exa entirely. |
 | `photos [--source S]` | Collect local/Google photos; `--source social` fetches known LinkedIn/Instagram avatars; `--source gravatar` looks up known email hashes without login. `--dry-run` previews accounts; `--browser` enables dedicated login sessions. Largest per source is kept. |
 | `google login` / `google sync [--photos] [--create] [--person NAME_OR_ID] [--show-fields] [--apply]` | Export current contact cards and enrich Google Contacts; selection bypasses creation's message gate (dry run unless `--apply`). |
@@ -413,4 +413,4 @@ The importers are tested against a synthetic `chat.db`, `.vcf`, and `.mbox`. Ext
 
 ## Not yet
 
-Location-aware prompts, gift and intro suggestions, and the year in review. Android, encrypted Bluetooth/optional server sync, and opt-in public-profile discovery are implemented; see the app and feature documentation above. The brief's "last time you talked he was nervous" context line also needs an LLM pass over recent messages. Right now the context is the last-contact time plus the most relevant other fact.
+Location-aware prompts, gift and intro suggestions, and the year in review. Android, encrypted Bluetooth sync, and opt-in public-profile discovery are implemented; see the app and feature documentation above. The brief's "last time you talked he was nervous" context line also needs an LLM pass over recent messages. Right now the context is the last-contact time plus the most relevant other fact.

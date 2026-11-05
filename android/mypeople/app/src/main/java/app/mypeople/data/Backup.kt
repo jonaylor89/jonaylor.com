@@ -6,7 +6,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
-import okhttp3.Request
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -16,7 +15,7 @@ import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
 @Serializable
-data class ContactBackup(val format: Int = 1, val state: DiskState, val serverOrigin: String = "", val peopleFirst: Boolean = true)
+data class ContactBackup(val format: Int = 1, val state: DiskState, val peopleFirst: Boolean = true)
 
 /** Authenticated, versioned, bounded full phone backup. No OAuth/device/transfer secrets. */
 object BackupArchive {
@@ -52,12 +51,10 @@ object BackupArchive {
         }
         val b = requireNotNull(backup) { "Not a full MyPeople backup." }
         require(b.format == 1 && b.state.pending.size <= 10000 && b.state.records.people.size <= 100000) { "Unsupported backup." }
-        require(b.serverOrigin.isEmpty() || validateServerUrl(b.serverOrigin) == null) { "Invalid backup origin." }
         b.state.records.people.values.forEach { it.card?.validate() }
         if (b.state.replica.enabled) ContactHistory(b.state.replica.changes)
         require(b.state.replica.localIds.values.all { it < 0 } && b.state.replica.localIds.values.distinct().size == b.state.replica.localIds.size) { "Invalid replica identity map." }
         b.state.pending.forEach { require(it.kind in opKinds); java.util.UUID.fromString(it.client_id) }
-        require(b.state.records.people.values.mapNotNull { it.photo }.all { it in photos }) { "Backup is missing photos." }
         return b to photos
     }
 }
@@ -68,21 +65,14 @@ class Backups(private val context: Context, private val graph: app.mypeople.AppG
         for (hash in disk.records.people.values.mapNotNull { it.photo }.distinct()) {
             require(Regex("[a-f0-9]{64}").matches(hash)) { "Invalid photo reference." }
             val file = graph.offline.photo(hash)
-            val cached = if (!file.exists()) graph.imageLoader.diskCache?.openSnapshot(graph.api.photoUrl(hash))?.use { snapshot -> File(snapshot.data.toString()).inputStream().use { Transfer.readLimited(it, 10 * 1024 * 1024) } } else null
-            val bytes = if (file.exists()) file.inputStream().use { Transfer.readLimited(it, 10 * 1024 * 1024) } else if (cached != null && BackupArchive.hash(cached) == hash) cached else {
-                require(graph.settings.configured) { "Connect to the photo server before making a full backup." }
-                graph.client.newCall(Request.Builder().url(graph.api.photoUrl(hash)).build()).execute().use { response ->
-                    require(response.isSuccessful) { "A photo could not be backed up. Try again online." }
-                    Transfer.readLimited(response.body.byteStream(), 10 * 1024 * 1024)
-                }
-            }
+            if (!file.exists()) continue
+            val bytes = file.inputStream().use { Transfer.readLimited(it, 10 * 1024 * 1024) }
             require(BackupArchive.hash(bytes) == hash) { "Damaged cached photo." }; photos[hash] = bytes
-            if (!file.exists()) graph.offline.savePhoto(hash, bytes)
         }
-        val bytes = BackupArchive.encode(ContactBackup(state = disk, serverOrigin = graph.settings.serverUrl, peopleFirst = graph.settings.peopleFirst), photos, passphrase)
+        val bytes = BackupArchive.encode(ContactBackup(state = disk, peopleFirst = graph.settings.peopleFirst), photos, passphrase)
         requireNotNull(context.contentResolver.openOutputStream(uri, "wt")) { "Could not open backup destination." }.use { it.write(bytes) }
     }
-    suspend fun restore(uri: Uri, passphrase: String) = graph.sync.exclusive {
+    suspend fun restore(uri: Uri, passphrase: String) = graph.imports.exclusive {
         graph.deviceContacts.exclusive {
         withContext(Dispatchers.IO) {
             val bytes = requireNotNull(context.contentResolver.openInputStream(uri)).use { Transfer.readLimited(it, Transfer.MAX_FILE) }
@@ -90,7 +80,7 @@ class Backups(private val context: Context, private val graph: app.mypeople.AppG
             // Validate the whole archive first. Content-addressed files are harmless if a later disk write fails.
             photos.forEach { (hash, data) -> graph.offline.savePhoto(hash, data) }
             require(graph.store.snapshot().pending.isEmpty()) { "Sync pending edits before restoring." }
-            graph.settings.prepareRestore(backup.serverOrigin, backup.peopleFirst)
+            graph.settings.prepareRestore(backup.peopleFirst)
             graph.store.restoreBackup(backup.state)
         }
         }

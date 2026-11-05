@@ -193,7 +193,7 @@ fun Avatar(person: Person, graph: AppGraph, size: Dp = KinSize.avatarSm, shape: 
         val manual = remember(person.card?.photo) { person.card?.photo?.takeIf { it.isNotEmpty() }?.let { runCatching { Base64.getDecoder().decode(it) }.getOrNull() } }
         // The monogram stays underneath; a plain AsyncImage avoids a subcomposition per row.
         fallback()
-        val model = remember(manual, person.photo) { manual ?: person.photo?.let { val file = graph.offline.photo(it); if (file.exists()) file else graph.api.photoUrl(it) } }
+        val model = remember(manual, person.photo) { manual ?: person.photo?.let { val file = graph.offline.photo(it); file.takeIf { it.exists() } } }
         if (model != null) AsyncImage(model = model, imageLoader = graph.imageLoader, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
     }
 }

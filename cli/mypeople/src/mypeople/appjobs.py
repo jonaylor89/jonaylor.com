@@ -1,7 +1,7 @@
 """Long-running work for the macOS app: every job is one `mypeople …` child process.
 
 Python can't interrupt a thread, and the Bluetooth listener has to own its main thread, so
-imports, extraction, model calls and transfers run as ordinary CLI invocations. Cancelling is
+vCard imports and transfers run as ordinary CLI invocations. Cancelling is
 Ctrl-C, so the CLI's own checkpoints and resume behaviour apply unchanged. A crash in a native
 extension costs one job, not the app.
 
@@ -45,13 +45,6 @@ def _values(p: dict, *names: str) -> list[str]:
     return out
 
 
-def _repeated(p: dict, name: str, flag: str) -> list[str]:
-    values = p.get(name) or []
-    if not isinstance(values, list):
-        raise JobError(f"{name} must be a list")
-    return [part for value in values for part in (flag, str(value))]
-
-
 def _required(p: dict, name: str) -> str:
     value = p.get(name)
     if not isinstance(value, str) or not value.strip():
@@ -59,87 +52,26 @@ def _required(p: dict, name: str) -> str:
     return value
 
 
-def _missing(name: str) -> list[str]:
-    raise JobError(f"{name} is missing")
-
-
-def _person(p: dict, name: str = "person_id") -> list[str]:
-    """People are always named by id here, never by a name that could be ambiguous."""
-    if p.get(name) is None:
-        return []
-    if not isinstance(p[name], int):
-        raise JobError(f"{name} must be a number")
-    return [str(p[name])]
-
-
-def _person_flag(p: dict) -> list[str]:
-    return ["--person", *_person(p)] if p.get("person_id") is not None else []
-
-
-def _import(p: dict) -> list[str]:
-    source = p.get("source")
-    if source not in IMPORT_SOURCES:
-        raise JobError(f"Unknown import source {source!r}")
-    return ["import", source, *([p["path"]] if p.get("path") else []), *_values(p, "since", "names"), *_repeated(p, "me", "--me")]
-
-
-def _extract(p: dict) -> list[str]:
-    return ["extract", "--progress", "plain", *_person_flag(p), *_values(p, "limit", "since"), *_flags(p, "all", "reverse", "dry_run")]
-
-
-def _socials_find(p: dict) -> list[str]:
-    return ["socials", "find", *_person(p), *_values(p, "closest", "autumn_timeout", "osint_timeout", "flaresolverr_timeout"),
-            *_flags(p, "again", "autumn", "osint", "osint_only", "flaresolverr"), *_repeated(p, "usernames", "--username")]
-
-
-def _photos(p: dict) -> list[str]:
-    return ["photos", *_values(p, "source"), *([p["path"]] if p.get("path") else []), *_person_flag(p),
-            *_values(p, "limit", "delay", "max_failures"), *_flags(p, "dry_run", "again", "browser", "login")]
-
-
-def _google_sync(p: dict) -> list[str]:
-    return ["google", "sync", *_flags(p, "apply", "photos", "no_notes", "create", "show_notes", "show_fields"),
-            *_repeated(p, "person_ids", "--person"), *_values(p, "min_messages", "show")]
-
-
+# --no-enrich: a request queued by an older phone waits for the CLI, so the app never calls a model.
 JOBS: dict[str, Callable[[dict], list[str]]] = {
-    "import": _import,
-    "extract": _extract,
-    # `--` so that text starting with a dash stays text.
-    "note": lambda p: ["note", *(_person(p) or _missing("person_id")), "--", _required(p, "text")],
-    "ask": lambda p: ["ask", "--", _required(p, "question")],
-    "socials_find": _socials_find,
-    "photos": _photos,
-    "instagram_links": lambda p: ["instagram-links", *_person_flag(p), *_values(p, "limit", "delay"), *_flags(p, "dry_run", "again")],
-    "google_login": lambda p: ["google", "login"],
-    "google_sync": _google_sync,
-    "sync": lambda p: ["sync", *_values(p, "watch"), *_flags(p, "no_enrich", "full")],
-    "transfer_qr": lambda p: ["transfer", "qr", "--no-open", *_values(p, "minutes"), *_flags(p, "no_photos", "no_enrich")],
+    "import_vcf": lambda p: ["import", "vcf", _required(p, "path")],
+    "transfer_qr": lambda p: ["transfer", "qr", "--no-open", "--no-enrich", *_values(p, "minutes"), *_flags(p, "no_photos")],
     "transfer_export": lambda p: ["transfer", "export", _required(p, "path"), *_flags(p, "no_photos", "send")],
-    "transfer_import": lambda p: ["transfer", "import", _required(p, "path"), *_flags(p, "no_enrich")],
+    "transfer_import": lambda p: ["transfer", "import", _required(p, "path"), "--no-enrich"],
     "transfer_merge": lambda p: ["transfer", "merge", _required(p, "path")],
-    "recover_phones": lambda p: ["recover-phones", *_flags(p, "google", "apply")],
-    "server_run": lambda p: ["server", "run", *_values(p, "host", "port", "data")],
-}
-# Not a `mypeople` subcommand: this one must see the Signal Desktop key on the Mac that holds it.
-MODULE_JOBS: dict[str, tuple[str, Callable[[dict], list[str]]]] = {
-    "signal_export": ("mypeople.importers.signal_export", lambda p: [_required(p, "output")]),
 }
 # Only one of these can usefully run at a time.
-SINGLETONS = {"transfer_qr", "server_run", "google_login"}
+SINGLETONS = {"transfer_qr"}
 
 
-def build_argv(kind: str, params: dict, *, db_path: Path, llm: str | None = None) -> list[str]:
+def build_argv(kind: str, params: dict, *, db_path: Path) -> list[str]:
     """The full command line for a job, checked against the CLI's real parser."""
     if not isinstance(params, dict):
         raise JobError("Job parameters must be an object")
-    if kind in MODULE_JOBS:
-        module, build = MODULE_JOBS[kind]
-        return [sys.executable, "-m", module, *build(params)]
     if kind not in JOBS:
         raise JobError(f"Unknown job {kind!r}")
     args = JOBS[kind](params)
-    prefix = ["--db", str(db_path), *(["--llm", llm] if llm else [])]
+    prefix = ["--db", str(db_path)]
     from .cli import build_parser
 
     try:
@@ -168,7 +100,7 @@ class JobRunner:
         self.next_id = 1
 
     def start(self, kind: str, params: dict) -> dict:
-        argv = build_argv(kind, params, db_path=self.db_path, llm=os.environ.get("MYPEOPLE_LLM"))
+        argv = build_argv(kind, params, db_path=self.db_path)
         env = {**os.environ, jobevents.ENV: "1", "PYTHONUNBUFFERED": "1", "PYTHONUTF8": "1", "TERM": "dumb", "NO_COLOR": "1"}
         with self.lock:
             if kind in SINGLETONS and any(j.kind == kind for j in self.jobs.values()):
@@ -179,7 +111,7 @@ class JobRunner:
             process = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                        env=env, start_new_session=True)
             job = self.jobs[id] = _Job(id, kind, process)
-        self.send("job.started", {"id": id, "kind": kind, "params": _public(params)})
+        self.send("job.started", {"id": id, "kind": kind, "params": params})
         threading.Thread(target=self._pump, args=(job,), name=f"job-{id}", daemon=True).start()
         return {"id": id}
 
@@ -250,8 +182,3 @@ class JobRunner:
                 job.process.wait(max(0, deadline - time.monotonic()))
             except subprocess.TimeoutExpired:
                 self._signal(job, signal.SIGKILL)
-
-
-def _public(params: dict) -> dict:
-    """What the Activity list shows. Free text stays out; the screen that asked already has it."""
-    return {k: v for k, v in params.items() if k not in ("text", "question")}

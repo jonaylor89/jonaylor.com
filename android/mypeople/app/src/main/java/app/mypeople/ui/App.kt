@@ -73,11 +73,11 @@ fun MyPeople(graph: AppGraph, onContentReady: () -> Unit = {}) {
         }
         val lifecycle = LocalLifecycleOwner.current.lifecycle
         DisposableEffect(lifecycle) {
-            val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) { graph.sync.now(); graph.reconcileContacts() } }
+            val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) graph.reconcileContacts() }
             lifecycle.addObserver(observer)
             onDispose { lifecycle.removeObserver(observer) }
         }
-        LaunchedEffect(Unit) { graph.sync.now(); graph.feedback.collect { snackbar.showSnackbar(it) } }
+        LaunchedEffect(Unit) { graph.feedback.collect { snackbar.showSnackbar(it) } }
         LaunchedEffect(state.notices.firstOrNull()?.id) {
             state.notices.firstOrNull()?.let { notice ->
                 snackbar.showSnackbar(notice.message, duration = SnackbarDuration.Long)
@@ -113,7 +113,7 @@ fun MyPeople(graph: AppGraph, onContentReady: () -> Unit = {}) {
                     Surface(color = if (state.lastError != null) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer) {
                         Row(Modifier.fillMaxWidth().clickable { openTab("settings") }.heightIn(min = 48.dp).padding(horizontal = 24.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Icon(if (state.lastError != null) Icons.Outlined.CloudOff else Icons.Outlined.Schedule, null, Modifier.size(18.dp))
-                            Text(if (!state.ready) "Couldn’t open saved memory" else if (state.lastError != null) "Couldn’t sync · viewing saved memory" else if (state.offlineSource != null) "${state.pending.size} queued · sync with your Mac" else "${state.pending.size} queued · waiting for your Mac", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                            Text(if (!state.ready) "Couldn’t open saved memory" else if (state.lastError != null) "Something went wrong · viewing saved memory" else if (state.offlineSource != null) "${state.pending.size} queued · sync with your Mac" else "${state.pending.size} queued · waiting for your Mac", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
                             if (!state.ready) TextButton(onClick = { graph.openMemory() }) { Text("Retry") }
                             else Icon(Icons.Default.ChevronRight, null, Modifier.size(18.dp))
                         }
@@ -133,7 +133,6 @@ fun MyPeople(graph: AppGraph, onContentReady: () -> Unit = {}) {
                         else SavedRowsPlaceholder()
                     }
                 }
-                if (state.syncing) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp).align(Alignment.TopCenter), trackColor = MaterialTheme.colorScheme.surface)
                 }
             }
         }

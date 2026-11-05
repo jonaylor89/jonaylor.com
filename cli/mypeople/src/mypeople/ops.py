@@ -1,4 +1,4 @@
-"""Edits and enrichment requests made on the phone, applied to this Mac's database by `mypeople sync`.
+"""Edits made on the phone or the Mac app, and older requests, applied to this database.
 
 Each operation has a kind and a JSON payload naming people and facts by their ids here.
 A person merged since the phone last synced is followed to the record they were merged into.
@@ -9,12 +9,13 @@ from __future__ import annotations
 import sqlite3
 
 from . import identity, relationships
-from .events import EVENT_TYPES, add_event
+from .events import EVENT_TYPES, MANUAL, add_event, add_note
 
-EDITS = ("contact_change", "contact_save", "contact_trash", "contact_restore", "merge_undo", "rename", "alias_add", "alias_remove", "event_add", "event_forget", "relationship",
+EDITS = ("contact_change", "contact_save", "contact_trash", "contact_restore", "merge_undo", "rename", "alias_add", "alias_remove", "event_add", "event_forget", "note", "relationship",
          "profile_status", "merge", "distinct", "moment_status")
 # These need the model, Exa, or this Mac's address book, and can take a while.
-ENRICHMENT = ("note", "extract", "find_profiles", "photos")
+# Requests only older phones still send. Kept so that an edit bundle queued before they went CLI-only still applies.
+ENRICHMENT = ("extract", "find_profiles", "photos")
 KINDS = EDITS + ENRICHMENT
 
 
@@ -136,7 +137,7 @@ def apply(conn: sqlite3.Connection, kind: str, payload: dict) -> str:
     elif kind == "event_add":
         p, value = _person(conn, payload), _text(payload, "value")
         type = payload.get("type") if payload.get("type") in EVENT_TYPES else "other"
-        eid = add_event(conn, p["id"], type, value, payload.get("date") or None, 1.0, "manual")
+        eid = add_event(conn, p["id"], type, value, payload.get("date") or None, 1.0, MANUAL)
         message = "Added." if eid else "Already known."
     elif kind == "event_forget":
         cur = conn.execute("UPDATE events SET status = 'rejected' WHERE id = ?", (payload.get("event_id"),))
@@ -175,11 +176,8 @@ def apply(conn: sqlite3.Connection, kind: str, payload: dict) -> str:
             raise OpError("No such moment")
         message = "Thanks, noted."
     elif kind == "note":
-        from .extract import default_model, extract_note
-
         p, text = _person(conn, payload), _text(payload, "text")
-        added = extract_note(conn, default_model(), p["id"], text)
-        message = f"Noted. {added} new fact{'s' if added != 1 else ''}."
+        message = "Noted." if add_note(conn, p["id"], text) else "Already noted."
     elif kind == "extract":
         from .extract import default_model, extract_person
 

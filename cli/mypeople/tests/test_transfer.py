@@ -89,7 +89,7 @@ def test_enrichment_can_be_deferred_and_later_retried(conn, tmp_path, monkeypatc
     person = identity.create_person(conn, "Sample")
     source, _ = transfer._prepare(conn)
     path = tmp_path / "edits.sherloq"
-    path.write_bytes(edits(source, [operation("note", person_id=person, text="Synthetic note")]))
+    path.write_bytes(edits(source, [operation("extract", person_id=person)]))
     assert transfer.import_edits(conn, path, PASSWORD, enrich=False)["deferred"] == 1
     monkeypatch.setattr(ops, "apply", lambda *args: "Synthetic success")
     assert transfer.import_edits(conn, path, PASSWORD)["applied"] == 1

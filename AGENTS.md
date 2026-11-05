@@ -47,4 +47,4 @@
 - QA: `xcodebuild -project Fuego.xcodeproj -scheme Fuego -configuration Debug -only-testing:FuegoTests CODE_SIGNING_ALLOWED=NO test`.
 - Releases are tagged `fuego-v*`. Installed apps read their Sparkle appcast from `downloads.jonaylor.com/fuego/appcast.xml` (served by `apps/redirects`); don't change `SPARKLE_FEED_URL` or that route without a migration plan.
 - MyPeople (`macos/mypeople`) is a SwiftUI shell over the CLI's `mypeople app-server`; it holds no logic that changes data. QA from the root: `pnpm macos:mypeople:check` (includes a test against the real Python engine; needs uv), then `pnpm macos:mypeople:build`, plus `pnpm mypeople:check` for engine changes.
-- Run the MyPeople app only with `MYPEOPLE_DB`, `MYPEOPLE_ENV_FILE=/dev/null`, `MYPEOPLE_PI_AUTH=/dev/null`, `MYPEOPLE_SYNC_CONFIG`, and a throwaway `HOME` pointing at synthetic data. Architecture: `docs/mypeople/macos.md`.
+- Run the MyPeople app only with `MYPEOPLE_DB`, `MYPEOPLE_ENV_FILE=/dev/null`, `MYPEOPLE_PI_AUTH=/dev/null`, and a throwaway `HOME` pointing at synthetic data. Architecture: `docs/mypeople/macos.md`.

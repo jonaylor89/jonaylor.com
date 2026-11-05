@@ -10,7 +10,7 @@ from typing import Callable, Literal
 from pydantic import BaseModel, ValidationError
 
 from . import identity, llm
-from .events import EVENT_TYPES, add_event, events_for, format_date
+from .events import EVENT_TYPES, NOTE, add_event, add_note, events_for, format_date
 
 CONTEXT_MESSAGES = 20
 MAX_MESSAGE_CHARS = 1500
@@ -156,7 +156,8 @@ def plan_person(conn: sqlite3.Connection, person_id: int, since: dt.date | None 
 
 
 def _known(conn: sqlite3.Connection, person_id: int) -> str:
-    rows = events_for(conn, person_id)
+    # Not notes: as "known" facts they'd tell the model there's nothing to find in them.
+    rows = [r for r in events_for(conn, person_id) if r["type"] != NOTE]
     if not rows:
         return "(nothing yet)"
     return "\n".join(f"- {r['type']}: {r['value']} ({format_date(r['date'])})" for r in rows)
@@ -266,15 +267,33 @@ def extract_person(
     return added
 
 
+# events.source_ref of a note whose facts have been read, or that another machine reads.
+NOTE_READ = "read"
+
+
 def extract_note(conn: sqlite3.Connection, model: Model, person_id: int, note: str, today: dt.date | None = None) -> int:
-    """Quick capture: the user tells MyPeople something they learned."""
+    """Quick capture: keep what the user wrote, then read it for facts. A model failure loses nothing."""
     today = today or dt.date.today()
+    add_note(conn, person_id, note)
+    conn.commit()
     name = conn.execute("SELECT name FROM people WHERE id = ?", (person_id,)).fetchone()["name"]
     line = f"[{today.isoformat()} note] Me (a note to myself about {name}): {note}"
     result = model(SYSTEM, _prompt(_who(conn, person_id), name, _known(conn, person_id), [], [line], today))
     added = _store(conn, person_id, result, "note", today.isoformat())
+    conn.execute("UPDATE events SET source_ref = ? WHERE person_id = ? AND type = ? AND value = ?",
+                 (NOTE_READ, person_id, NOTE, note.strip()))
     conn.commit()
     return added
+
+
+def pending_notes(conn: sqlite3.Connection, person_id: int | None = None) -> list[sqlite3.Row]:
+    """Notes written in the apps, or saved while the model was unavailable, that haven't been read yet."""
+    only, args = (" AND e.person_id = ?", (person_id,)) if person_id is not None else ("", ())
+    return conn.execute(
+        "SELECT e.person_id, e.value, p.name FROM events e JOIN people p ON p.id = e.person_id "
+        f"WHERE e.type = ? AND e.status = 'active' AND e.source_ref IS NULL AND p.merged_into IS NULL{only} ORDER BY e.id",
+        (NOTE, *args),
+    ).fetchall()
 
 
 def pending_people(conn: sqlite3.Connection, since: dt.date | None = None) -> list[sqlite3.Row]:

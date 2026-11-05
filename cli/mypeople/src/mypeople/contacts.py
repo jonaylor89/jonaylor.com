@@ -284,6 +284,22 @@ def reversible_merge(conn, ids, action):
     return keep
 
 
+def _unchanged(conn, ids, after_data):
+    """Nothing you did has touched these records since the merge. A moment that was merely
+    surfaced doesn't count: the app chose it, and undoing loses nothing you did to it."""
+    def yours(data):
+        records = json.loads(data)
+        records["moments"] = [m for m in records["moments"] if m["status"] != "new"]
+        return records
+    return yours(capture(conn, ids)) == yours(after_data)
+
+
+def merge_can_be_undone(conn, keep):
+    """Exactly what undo_merge will accept, so the view never offers an undo it would refuse."""
+    row = conn.execute("SELECT person_ids, after_data FROM contact_merge_undo WHERE keep_id=? AND undone=0 ORDER BY id DESC LIMIT 1", (keep,)).fetchone()
+    return row is not None and _unchanged(conn, json.loads(row["person_ids"]), row["after_data"])
+
+
 def undo_merge(conn, keep):
     from . import replica
     person = conn.execute("SELECT contact_uid FROM people WHERE id=?", (keep,)).fetchone()
@@ -294,7 +310,7 @@ def undo_merge(conn, keep):
     if row is None:
         raise ValueError("No merge to undo")
     ids = json.loads(row["person_ids"])
-    if capture(conn, ids) != row["after_data"]:
+    if not _unchanged(conn, ids, row["after_data"]):
         raise ValueError("These contacts changed after merging. Restore from a backup instead; newer edits were not overwritten.")
     snapshot = json.loads(row["before_data"])
     marks = ",".join("?" for _ in ids)

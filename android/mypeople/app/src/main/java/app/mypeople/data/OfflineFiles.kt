@@ -9,7 +9,7 @@ import java.io.FileOutputStream
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
-class OfflineFiles(private val context: Context, private val store: Store, private val sync: Sync, private val settings: Settings) {
+class OfflineFiles(private val context: Context, private val store: Store, private val imports: MemoryImports, private val settings: Settings) {
     private val photos = File(context.filesDir, "offline-photos")
     fun photo(hash: String): File {
         require(Regex("[0-9a-f]{64}").matches(hash)) { "Invalid photo reference." }
@@ -38,9 +38,9 @@ class OfflineFiles(private val context: Context, private val store: Store, priva
         timed("archive", start)
         require(expectedSource == null || snapshot.source == expectedSource) { "This memory doesn’t match the Mac in the QR." }
         start = System.nanoTime()
-        sync.importOffline(snapshot)
+        imports.install(snapshot)
         timed("commit", start)
-        // Like the server token: app-private, excluded from backups, never saved UI state.
+        // App-private, excluded from backups, never saved UI state.
         // Retaining this lets tomorrow's edits use the same Mac's transfer key.
         settings.transferPassword = password
     }

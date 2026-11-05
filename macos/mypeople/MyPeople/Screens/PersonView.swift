@@ -84,8 +84,6 @@ struct PersonView: View {
                 Button("Add Note…") { sheet = .note }
                 Button("Relationship Settings…") { sheet = .relationship }
                 Divider()
-                tendButtons(id)
-                Divider()
                 Button("Export vCard…") { exportVCards(model: model, people: [person]) }
                 Button("Contact History…") { sheet = .history }
                 if person.canUndoMerge { Button("Undo Last Merge…") { confirmingUndo = true } }
@@ -99,16 +97,6 @@ struct PersonView: View {
                 Label("More", systemImage: "ellipsis.circle")
             }
         }
-    }
-
-    @ViewBuilder private func tendButtons(_ id: Int) -> some View {
-        Button("Read New Messages") { start("extract", id, "person_id") }
-        Button("Find Profiles") { start("socials_find", id, "person_id") }
-        Button("Refresh Photos") { Task { await model.startJob("photos") } }
-    }
-
-    private func start(_ kind: String, _ id: Int, _ key: String) {
-        Task { await model.startJob(kind, [key: .int(id)]) }
     }
 
     private func setTrashed(_ person: Person, _ trashed: Bool) {
@@ -162,10 +150,9 @@ struct PersonView: View {
                     }
                 }
 
-                SectionTitle(text: "The story so far")
-                Muted("Every fact has a source. Click to look closer.")
+                SectionTitle(text: "Notes and facts")
                 if events.isEmpty {
-                    Muted("No facts yet. Add one above, or read their new messages below.")
+                    Muted("Nothing yet. Add a note or a fact above.")
                 }
                 ForEach(events, id: \.id) { eventId, event in
                     Button { evidence = (eventId, event) } label: {
@@ -173,7 +160,7 @@ struct PersonView: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(formatDate(event.date)).font(.caption).foregroundStyle(Kin.onSurfaceVariant)
                                 Text(event.value).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
-                                Label("\(event.type) · \(event.source)", systemImage: "quote.opening")
+                                Label(event.isNote ? event.origin : "\(event.type) · \(event.origin)", systemImage: event.isManual ? "pencil" : "sparkles")
                                     .font(.caption).foregroundStyle(Kin.onSurfaceVariant)
                             }
                         }
@@ -181,23 +168,15 @@ struct PersonView: View {
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
-                        Button("Forget Fact…") { forgetting = eventId }
+                        Button(event.isNote ? "Forget Note…" : "Forget Fact…") { forgetting = eventId }
                     }
                 }
-
-                SectionTitle(text: "Tend to this memory")
-                HStack { tendButtons(id) }
-                ForEach(personJobs(id)) { job in JobPanel(job: job, logHeight: 110) }
             }
             .padding(20)
             .frame(maxWidth: 720, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .center)
         }
         .background(Kin.surface)
-    }
-
-    private func personJobs(_ id: Int) -> [Job] {
-        model.jobs.values.filter { $0.params["person_id"]?.int == id }.sorted { $0.id > $1.id }.prefix(2).map { $0 }
     }
 }
 
@@ -466,13 +445,13 @@ private struct EvidenceSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     Text(event.value).textSelection(.enabled)
-                    let quote = event.evidence?.isEmpty == false ? "“\(event.evidence!)”" : "No evidence quote was published for this fact."
+                    let quote = event.evidence?.isEmpty == false ? "“\(event.evidence!)”" : event.isManual ? "Your own words." : "No evidence quote was published for this fact."
                     Text(verbatim: quote)
                         .textSelection(.enabled)
                         .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Kin.secondaryContainer, in: RoundedRectangle(cornerRadius: 10))
-                    Muted("\(event.source) · said on \(formatDate(event.saidAt.map { String($0.prefix(10)) }))", font: .caption)
+                    Muted("\(event.origin) · \(event.isManual ? "on" : "said on") \(formatDate(event.saidAt.map { String($0.prefix(10)) }))", font: .caption)
                 }
             }
             HStack {
@@ -622,16 +601,24 @@ private struct AddNoteSheet: View {
     var id: Int
     var name: String
     @State private var text = ""
+    @State private var error: String?
 
     var body: some View {
         SheetFrame(title: "Add a note about \(name)", confirm: "Add Note", canConfirm: !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, onConfirm: save) {
             TextField("What would you like to remember?", text: $text, axis: .vertical).lineLimit(3...8).textFieldStyle(.roundedBorder)
-            Muted("MyPeople's model turns this note into facts. Progress shows on their page and in Activity.", font: .caption)
+            Muted("Saved as you wrote it, on their contact.", font: .caption)
+            if let error { Text(error).foregroundStyle(Kin.error) }
         }
     }
 
     private func save() async -> Bool {
-        await model.startJob("note", ["person_id": .int(id), "text": .string(text.trimmingCharacters(in: .whitespacesAndNewlines))]) != nil
+        do {
+            let _: EditReply = try await model.call("edit.apply", ["kind": "note", "payload": ["person_id": .int(id), "text": .string(text.trimmingCharacters(in: .whitespacesAndNewlines))]])
+            return true
+        } catch {
+            self.error = error.localizedDescription
+            return false
+        }
     }
 }
 

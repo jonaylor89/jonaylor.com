@@ -144,7 +144,7 @@ class ContactsTest {
         val store = Store(temp.newFolder()); store.saveContact(card)
         val photo = "photo bytes".toByteArray(); val hash = BackupArchive.hash(photo)
         val disk = store.snapshot().copy(records = Records(people = mapOf(1 to Person("Trash", trashed = true, photo = hash))), failedEdits = store.unsent())
-        val backup = ContactBackup(state = disk, serverOrigin = "https://example.com")
+        val backup = ContactBackup(state = disk)
         val encrypted = BackupArchive.encode(backup, mapOf(hash to photo), "correct horse battery")
         assertFalse(encrypted.toString(Charsets.UTF_8).contains("Alice"))
         val (decoded, photos) = BackupArchive.decode(encrypted, "correct horse battery")

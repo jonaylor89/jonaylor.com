@@ -106,7 +106,7 @@ fun BluetoothPairing(graph: AppGraph, state: StoreState, feedback: (String) -> U
                     } else {
                         LinearProgressIndicator(Modifier.fillMaxWidth())
                         Text(when (transfer.phase) {
-                            BluetoothPhase.WAITING_FOR_MAC -> "Your Mac is applying edits and preparing fresh memory. Notes and enrichment may take longer."
+                            BluetoothPhase.WAITING_FOR_MAC -> "Your Mac is applying edits and preparing fresh memory. Requests from an older version may take longer."
                             BluetoothPhase.IMPORTING -> "Verifying and saving memory and receipts together."
                             BluetoothPhase.CONFIRMING -> "Confirming that both devices finished."
                             else -> "Approve any OS Bluetooth pairing prompts."

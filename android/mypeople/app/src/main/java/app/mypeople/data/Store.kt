@@ -39,7 +39,6 @@ data class StoreState(
     val lastSync: String? = null,
     val lastError: String? = null,
     val notices: List<Notice> = emptyList(),
-    val syncing: Boolean = false,
     val ready: Boolean = false,
     val offlineSource: String? = null,
     val offlineRevision: Long = 0,
@@ -77,7 +76,7 @@ fun DiskState.receive(page: Changes): DiskState {
     )
 }
 
-/** One atomic JSON transaction contains the server view, cursor AND outbox. No partial-page saves. */
+/** One atomic JSON transaction contains the Mac's view, cursor AND outbox. No partial-page saves. */
 class Store(private val directory: File, private val startupTiming: (String, Long) -> Unit = { _, _ -> }) {
     private val mutex = Mutex()
     private val journal = StoreJournal(directory)
@@ -90,7 +89,6 @@ class Store(private val directory: File, private val startupTiming: (String, Lon
     private var view = Records()
     private var disk = DiskState()
     private var loaded = false
-    private var syncing = false
     private val mutable = MutableStateFlow(StoreState())
     val state: StateFlow<StoreState> = mutable.asStateFlow()
 
@@ -139,7 +137,7 @@ class Store(private val directory: File, private val startupTiming: (String, Lon
         else -> false
     }
     private fun publish() {
-        mutable.value = StoreState(records = shown(), pending = disk.pending, failedEdits = disk.failedEdits, lastSync = disk.lastSync, lastError = disk.lastError, notices = disk.notices, syncing = syncing, ready = loaded, offlineSource = disk.offlineSource, offlineRevision = disk.offlineRevision, replicatedContacts = disk.replica.enabled)
+        mutable.value = StoreState(records = shown(), pending = disk.pending, failedEdits = disk.failedEdits, lastSync = disk.lastSync, lastError = disk.lastError, notices = disk.notices, ready = loaded, offlineSource = disk.offlineSource, offlineRevision = disk.offlineRevision, replicatedContacts = disk.replica.enabled)
     }
     private fun load() {
         if (loaded) return
@@ -277,7 +275,6 @@ class Store(private val directory: File, private val startupTiming: (String, Lon
         }
         save(next)
     }
-    suspend fun busy(value: Boolean) = locked { syncing = value; publish() }
     suspend fun succeeded() = locked { save(disk.copy(lastSync = Instant.now().toString(), lastError = null)) }
     suspend fun error(message: String) = withContext(Dispatchers.IO) {
         mutex.withLock {
@@ -351,7 +348,7 @@ class Store(private val directory: File, private val startupTiming: (String, Lon
             record_hashes = if (samePeer) disk.replica.recordHashes else emptyMap())
     }
     suspend fun reset() = locked {
-        require(disk.pending.isEmpty() || standaloneQueue()) { "Wait for pending edits before switching servers or devices." }
+        require(disk.pending.isEmpty() || standaloneQueue()) { "Wait for pending edits before switching devices." }
         save(DiskState(pending = if (standaloneQueue()) disk.pending else emptyList(), replica = if (standaloneQueue()) disk.replica else ReplicaState(), nextLocalId = disk.nextLocalId, failedEdits = disk.failedEdits))
     }
 }

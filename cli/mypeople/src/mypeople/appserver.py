@@ -24,7 +24,6 @@ import json
 import math
 import os
 import queue
-import shutil
 import signal
 import sqlite3
 import sys
@@ -35,9 +34,9 @@ import uuid
 from pathlib import Path
 from typing import Callable
 
-from . import appjobs, contacts, db, identity, llm, moments, ops, publish, replica
+from . import appjobs, contacts, db, identity, moments, ops, publish, replica
 
-PROTOCOL = 1
+PROTOCOL = 2
 POLL_SECONDS = 2.0
 MIN_REFRESH_SECONDS = 5.0
 REFRESH_BACKOFF = 5  # never spend more than a fifth of the time refreshing
@@ -47,9 +46,8 @@ HISTORY_LIMIT = 200
 # Edits the app may send straight to ops.apply. Contact edits go through replica instead, as
 # `mypeople contact` does, so they enter causal history immediately. Model-backed operations
 # are jobs.
-EDIT_KINDS = ("alias_add", "alias_remove", "event_add", "event_forget", "relationship", "profile_status",
+EDIT_KINDS = ("alias_add", "alias_remove", "event_add", "event_forget", "note", "relationship", "profile_status",
               "distinct", "moment_status", "merge_undo")
-SECRET_KEYS = ("EXA_API_KEY", "AUTUMN_API_KEY", "ANTHROPIC_API_KEY")
 Key = tuple[str, str]
 
 
@@ -399,8 +397,6 @@ def _error(exc: Exception) -> dict:
         return {"code": "invalid", "message": str(exc)}
     if isinstance(exc, identity.PersonNotFound):
         return {"code": "not_found", "message": str(exc)}
-    if isinstance(exc, llm.LLMError):
-        return {"code": "model", "message": str(exc)}
     if isinstance(exc, sqlite3.OperationalError) and "locked" in str(exc):
         return {"code": "busy", "message": "The database is busy with another MyPeople process. Nothing was changed; try again."}
     if isinstance(exc, sqlite3.Error):
@@ -438,67 +434,17 @@ def _exists(path: Path) -> bool:
         return False
 
 
-def _full_disk_access() -> bool | None:
-    """Can this process read another app's data? None when there's nothing there to test against."""
-    probe = Path.home() / "Library" / "Messages" / "chat.db"
-    try:
-        with open(probe, "rb"):
-            return True
-    except PermissionError:
-        return False
-    except OSError:
-        return None
-
-
 @method("system.status")
 def system_status(self: Engine, conn, p: dict) -> dict:
-    from . import google, osint, sync, transfer
-    from .importers import imessage, mino, whatsapp
+    from . import transfer
 
-    backend = llm.backend()
-    home = Path.home()
-    secrets = Path(os.environ.get("MYPEOPLE_ENV_FILE", home / ".mypeople" / "secrets.ini")).expanduser()
     return {
         "db": str(self.db_path),
         "version": _version(),
         "python": sys.version.split()[0],
-        "llm": {"backend": backend.name, "model": backend.model, "local": backend.local, "choices": list(llm.BACKENDS)},
-        # Whether a credential exists, never its value.
-        "secrets": {"path": str(secrets), "exists": _exists(secrets), "keys": {k: bool(os.environ.get(k)) for k in SECRET_KEYS}},
-        "pi_auth": _exists(llm.AUTH_PATH),
         "transfer_key": _exists(transfer.KEY_FILE),
-        "full_disk_access": _full_disk_access(),
-        "extras": {
-            "bluetooth": all(importlib.util.find_spec(m) for m in ("IOBluetooth", "qrcode")),
-            "browser": importlib.util.find_spec("playwright") is not None,
-            "osint": bool(osint.available()),
-        },
-        "docker": shutil.which("docker") is not None,
-        "sqlcipher": shutil.which("sqlcipher") is not None,
-        "sources": {
-            "imessage": _exists(imessage.DEFAULT_DB),
-            "whatsapp": _exists(whatsapp.DEFAULT_DIR),
-            "mino": _exists(mino.DEFAULT_DB),
-        },
-        "google": {"client": _exists(google.CLIENT_PATH), "signed_in": _exists(google.TOKEN_PATH)},
-        "sync": _sync_status(sync),
+        "extras": {"bluetooth": all(importlib.util.find_spec(m) for m in ("IOBluetooth", "qrcode"))},
     }
-
-
-def _sync_status(sync) -> dict:
-    try:
-        return {"configured": True, "url": sync.load_config()["url"]}
-    except (sync.SyncError, OSError, ValueError, KeyError):
-        return {"configured": False, "url": None}
-
-
-@method("settings.llm")
-def settings_llm(self: Engine, conn, p: dict) -> dict:
-    name = _text(p, "backend")
-    if name not in llm.BACKENDS:
-        raise RpcError("invalid", f"Unknown model backend {name!r}")
-    os.environ["MYPEOPLE_LLM"] = name
-    return {}
 
 
 # --- contacts -----------------------------------------------------------------------------
@@ -508,6 +454,15 @@ def _uid_person(conn, uid: str) -> int:
     if row is None:
         raise RpcError("not_found", "That contact no longer exists.")
     return identity.canonical(conn, row["id"])
+
+
+def _capture_for(self: Engine, conn, uid: str | None) -> replica.History:
+    """Capture history before editing a contact. Capturing a recent merge can move its root to the
+    other record, and the view has to drop the old one too."""
+    row = conn.execute("SELECT id FROM people WHERE contact_uid = ?", (uid,)).fetchone() if uid else None
+    if row is not None:
+        self.touched.add(identity.canonical(conn, row["id"]))
+    return replica.capture(conn)
 
 
 def _contact(history: replica.History, uid: str) -> replica.Contact:
@@ -530,7 +485,7 @@ def contact_save(self: Engine, conn, p: dict) -> dict:
     card = p.get("card")
     if not isinstance(card, dict):
         raise RpcError("invalid", "card is missing")
-    history = replica.capture(conn)
+    history = _capture_for(self, conn, p.get("uid"))
     if p.get("uid"):
         contact = _contact(history, _text(p, "uid"))
         # replica.edit diffs against the current card, so a stale editor would silently revert
@@ -557,7 +512,7 @@ def contact_patch(self: Engine, conn, p: dict) -> dict:
         raise RpcError("invalid", "values must name contact fields")
     if "name" in values and (not isinstance(values["name"], str) or not values["name"].strip()):
         raise RpcError("invalid", "A contact needs a name")
-    uid = _contact(replica.capture(conn), _text(p, "uid")).uid
+    uid = _contact(_capture_for(self, conn, p.get("uid")), _text(p, "uid")).uid
     replica.change(conn, uid, values={**values, "user_edited": True})
     conn.commit()
     self.touched.add(_uid_person(conn, uid))
@@ -566,7 +521,7 @@ def contact_patch(self: Engine, conn, p: dict) -> dict:
 
 @method("contact.trash")
 def contact_trash(self: Engine, conn, p: dict) -> dict:
-    uid = _contact(replica.capture(conn), _text(p, "uid")).uid
+    uid = _contact(_capture_for(self, conn, p.get("uid")), _text(p, "uid")).uid
     replica.change(conn, uid, trashed=bool(p.get("trashed", True)))
     conn.commit()
     self.touched.add(_uid_person(conn, uid))
@@ -575,7 +530,7 @@ def contact_trash(self: Engine, conn, p: dict) -> dict:
 
 @method("contact.resolve")
 def contact_resolve(self: Engine, conn, p: dict) -> dict:
-    contact = _contact(replica.capture(conn), _text(p, "uid"))
+    contact = _contact(_capture_for(self, conn, p.get("uid")), _text(p, "uid"))
     field, change = _text(p, "field"), _text(p, "change")
     choice = next((c for c in contact.conflicts.get(field, []) if c["change"] == change), None)
     if choice is None:
@@ -744,101 +699,6 @@ def dupes_cards(self: Engine, conn, p: dict) -> dict:
     } for c in cards], "clues": dupes.shared_clues(cards, conn)}
 
 
-@method("dupes.judge", "slow")
-def dupes_judge(self: Engine, conn, p: dict) -> dict:
-    """Ask the configured model. Sends names, facts and the sample messages the app is showing."""
-    from . import dupes
-
-    verdict = dupes.judge(_dupe_cards(conn, _ints(p, "ids", 2)))
-    return {"same_person": verdict.same_person, "confidence": verdict.confidence, "reason": verdict.reason}
-
-
-@method("twitter.unnamed", "slow")
-def twitter_unnamed(self: Engine, conn, p: dict) -> dict:
-    """The conversations `import twitter --review` would ask about."""
-    from .importers import twitter
-
-    root = Path(_text(p, "root")).expanduser()
-    try:
-        todo = twitter.unnamed(conn, root)
-    except (OSError, ValueError, KeyError, IndexError) as exc:
-        raise RpcError("invalid", f"Couldn't read that X archive: {exc}") from None
-    return {"conversations": [{
-        "account_id": u.account_id, "link": u.link, "tweets_shared": u.tweets_shared,
-        "messages": [{"at": at, "mine": mine, "text": text} for at, mine, text in u.messages],
-    } for u in todo]}
-
-
-@method("twitter.name")
-def twitter_name(self: Engine, conn, p: dict) -> dict:
-    from .importers import twitter
-
-    name, handle = p.get("name") or None, p.get("handle") or None
-    person_id = p.get("person_id")
-    if not (name or handle or person_id):
-        raise RpcError("invalid", "Give a name, an @handle, or an existing person.")
-    pid = twitter.name_account(conn, _text(p, "account_id"), name, handle, person_id)
-    self.touched.add(pid)
-    return {"person_id": pid}
-
-
-# --- sync and server ----------------------------------------------------------------------
-
-@method("sync.setup")
-def sync_setup(self: Engine, conn, p: dict) -> dict:
-    """A call rather than a job, so the token never appears in a process list or a job log."""
-    from . import sync
-
-    url, token = _text(p, "url"), _text(p, "token")
-    if not url.startswith(("https://", "http://")):
-        raise RpcError("invalid", "The server address must start with https://")
-    sync.save_config(url, token)
-    conn.executescript(sync.SCHEMA)
-    conn.execute("DELETE FROM sync_pushed")  # a new server starts empty
-    conn.commit()
-    return {}
-
-
-def _server_root(p: dict) -> Path:
-    from . import server
-
-    return Path(p["data"]).expanduser() if p.get("data") else server.default_dir()
-
-
-def _with_store(root: Path, action: Callable):
-    from . import server
-
-    store = server.Store(root)
-    try:
-        return action(store)
-    finally:
-        store.conn.close()
-
-
-@method("server.devices")
-def server_devices(self: Engine, conn, p: dict) -> dict:
-    root = _server_root(p)
-    if not (root / "server.db").exists():  # looking shouldn't create a server here
-        return {"data": str(root), "exists": False, "devices": []}
-    rows = _with_store(root, lambda s: s.devices())
-    return {"data": str(root), "exists": True, "devices": [dict(r) for r in rows]}
-
-
-@method("server.addDevice")
-def server_add_device(self: Engine, conn, p: dict) -> dict:
-    name, role = _text(p, "name"), _text(p, "role")
-    try:
-        return {"token": _with_store(_server_root(p), lambda s: s.add_device(name, role))}
-    except sqlite3.IntegrityError:
-        raise RpcError("invalid", f"There's already a device called {name}. Remove it first to issue a new token.") from None
-
-
-@method("server.removeDevice")
-def server_remove_device(self: Engine, conn, p: dict) -> dict:
-    name = _text(p, "name")
-    return {"removed": _with_store(_server_root(p), lambda s: s.remove_device(name))}
-
-
 # --- jobs ---------------------------------------------------------------------------------
 
 @method("job.start", "now")
@@ -890,7 +750,6 @@ def serve(db_path: Path) -> None:
         finally:
             os._exit(0)
 
-    llm.load_env_file()  # as the CLI does, so status and model calls see the same credentials
     engine = Engine(db_path, emit)
     signal.signal(signal.SIGTERM, shutdown)
     signal.signal(signal.SIGINT, shutdown)

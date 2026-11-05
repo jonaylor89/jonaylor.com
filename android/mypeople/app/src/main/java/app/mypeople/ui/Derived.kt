@@ -28,7 +28,7 @@ object Derived {
         val results = records.searchPeople("", "name")
         records.sections("", "name", results)
         records.profileByPerson(); records.favorites()
-        records.moments(today); records.feedByWeek(today); records.upcomingSoon(today); records.recentlyInTouch()
+        records.moments(today); records.upcomingSoon(today); records.recentlyInTouch()
         records.suggestedProfiles(); records.duplicateGroups()
     }
 }
@@ -42,7 +42,6 @@ fun Records.sections(query: String, sort: String, results: List<Map.Entry<Int, P
 fun Records.profileByPerson() = Derived.of(this, "profiles") { events.values.groupBy { it.person_id }.mapValues { currentProfile(it.value) } }
 fun Records.favorites() = Derived.of(this, "favorites") { people.entries.filter { it.value.card?.favorite == true && !it.value.trashed }.sortedBy { it.value.name.lowercase() } }
 fun Records.moments(today: LocalDate) = Derived.of(this, "today:$today") { today(today) }
-fun Records.feedByWeek(today: LocalDate) = Derived.of(this, "feed:$today") { feed(today).groupBy { weekOf(it.value.said_at.orEmpty()) } }
 fun Records.upcomingSoon(today: LocalDate) = Derived.of(this, "upcoming:$today") { upcoming(today) }
 fun Records.recentlyInTouch() = Derived.of(this, "recent") { people.entries.filter { it.value.last_contact != null && !it.value.trashed }.sortedByDescending { it.value.last_contact }.take(3) }
 fun Records.suggestedProfiles() = Derived.of(this, "review-profiles") {

@@ -31,7 +31,7 @@ class ReplicatedContactsTest {
         val context = instrumentation.targetContext
         val graph = (context.applicationContext as MyPeopleApp).graph
         graph.store.initialize()
-        check(graph.store.state.value.records.people.isEmpty() && graph.store.state.value.pending.isEmpty() && !graph.settings.configured) { "Use a fresh disposable emulator." }
+        check(graph.store.state.value.records.people.isEmpty() && graph.store.state.value.pending.isEmpty()) { "Use a fresh disposable emulator." }
         for (permission in listOf(Manifest.permission.READ_CONTACTS, Manifest.permission.WRITE_CONTACTS)) instrumentation.uiAutomation.grantRuntimePermission(context.packageName, permission)
         graph.settings.contactsEnabled = false
         val first = graph.store.saveContact(ContactCard("Ada QA", notes = "Original", region = "GB", fields = listOf(ContactField("phone", "020 7946 0018", region = "GB"))))

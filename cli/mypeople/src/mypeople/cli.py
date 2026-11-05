@@ -213,7 +213,7 @@ def _llm_errors():
 
 
 def cmd_extract(conn, args) -> None:
-    from .extract import extract_person, pending_people, plan_person
+    from .extract import extract_note, extract_person, pending_notes, pending_people, plan_person
 
     # One named person, or --all, means their whole history unless --since says otherwise.
     since = args.since or (None if args.all or args.person else _default_since())
@@ -228,10 +228,13 @@ def cmd_extract(conn, args) -> None:
         waiting = sum(p["pending"] for p in pending)
         window = "all time" if since is None else f"since {since.isoformat()}"
         print(f"{len(pending)} people with {waiting} unread messages ({window}); this run reads {len(todo)} of them.")
-    if not todo:
+    notes = pending_notes(conn, p["id"] if args.person else None)
+    if not todo and not notes:
         print("Nothing new to read.")
         return
     if args.dry_run:
+        if notes:
+            print(f"{len(notes)} unread note{'s' if len(notes) != 1 else ''}")
         for p in todo:
             print(f"{p['name']} (#{p['id']}): {p['pending']} new messages")
         return
@@ -244,6 +247,14 @@ def cmd_extract(conn, args) -> None:
 
     mode = args.progress
     total = 0
+    try:
+        for note in notes:
+            total += extract_note(conn, model, note["person_id"], note["value"])
+    except _llm_errors() as e:
+        sys.exit(f"Couldn't read a note about {note['name']}: {e}\nIt's saved; rerun to try again.")
+    if not todo:
+        print(f"Done. {total} new events.", flush=True)
+        return
     display = None
     current_name = "batch preparation"
     try:
@@ -331,7 +342,7 @@ def cmd_note(conn, args) -> None:
     try:
         added = extract_note(conn, _model(), p["id"], " ".join(args.text))
     except _llm_errors() as e:
-        sys.exit(f"Couldn't process the note: {e}")
+        sys.exit(f"Saved your note, but couldn't read it for facts: {e}\nRun `mypeople extract` to try again.")
     print(f"Noted. {added} new event{'s' if added != 1 else ''} for {p['name']}.")
 
 
@@ -808,67 +819,6 @@ def cmd_recover_phones(conn, args) -> None:
         sys.exit(f"Phone recovery stopped: {exc}")
 
 
-def cmd_server(conn, args) -> None:
-    from . import server
-
-    store = server.Store(args.data or server.default_dir())
-    if args.action == "add-device":
-        if not args.name:
-            sys.exit("Name the device, e.g. `mypeople server add-device pixel --role phone`.")
-        try:
-            token = store.add_device(args.name, args.role)
-        except sqlite3.IntegrityError:
-            sys.exit(f"There's already a device called {args.name}. Remove it first to issue a new token.")
-        print(f"Token for {args.name} ({args.role}). It's shown once; paste it into the device now:\n\n  {token}\n")
-    elif args.action == "remove-device":
-        print("Removed." if store.remove_device(args.name or "") else f"No device called {args.name}.")
-    elif args.action == "devices":
-        for d in store.devices():
-            print(f"  {d['name']} ({d['role']}), added {d['created_at']}, last seen {d['last_seen'] or 'never'}")
-    else:
-        httpd = server.make_server(store, args.host, args.port)
-        print(f"Serving {store.root} on http://{args.host}:{args.port} (Ctrl-C to stop).")
-        try:
-            httpd.serve_forever()
-        except KeyboardInterrupt:
-            pass
-
-
-def cmd_sync(conn, args) -> None:
-    import time
-
-    from . import sync
-
-    if args.action == "setup":
-        if not (args.url and args.token):
-            sys.exit("Usage: mypeople sync setup URL TOKEN")
-        sync.save_config(args.url, args.token)
-        conn.executescript(sync.SCHEMA)
-        conn.execute("DELETE FROM sync_pushed")  # a new server starts empty
-        conn.commit()
-        print(f"Saved to {sync.CONFIG}. Run `mypeople sync` to push everything.")
-        return
-    try:
-        config = sync.load_config()
-        client = sync.Client(config["url"], config["token"])
-        if args.full:
-            conn.executescript(sync.SCHEMA)
-            conn.execute("DELETE FROM sync_pushed")
-            conn.commit()
-        while True:
-            stats = sync.sync(conn, client, enrich=not args.no_enrich)
-            print(f"{time.strftime('%H:%M')} applied {stats['applied']} from phones; "
-                  f"pushed {stats['updated']} changed and {stats['deleted']} deleted of {stats['records']} records, "
-                  f"{stats['photos']} photos.")
-            if not args.watch:
-                break
-            time.sleep(args.watch)
-    except sync.SyncError as e:
-        sys.exit(str(e))
-    except KeyboardInterrupt:
-        pass
-
-
 def cmd_app_server(conn, args) -> None:
     from . import appserver
 
@@ -1030,16 +980,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--show-fields", action="store_true", help="print proposed structured fields in dry runs (notes require --show-notes)")
     p.set_defaults(func=cmd_google)
 
-    p = sub.add_parser("sync", help="apply edits from your phone, then push what's new to the sync server")
-    p.add_argument("action", nargs="?", choices=("now", "setup"), default="now")
-    p.add_argument("url", nargs="?", help="with setup: the server's address")
-    p.add_argument("token", nargs="?", help="with setup: a mac token from `mypeople server add-device`")
-    p.add_argument("--watch", type=int, metavar="SECONDS", help="keep syncing, this many seconds apart")
-    p.add_argument("--no-enrich", action="store_true", help="apply edits only; leave enrichment requests for later")
-    p.add_argument("--full", action="store_true", help="push every record again, not just what changed")
-    p.set_defaults(func=cmd_sync)
-
-    p = sub.add_parser("transfer", help="exchange encrypted memory and edits files over Bluetooth or USB; no server")
+    p = sub.add_parser("transfer", help="exchange encrypted memory and edits files over Bluetooth or USB")
     p.add_argument("action", choices=("qr", "export", "import", "merge"))
     p.add_argument("path", nargs="?", type=Path, help="memory output or phone edits input (.sherloq)")
     p.add_argument("--password-file", type=Path, help="private file containing the shared transfer passphrase")
@@ -1061,15 +1002,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--apply", action="store_true", help="back up, then apply only unambiguous repairs; preserve concurrent/manual changes")
     p.set_defaults(func=cmd_recover_phones)
 
-    p = sub.add_parser("server", help="run the sync server on an always-on machine, and manage its devices")
-    p.add_argument("action", choices=("run", "add-device", "remove-device", "devices"))
-    p.add_argument("name", nargs="?", help="device name, for add-device and remove-device")
-    p.add_argument("--role", choices=("phone", "mac"), default="phone", help="what the device may do (default phone)")
-    p.add_argument("--data", type=Path, help="where the server keeps its data (default ~/.mypeople-server)")
-    p.add_argument("--host", default="127.0.0.1", help="address to listen on (default 127.0.0.1; use tailscale serve for HTTPS)")
-    p.add_argument("--port", type=int, default=8765)
-    p.set_defaults(func=cmd_server, needs_db=False)
-
     p = sub.add_parser("app-server", help="the local engine behind the macOS app; speaks JSON over stdin/stdout")
     p.set_defaults(func=cmd_app_server, needs_db=False)
     return parser
@@ -1079,7 +1011,6 @@ def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     if args.llm:
         os.environ["MYPEOPLE_LLM"] = args.llm
-    # The server keeps its own data; don't create a MyPeople database on its machine.
     conn = db.connect(args.db) if getattr(args, "needs_db", True) else None
     try:
         args.func(conn, args)

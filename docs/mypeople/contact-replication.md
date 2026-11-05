@@ -126,9 +126,12 @@ Switching to a foreign collection never uploads the old collection's history.
 ## Deliberate boundaries
 
 - **This is contact replication, not replication of the whole SQLite database.** Imported
-  conversations, inferred life events, relationship inference/overrides, aliases, profile
-  decisions, moments, and model/enrichment requests retain their existing Mac workflow.
-  A CLI clone imports contact history, not another machine's published facts/messages.
+  conversations, relationship inference/overrides, aliases, profile decisions, moments, and
+  model/enrichment requests retain their existing Mac workflow.
+- **Notes and facts travel with the contact, but one way and add-only.** `transfer merge` adds
+  those it doesn't have to the matching contact, keeping their source. A fact forgotten here
+  stays forgotten, but forgetting one on the other Mac doesn't remove it here, and only the Mac
+  that wrote a note reads it for facts. They aren't in the causal history above.
   Queued Mac-only memory requests must finish with their original publisher before switching
   peers, because their integer fact/profile IDs are not portable across CLI databases.
 - **Splitting a replicated identity/undoing its merge is not implemented.** Android hides

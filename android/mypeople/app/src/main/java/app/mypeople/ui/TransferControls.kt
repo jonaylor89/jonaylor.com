@@ -32,7 +32,7 @@ fun TransferControls(graph: AppGraph, state: StoreState, feedback: (String) -> U
     JournalCard {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("Sync with your Mac", style = MaterialTheme.typography.titleLarge)
-            Text(if (state.offlineSource == null) "No server needed. Scan your Mac’s QR to sync over Bluetooth." else "Offline memory · revision ${state.offlineRevision}. One QR scan sends queued edits and brings back updated memory.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (state.offlineSource == null) "Scan your Mac’s QR to sync over Bluetooth." else "Offline memory · revision ${state.offlineRevision}. One QR scan sends queued edits and brings back updated memory.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             BluetoothPairing(graph, state, feedback)
             OutlinedButton(enabled = state.ready && !busy, onClick = { choose.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) { Text("Import memory file") }
             OutlinedButton(enabled = state.offlineSource != null && state.pending.isNotEmpty() && !busy, modifier = Modifier.fillMaxWidth(), onClick = {

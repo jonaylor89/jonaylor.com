@@ -3,14 +3,11 @@ package app.mypeople
 import android.app.Application
 import app.mypeople.data.*
 import coil3.ImageLoader
-import coil3.disk.DiskCache
-import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.serialization.json.*
 import java.io.File
-import okio.Path.Companion.toOkioPath
 
 class MyPeopleApp : Application() {
     lateinit var graph: AppGraph
@@ -18,7 +15,6 @@ class MyPeopleApp : Application() {
     override fun onCreate() {
         super.onCreate()
         graph = AppGraph(this)
-        SyncWorker.schedule(this)
     }
 }
 
@@ -30,16 +26,12 @@ class AppGraph(context: Application, startMemoryImmediately: Boolean = true) {
         if (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0)
             android.util.Log.i("MyPeopleStartup", "$stage=${milliseconds}ms")
     }
-    val client = httpClient(settings)
-    val api = Api(settings, client)
-    val sync = Sync(settings, api, store, scope)
-    val offline = OfflineFiles(context, store, sync, settings)
+    val imports = MemoryImports(store)
+    val offline = OfflineFiles(context, store, imports, settings)
     val bluetooth = BluetoothMemory(context, offline)
     val backups = Backups(context, this)
     val deviceContacts = DeviceContacts(context, this)
     val imageLoader = ImageLoader.Builder(context)
-        .components { add(OkHttpNetworkFetcherFactory(callFactory = { client })) }
-        .diskCache { DiskCache.Builder().directory(File(context.cacheDir, "photos").toOkioPath()).maxSizeBytes(100L * 1024 * 1024).build() }
         .build()
     private val messages = Channel<String>(Channel.BUFFERED)
     val feedback = messages.receiveAsFlow()
@@ -59,7 +51,7 @@ class AppGraph(context: Application, startMemoryImmediately: Boolean = true) {
         scope.launch {
             var previous: Records? = null
             store.state.collect { state ->
-                if (state.ready && !state.syncing && state.records != previous) {
+                if (state.ready && state.records != previous) {
                     previous = state.records
                     reconcileContacts()
                 }
@@ -86,7 +78,6 @@ class AppGraph(context: Application, startMemoryImmediately: Boolean = true) {
         val person = store.state.value.records.people[payload.int("person_id")]
         val addressed = if (payload.text("contact_uid").isEmpty() && person?.contact_uid?.isNotEmpty() == true) JsonObject(payload + ("contact_uid" to JsonPrimitive(person.contact_uid))) else payload
         store.enqueue(kind, addressed)
-        sync.afterEdit()
         if (kind == "merge") messages.send(if (store.state.value.replicatedContacts) "Contacts merged on this phone." else "Merge saved on this phone. Sync with your Mac to finish.")
     }.await()
 
@@ -107,17 +98,8 @@ class AppGraph(context: Application, startMemoryImmediately: Boolean = true) {
     }
     suspend fun retryFailed(clientId: String) {
         store.retryFailed(clientId)
-        sync.afterEdit()
     }
     suspend fun saveContact(card: ContactCard, id: Int? = null, contactUid: String? = null, expectedPerson: Person? = null): Int {
-        val result = store.saveContact(card, id, contactUid, expectedPerson = expectedPerson)
-        sync.afterEdit()
-        return result
-    }
-    suspend fun configure(url: String, token: String) {
-        sync.configure(url, token)
-        imageLoader.memoryCache?.clear()
-        imageLoader.diskCache?.clear()
-        sync.now()
+        return store.saveContact(card, id, contactUid, expectedPerson = expectedPerson)
     }
 }

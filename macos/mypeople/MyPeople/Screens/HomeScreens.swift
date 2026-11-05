@@ -124,32 +124,6 @@ private struct MomentPreview: View {
     }
 }
 
-struct FeedView: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        let day = LocalDay.today()
-        let weeks = model.derived("feed:\(day)") { $0.feedByWeek(day) }
-        Page(title: "Feed", subtitle: "What people told you in the last 90 days, with where it came from.") {
-            if weeks.isEmpty {
-                ContentUnavailableView("No recent news", systemImage: "text.quote", description: Text("Facts from conversations in the last 90 days will appear here, with their sources."))
-            }
-            ForEach(weeks, id: \.week) { week, events in
-                SectionTitle(text: "Week of \(formatDate(week.description))")
-                ForEach(events, id: \.id) { _, event in
-                    CardBox {
-                        VStack(alignment: .leading, spacing: 8) {
-                            PersonLinkRow(id: event.personId, detail: capitalized(event.type))
-                            Text(event.value).fixedSize(horizontal: false, vertical: true)
-                            Muted("Said on \(formatDate(event.saidAt.map { String($0.prefix(10)) })) · \(event.source)", font: .caption)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 struct UpcomingView: View {
     @Environment(AppModel.self) private var model
 
@@ -172,65 +146,6 @@ struct UpcomingView: View {
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-struct AskView: View {
-    @Environment(AppModel.self) private var model
-    @State private var question = ""
-    @FocusState private var focused: Bool
-
-    var body: some View {
-        Page(title: "Ask", subtitle: "A question about the people you know, answered from your memory.") {
-            HStack {
-                TextField("Who do I know in Lisbon?", text: $question, axis: .vertical)
-                    .lineLimit(1...4)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($focused)
-                    .onSubmit(ask)
-                Button("Ask", action: ask)
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !model.isReady)
-            }
-            if let llm = model.status?.llm {
-                Muted("Answered by \(llm.model)\(llm.local ? " on this Mac" : ", so relevant facts leave this Mac"). Change it in Settings.", font: .caption)
-            }
-            ForEach(model.asks.reversed(), id: \.jobId) { ask in
-                CardBox {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(ask.question).font(.headline).textSelection(.enabled)
-                        if let job = model.jobs[ask.jobId] {
-                            if job.isRunning && job.lines.isEmpty {
-                                HStack(spacing: 8) {
-                                    ProgressView().controlSize(.small)
-                                    Muted("Thinking…")
-                                }
-                            }
-                            Text(job.outputLines.joined(separator: "\n"))
-                                .textSelection(.enabled)
-                                .fixedSize(horizontal: false, vertical: true)
-                            if job.isRunning {
-                                Button("Stop") { model.cancel(job) }
-                            } else if job.status == .failed {
-                                Text(job.message.isEmpty ? "That didn't work." : job.message).foregroundStyle(Kin.error)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        .onAppear { focused = true }
-    }
-
-    private func ask() {
-        let text = question.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, model.isReady else { return }
-        question = ""
-        Task {
-            if let id = await model.startJob("ask", ["question": .string(text)]) {
-                model.asks.append((question: text, jobId: id))
             }
         }
     }

@@ -37,14 +37,14 @@ class StartupNavigationTest {
         // A valid last-known read-only index must not turn corrupt authority into edit permission.
         binary.writeBytes(bytes.copyOf().also { it[20] = (it[20].toInt() xor 1).toByte() })
         val graph = AppGraph(context.applicationContext as Application, startMemoryImmediately = false)
-        check(!graph.settings.configured && !graph.settings.contactsEnabled) { "Use a fresh disposable emulator." }
+        check(!graph.settings.contactsEnabled) { "Use a fresh disposable emulator." }
         assertFalse(graph.store.state.value.ready)
         compose.setContent { MyPeople(graph) }
         compose.onNodeWithContentDescription("Search people").assertIsDisplayed()
         compose.onNodeWithText("Opening your memory…").assertDoesNotExist()
         compose.onNodeWithText("No one found").assertDoesNotExist()
         compose.onNodeWithTag("nav-settings").assertIsEnabled().performClick()
-        compose.onNodeWithText("Sync & storage").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Storage").performScrollTo().assertIsDisplayed()
         assertFalse(graph.store.state.value.ready)
         graph.openMemory()
         compose.waitUntil(5000) { graph.store.state.value.lastError != null }

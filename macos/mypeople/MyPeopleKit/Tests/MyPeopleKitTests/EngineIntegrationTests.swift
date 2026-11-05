@@ -31,7 +31,6 @@ struct EngineIntegrationTests {
             env["MYPEOPLE_DB"] = home.appendingPathComponent(".mypeople/test.db").path
             env["MYPEOPLE_ENV_FILE"] = "/dev/null"
             env["MYPEOPLE_PI_AUTH"] = "/dev/null"
-            env["MYPEOPLE_SYNC_CONFIG"] = home.appendingPathComponent("sync.json").path
             // uv keeps its own caches under the real home, so moving HOME doesn't mean downloading again.
             env["UV_CACHE_DIR"] = env["UV_CACHE_DIR"] ?? realHome + "/.cache/uv"
             env["UV_PYTHON_INSTALL_DIR"] = env["UV_PYTHON_INSTALL_DIR"] ?? realHome + "/.local/share/uv/python"
@@ -101,10 +100,17 @@ struct EngineIntegrationTests {
 
             let status: SystemStatus = try await client.call("system.status")
             #expect(status.db.hasSuffix("test.db"))
-            #expect(status.llm.choices.contains("claude"))
-            #expect(status.fullDiskAccess == nil, "HOME is a throwaway")
 
-            let job: StartedJob = try await client.call("job.start", ["kind": "extract", "params": ["dry_run": true]])
+            // A note is saved through the same edit path as a fact, with no model behind it.
+            let noted: EditReply = try await client.call("edit.apply", ["kind": "note", "payload": ["person_id": .int(saved.personId), "text": "Allergic to peanuts"]])
+            #expect(noted.message == "Noted.")
+            snapshot = try await client.call("view.snapshot")
+            let note = Records(snapshot: snapshot.records).events.values.first { $0.isNote }
+            #expect(note?.value == "Allergic to peanuts" && note?.isManual == true)
+
+            let vcard = h.home.appendingPathComponent("people.vcf")
+            try "BEGIN:VCARD\nVERSION:3.0\nFN:Katherine Johnson\nEND:VCARD\n".write(to: vcard, atomically: true, encoding: .utf8)
+            let job: StartedJob = try await client.call("job.start", ["kind": "import_vcf", "params": ["path": .string(vcard.path)]])
             var finished: JobFinished?
             for _ in 0..<400 {
                 let all = await h.sink.events
@@ -157,30 +163,6 @@ struct EngineIntegrationTests {
 
             let review: ProfileReview = try await client.call("profiles.review", ["include_diagnostics": true])
             #expect(review.profiles.isEmpty)
-
-            let serverRoot = h.home.appendingPathComponent("server").path
-            let empty: ServerDevices = try await client.call("server.devices", ["data": .string(serverRoot)])
-            #expect(!empty.exists)
-            struct Issued: Decodable, Sendable { var token: String }
-            let issued: Issued = try await client.call("server.addDevice", ["name": "pixel", "role": "phone", "data": .string(serverRoot)])
-            #expect(!issued.token.isEmpty)
-            let devices: ServerDevices = try await client.call("server.devices", ["data": .string(serverRoot)])
-            #expect(devices.devices.map(\.name) == ["pixel"])
-
-            // The X review flow, on a small invented archive.
-            let archive = h.home.appendingPathComponent("x/data")
-            try FileManager.default.createDirectory(at: archive, withIntermediateDirectories: true)
-            func js(_ name: String, _ global: String, _ body: String) throws {
-                try "window.YTD.\(global).part0 = \(body)".write(to: archive.appendingPathComponent(name), atomically: true, encoding: .utf8)
-            }
-            try js("account.js", "account", #"[{"account":{"accountId":"100","username":"owner"}}]"#)
-            try js("direct-messages.js", "direct_messages", #"[{"dmConversation":{"conversationId":"100-200","messages":[{"messageCreate":{"recipientId":"200","senderId":"100","createdAt":"2026-01-02T03:04:05.000Z","text":"hello, unnamed account","id":"1","urls":[]}}]}}]"#)
-            let unnamed: UnnamedConversations = try await client.call("twitter.unnamed", ["root": .string(archive.deletingLastPathComponent().path)])
-            let conversation = try #require(unnamed.conversations.first)
-            #expect(conversation.accountId == "200")
-            #expect(conversation.messages.first?.mine == true)
-            let named: Merged = try await client.call("twitter.name", ["account_id": .string(conversation.accountId), "name": "Named Now", "handle": "named"])
-            #expect(named.person_id > 0)
 
             // Merge last, because it changes who's who. The view must follow it.
             let merged: Merged = try await client.call("people.merge", ["ids": JSONValue(ints: [ada.personId, twin.personId])])

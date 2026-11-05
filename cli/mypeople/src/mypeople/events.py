@@ -25,6 +25,10 @@ EVENT_TYPES = (
     "other",
 )
 
+# events.source for what you wrote yourself. Every other source was derived or imported.
+MANUAL = "manual"
+# Your own words about someone, kept verbatim. Not in EVENT_TYPES: only you write notes, the model doesn't.
+NOTE = "note"
 # Life events worth a nudge when they are fresh.
 LIFE_EVENTS = {"job", "education", "move", "engagement", "wedding", "birth", "loss", "health", "achievement"}
 # Events whose anniversaries matter, including the hard ones.
@@ -118,7 +122,7 @@ def add_event(
     """Insert an event; returns its id, or None if it was already known.
 
     said_at is when the fact came up (its message's time); left out, it counts as just now."""
-    if type not in EVENT_TYPES:
+    if type not in EVENT_TYPES and type != NOTE:
         type = "other"
     cur = conn.execute(
         "INSERT OR IGNORE INTO events (person_id, type, value, date, confidence, source, source_ref, evidence, said_at) "
@@ -136,6 +140,11 @@ def add_event(
         ),
     )
     return cur.lastrowid if cur.rowcount else None
+
+
+def add_note(conn: sqlite3.Connection, person_id: int, text: str) -> int | None:
+    """Save a note as written. Needs no model; `mypeople extract` reads it later for facts."""
+    return add_event(conn, person_id, NOTE, text, None, 1.0, MANUAL)
 
 
 def said_on(event: sqlite3.Row) -> dt.date | None:

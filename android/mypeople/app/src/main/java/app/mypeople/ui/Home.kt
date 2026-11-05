@@ -33,13 +33,11 @@ fun HomeScreen(records: Records, graph: AppGraph, scrollToTopRequest: Long = 0, 
     val largeText = LocalDensity.current.fontScale > 1.3f
     val locale = LocalLocale.current.platformLocale
     val moments = remember(records, today) { records.moments(today) }
-    val feed = remember(records, today) { records.feedByWeek(today) }
     val upcoming = remember(records, today) { records.upcomingSoon(today) }
     val recent = remember(records) { records.recentlyInTouch() }
     val todayList = rememberLazyListState()
-    val feedList = rememberLazyListState()
     val upcomingList = rememberLazyListState()
-    val list = when (tab) { 0 -> todayList; 1 -> feedList; else -> upcomingList }
+    val list = if (tab == 0) todayList else upcomingList
     OnScrollToTopRequest(scrollToTopRequest) { list.scrollToItem(0) }
     // One scrolling canvas keeps the page usable at large font sizes, too.
     key(tab) {
@@ -47,7 +45,7 @@ fun HomeScreen(records: Records, graph: AppGraph, scrollToTopRequest: Long = 0, 
             item { Heading("Keep people close.", "A little memory. A reason to reach out.", onAccount = openSettings) }
             stickyHeader {
                 Surface(color = MaterialTheme.colorScheme.surface) {
-                    Box(Modifier.padding(vertical = 8.dp)) { JournalTabs(tab, listOf("Today", "Feed", "Upcoming")) { tab = it } }
+                    Box(Modifier.padding(vertical = 8.dp)) { JournalTabs(tab, listOf("Today", "Upcoming")) { tab = it } }
                 }
             }
             if (loading) item { SavedRowsPlaceholder() }
@@ -97,22 +95,6 @@ fun HomeScreen(records: Records, graph: AppGraph, scrollToTopRequest: Long = 0, 
                                 if (index < recent.lastIndex) Spacer(Modifier.height(KinSpace.half))
                             }
                         } }
-                    }
-                }
-                1 -> {
-                    if (feed.isEmpty()) item { EmptyState("No recent news", "Facts from conversations in the last 90 days will appear here, with their sources.") }
-                    feed.forEach { (week, events) ->
-                        item(key = "week-$week") { SectionHeader("Week of ${formatDate(week?.toString())}") }
-                        items(events, key = { it.key }) { (_, event) ->
-                            JournalCard(Modifier.padding(horizontal = KinSpace.s4)) {
-                                PersonRow(records.people.getValue(event.person_id), graph, event.type.replaceFirstChar { it.uppercase() }) { openPerson(event.person_id) }
-                                Column(Modifier.fillMaxWidth().clickable { openPerson(event.person_id) }.padding(start = 20.dp, end = 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                                    Text(event.value, style = MaterialTheme.typography.bodyLarge)
-                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
-                                    Text("Said on ${formatDate(event.said_at?.take(10))} · ${event.source}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                        }
                     }
                 }
                 else -> {

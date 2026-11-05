@@ -51,7 +51,6 @@ struct ActivityView: View {
             }
             Muted("\(job.status.label) · started \(job.started.formatted(date: .abbreviated, time: .standard))" + (job.finished.map { " · ended \($0.formatted(date: .omitted, time: .standard))" } ?? ""), font: .caption)
             if job.status == .interrupted { Muted("The engine stopped while this was running. Anything finished was kept.") }
-            if let progress = job.progress, progress["kind"]?.string == "extract" { ExtractProgressView(event: progress) }
             if job.droppedLines > 0 { Muted("Earlier output was dropped to save memory (\(job.droppedLines) lines).", font: .caption) }
             ScrollViewReader { proxy in
                 ScrollView {

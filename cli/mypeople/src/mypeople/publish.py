@@ -1,4 +1,4 @@
-"""The phone-safe view of the database that `mypeople sync` publishes to the server.
+"""The phone-safe view of the database that a transfer carries to the phone.
 
 People with their nicknames, numbers, emails and relationship stats; their facts and where
 each came from; public profiles; photos; recent moments; and duplicate groups to review.
@@ -13,7 +13,7 @@ import json
 import sqlite3
 from pathlib import Path
 
-from . import dupes, moments, relationships, socials, identity
+from . import contacts, dupes, moments, relationships, socials, identity
 
 HIDDEN_IDENTIFIERS = ("google",)  # resource names mean nothing outside the Google API
 MOMENT_DAYS = 30  # how far back the phone sees moments
@@ -87,7 +87,7 @@ def records(
             "contact_aliases": redirects.get(pid, []),
             "card": json.loads(p["contact_data"]) if p["contact_data"] else None,
             "trashed": bool(p["trashed"]),
-            "can_undo_merge": (not history.contact(p["contact_uid"]) or len(history.contact(p["contact_uid"]).members) == 1) and conn.execute("SELECT 1 FROM contact_merge_undo WHERE keep_id=? AND undone=0", (pid,)).fetchone() is not None,
+            "can_undo_merge": (not history.contact(p["contact_uid"]) or len(history.contact(p["contact_uid"]).members) == 1) and contacts.merge_can_be_undone(conn, pid),
             "contact_conflicts": history.contact(p["contact_uid"]).conflicts if history.contact(p["contact_uid"]) else {},
             "aliases": [a["alias"] for a in aliases.get(pid, [])],
             "identifiers": [{"kind": i["kind"], "value": i["value"]} for i in identifiers.get(pid, [])],

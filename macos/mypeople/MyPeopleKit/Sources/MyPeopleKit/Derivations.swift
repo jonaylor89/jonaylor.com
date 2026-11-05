@@ -59,6 +59,23 @@ public func whenKnown(_ e: Event) -> String {
     e.date.isEmpty || e.date.hasPrefix("--") ? String(e.createdAt.prefix(10)) : e.date
 }
 
+public extension Event {
+    /// Written by you, as opposed to read from messages or imported.
+    var isManual: Bool { source == "manual" }
+    var isNote: Bool { type == "note" }
+    /// Where this came from, in words. Keep in step with `factOrigin` in Logic.kt.
+    var origin: String {
+        switch source {
+        case "manual": "Added by you"
+        case "note": "Derived from your note"
+        case "vcard": "Imported from a vCard"
+        case "google": "Imported from Google"
+        case "linkedin": "Imported from LinkedIn"
+        default: "Derived from \(source)"
+        }
+    }
+}
+
 /// Latest job, home and school, preferring anything over the address book's stale copy.
 public func currentProfile(_ events: some Collection<Event>) -> [String: Event] {
     var best: [String: Event] = [:]
@@ -155,26 +172,6 @@ public extension Records {
             if a.moment.surfacedOn != b.moment.surfacedOn { return a.moment.surfacedOn > b.moment.surfacedOn }
             return a.moment.score != b.moment.score ? a.moment.score > b.moment.score : a.key < b.key
         }
-    }
-
-    /// What people said in the last 90 days, by when it was said rather than what it's about.
-    func feed(_ today: LocalDay) -> [(id: String, event: Event)] {
-        events.compactMap { id, e -> (id: String, event: Event)? in
-            guard people[e.personId]?.trashed == false, !["vcard", "linkedin", "google"].contains(e.source),
-                  let d = LocalDay(e.saidAt), d >= today.adding(days: -90), d <= today else { return nil }
-            return (id, e)
-        }.sorted { ($0.event.saidAt ?? "", $1.id) > ($1.event.saidAt ?? "", $0.id) }
-    }
-
-    func feedByWeek(_ today: LocalDay) -> [(week: LocalDay, events: [(id: String, event: Event)])] {
-        var order: [LocalDay] = []
-        var groups: [LocalDay: [(id: String, event: Event)]] = [:]
-        for entry in feed(today) {
-            guard let week = weekOf(entry.event.saidAt) else { continue }
-            if groups[week] == nil { order.append(week) }
-            groups[week, default: []].append(entry)
-        }
-        return order.map { ($0, groups[$0]!) }
     }
 
     func upcoming(_ today: LocalDay) -> [Upcoming] {

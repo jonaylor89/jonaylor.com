@@ -166,7 +166,7 @@ fun ContactsSettings(graph: AppGraph, state: StoreState, feedback: (String) -> U
     JournalCard {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Backup & recovery", style = MaterialTheme.typography.titleLarge)
-            Text("Encrypted full phone backup: contacts, photos, facts, trash, and unsynced edits. Server tokens and transfer passphrases are excluded. Reconnect to the same Mac/server after restoring.")
+            Text("Encrypted full phone backup: contacts, photos, facts, trash, and unsynced edits. Transfer passphrases are excluded. Reconnect to the same Mac/server after restoring.")
             OutlinedButton(enabled = !busy, onClick = { backupAction = "export"; passphrase = ""; backupError = null }) { Text("Create encrypted phone backup") }
             OutlinedButton(enabled = !busy && state.pending.isEmpty(), onClick = { restoreBackup.launch(arrayOf("*/*")) }) { Text("Restore encrypted phone backup") }
             if (state.pending.isNotEmpty()) Text("Sync pending edits before restoring. Exporting a backup is always available.", style = MaterialTheme.typography.bodySmall)

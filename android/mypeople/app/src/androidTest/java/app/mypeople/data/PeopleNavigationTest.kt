@@ -45,7 +45,7 @@ class PeopleNavigationTest {
         graph = (InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as MyPeopleApp).graph
         graph.store.initialize()
         val disk = graph.store.snapshot()
-        check(disk.records.people.isEmpty() && disk.pending.isEmpty() && !graph.settings.configured) { "Refusing to seed an existing installation." }
+        check(disk.records.people.isEmpty() && disk.pending.isEmpty()) { "Refusing to seed an existing installation." }
     }
     @After fun clearSyntheticCache() = runBlocking { if (seeded) graph.store.restoreBackup(DiskState()); Unit }
 
@@ -117,7 +117,7 @@ class PeopleNavigationTest {
         val records = records()
         val today = LocalDate.now().toString()
         val changes = records.people.map { (id, person) -> RecordChange("person", id.toString(), json.encodeToJsonElement(person)) } +
-            (1..60).map { RecordChange("event", it.toString(), json.encodeToJsonElement(Event(1, "job", "News $it", source = "imessage", said_at = today, created_at = today))) } +
+            (1..60).map { RecordChange("event", it.toString(), json.encodeToJsonElement(Event(1, "plan", "News $it", date = java.time.LocalDate.now().plusDays(10).toString(), source = "imessage", said_at = today, created_at = today))) } +
             (1..60).map { RecordChange("profile", it.toString(), json.encodeToJsonElement(Profile(1, "example", "https://example.org/$it", title = "Profile $it"))) }
         seeded = true
         graph.settings.peopleFirst = true
@@ -140,7 +140,7 @@ class PeopleNavigationTest {
         compose.onNodeWithText(firstName).assertIsDisplayed()
         compose.onNodeWithContentDescription("Search people").assertIsDisplayed()
         compose.onNodeWithTag("nav-home").performClick()
-        compose.onNodeWithText("Feed").performClick()
+        compose.onNodeWithText("Upcoming").performClick()
         compose.onNodeWithTag("home-list").performScrollToIndex(40)
         compose.onNodeWithText("Keep people close.").assertIsNotDisplayed()
         compose.onNodeWithTag("nav-home").performTouchInput { doubleClick() }

@@ -211,7 +211,7 @@ class DeviceContacts(private val context: Context, private val graph: app.mypeop
             kotlinx.coroutines.yield()
         }
         mutex.withLock { withContext(Dispatchers.IO) {
-            if (graph.settings.contactsEnabled && permitted() && graph.store.state.value.ready && !graph.store.state.value.syncing) {
+            if (graph.settings.contactsEnabled && permitted() && graph.store.state.value.ready) {
                 val baseline = loadMirror(); val next = baseline.entries.toMutableMap()
                 val live = graph.store.state.value.records.people.values.map { it.contact_uid }.toSet()
                 for (raw in rawContacts(true)) if (raw.second !in live && raw.second in baseline.entries) {
@@ -234,7 +234,7 @@ class DeviceContacts(private val context: Context, private val graph: app.mypeop
             return@withContext Outcome(status)
         }
         observe()
-        if (!graph.store.state.value.ready || graph.store.state.value.syncing) {
+        if (!graph.store.state.value.ready) {
             if (preparing) throw EditRejected("Wait for the current sync to finish, then try merging again.")
             return@withContext Outcome(status, status.startsWith("Conflicts"))
         }
@@ -285,7 +285,7 @@ class DeviceContacts(private val context: Context, private val graph: app.mypeop
             }
             settledNow.add(uid)
         }
-        saveMirror(MirrorState(next)); if (edited) graph.sync.afterEdit()
+        saveMirror(MirrorState(next))
         settledVersions.putAll(versions(settledNow))
         var message = if (conflicts.isEmpty()) "Android contacts up to date · $changed changes" else "Conflicts (left untouched): ${conflicts.joinToString()}. Choose which version to keep in Settings."
         if (unverified.isNotEmpty()) message += "\n${unverified.size} contacts need original numbers re-imported or verified before Android export."
