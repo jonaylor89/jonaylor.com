@@ -25,8 +25,8 @@ android {
         applicationId = "com.jonaylor.saintjohn"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.6"
+        versionCode = 8
+        versionName = "1.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "OPENWEATHER_API_KEY", "\"$weatherApiKey\"")
