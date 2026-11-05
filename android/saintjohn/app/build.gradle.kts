@@ -9,6 +9,14 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+val weatherApiKey = providers.gradleProperty("OPENWEATHER_API_KEY")
+    .orElse(providers.environmentVariable("OPENWEATHER_API_KEY"))
+    .orElse("")
+    .get()
+require(weatherApiKey.matches(Regex("[A-Za-z0-9]*"))) {
+    "OPENWEATHER_API_KEY must contain only letters and digits"
+}
+
 android {
     namespace = "com.jonaylor.saintjohn"
     compileSdk = 35
@@ -21,6 +29,7 @@ android {
         versionName = "1.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "OPENWEATHER_API_KEY", "\"$weatherApiKey\"")
     }
 
     signingConfigs {
@@ -32,7 +41,8 @@ android {
                 keyAlias = System.getenv("KEY_ALIAS")
                 keyPassword = System.getenv("KEY_PASSWORD")
             } else {
-                val keystorePropertiesFile = file("/Users/johannes/Repos/keys/key.properties")
+                val keystorePropertiesFile = providers.environmentVariable("KEYSTORE_PROPERTIES_FILE")
+                    .orNull?.let { file(it) } ?: rootProject.file("keystore.properties")
                 if (keystorePropertiesFile.exists()) {
                     val keystoreProperties = Properties()
                     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
@@ -66,6 +76,7 @@ android {
         jvmTarget = "17"
     }
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 }

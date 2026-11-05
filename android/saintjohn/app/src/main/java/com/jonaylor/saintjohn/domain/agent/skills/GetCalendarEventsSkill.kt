@@ -28,9 +28,10 @@ class GetCalendarEventsSkill @Inject constructor(
         
         if (events.isEmpty()) return "No upcoming events found."
         
-                val sdf = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
-                return events.joinToString("\n") { event ->
-                    "${event.title} at ${sdf.format(Date(event.startTime))}" + 
-                    (if (!event.location.isNullOrBlank()) " in ${event.location}" else "")
-                }    }
+        val sdf = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
+        return events.joinToString("\n") { event ->
+            "${event.title} at ${sdf.format(Date(event.startTime))}" +
+                (if (!event.location.isNullOrBlank()) " in ${event.location}" else "")
+        }
+    }
 }

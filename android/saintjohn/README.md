@@ -57,6 +57,17 @@ export JAVA_HOME="$HOME/Applications/Android Studio.app/Contents/jbr/Contents/Ho
 
 The APK will be generated at `app/build/outputs/apk/debug/app-debug.apk`
 
+### Local credentials
+
+Weather requires an `OPENWEATHER_API_KEY` supplied through the build environment or
+user-level `~/.gradle/gradle.properties`. No shared demo key is bundled. Do not put
+credentials in tracked project files. BuildConfig values are extractable from an
+APK; use restricted provider credentials or a backend proxy for production.
+
+Release signing uses `KEYSTORE_FILE` and its existing password/alias environment
+variables, or an ignored `keystore.properties` file at the Android project root.
+Set `KEYSTORE_PROPERTIES_FILE` locally to use another location.
+
 ## Installing
 
 ### Install to Connected Device

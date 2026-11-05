@@ -1049,7 +1049,7 @@ mod tests {
 
         let url = canonical_share_url(
             &config,
-            "http://100.67.54.8:8000/s/abc123?token=review#thread",
+            "http://192.0.2.10:8000/s/abc123?token=review#thread",
         );
 
         assert_eq!(url, "https://hub.jonaylor.com/s/abc123?token=review#thread");
@@ -1059,8 +1059,8 @@ mod tests {
     fn canonical_share_url_leaves_non_share_links_unchanged() {
         let config = config_for_token("https://hub.jonaylor.com", "token");
 
-        let url = canonical_share_url(&config, "http://100.67.54.8:8000/admin/threads/abc123");
+        let url = canonical_share_url(&config, "http://192.0.2.10:8000/admin/threads/abc123");
 
-        assert_eq!(url, "http://100.67.54.8:8000/admin/threads/abc123");
+        assert_eq!(url, "http://192.0.2.10:8000/admin/threads/abc123");
     }
 }
