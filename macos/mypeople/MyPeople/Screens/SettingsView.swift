@@ -24,6 +24,16 @@ private struct GeneralSettings: View {
 
     var body: some View {
         Form {
+            Section("Model") {
+                if let llm = model.status?.llm {
+                    Picker("Reads messages and answers questions with", selection: Binding(get: { llm.backend }, set: { model.setBackend($0) })) {
+                        ForEach(llm.choices, id: \.self) { Text($0).tag($0) }
+                    }
+                    Muted(llm.local ? "\(llm.model), running on this Mac. Nothing leaves it." : "\(llm.model). Anything it reads is sent to that service.", font: .caption)
+                } else {
+                    Muted("Available once the engine is running.")
+                }
+            }
             Section("You") {
                 if let me {
                     LabeledContent("You are") { Text(verbatim: "\(me.name) (#\(me.id))") }
@@ -138,9 +148,13 @@ private struct SystemSettings: View {
                     LabeledContent("CLI", value: status.version)
                     LabeledContent("Python", value: status.python)
                 }
-                Section("Phone exchange") {
+                Section("Permissions") {
+                    row("Full Disk Access", status.fullDiskAccess != false, status.fullDiskAccess == nil ? "Nothing to read yet" : nil)
+                    if status.fullDiskAccess == false { FullDiskAccessNote() }
+                }
+                Section("Optional features") {
                     row("Bluetooth pairing", status.extras.bluetooth)
-                    row("Transfer passphrase", status.transferKey)
+                    row("SQLCipher, for Signal", status.sqlcipher)
                     if !status.extras.bluetooth {
                         HStack {
                             Text(verbatim: EngineLocator.installHint).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
@@ -148,6 +162,13 @@ private struct SystemSettings: View {
                             Button("Copy") { copyToPasteboard(EngineLocator.installHint) }
                         }
                     }
+                }
+                Section("Credentials") {
+                    Muted("Whether each is present. Values are never shown, and they live in \(status.secrets.path).", font: .caption)
+                    ForEach(status.secrets.keys.sorted { $0.key < $1.key }, id: \.key) { key, present in row(key, present) }
+                    row("Google", status.google.signedIn)
+                    row("Transfer passphrase", status.transferKey)
+                    row("Pi sign-in, for Codex", status.piAuth)
                 }
             } else {
                 Muted("Available once the engine is running.")

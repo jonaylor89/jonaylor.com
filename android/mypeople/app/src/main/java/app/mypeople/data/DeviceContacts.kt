@@ -197,6 +197,12 @@ class DeviceContacts(private val context: Context, private val graph: app.mypeop
         // One query finds the few contacts that can need work; everyone else is skipped unread.
         val candidates = mutex.withLock { withContext(Dispatchers.IO) {
             if (!graph.settings.contactsEnabled || !permitted()) return@withContext graph.store.state.value.records.people.keys.toList()
+            // Checked here too: when nothing needs work there's no batch to notice a removed account.
+            if (AccountManager.get(context).getAccountsByType(ACCOUNT_TYPE).none { it.name == ACCOUNT_NAME }) {
+                graph.settings.contactsEnabled = false
+                status = "MyPeople Android account was removed. Integration paused; your MyPeople contacts were kept."
+                return@withContext emptyList()
+            }
             val baseline = loadMirror(); val current = versions()
             graph.store.state.value.records.people.filter { (_, person) ->
                 if (person.contact_uid.isBlank()) false

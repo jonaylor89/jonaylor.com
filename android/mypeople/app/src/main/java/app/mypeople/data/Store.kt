@@ -302,7 +302,8 @@ class Store(private val directory: File, private val startupTiming: (String, Lon
         val sameSource = disk.offlineSource == snapshot.source
         require(sameSource || disk.pending.isEmpty() || standaloneQueue()) { "Export and acknowledge pending edits before switching databases or sync methods." }
         val samePublisher = snapshot.publisher == disk.replica.publisher
-        require(!sameSource || samePublisher || disk.replica.publisher == null || disk.pending.all { it.kind == "contact_change" }) { "Finish queued memory requests with their original CLI before switching peers." }
+        // Requests naming a row on one Mac can't go to another. Everything else names its contact.
+        require(!sameSource || samePublisher || disk.replica.publisher == null || disk.pending.all { it.portable }) { "Finish the queued profile and review decisions with the Mac they came from, then sync here." }
         require(!sameSource || !samePublisher || snapshot.revision >= disk.offlineRevision) { "This memory file is older than the one already on your phone." }
         if (snapshot.contact_version == 0 && sameSource && snapshot.revision == disk.offlineRevision) return@locked
         val base = if (sameSource || standaloneQueue()) disk else DiskState(notices = disk.notices)
@@ -334,7 +335,7 @@ class Store(private val directory: File, private val startupTiming: (String, Lon
     suspend fun bluetoothEdits(source: String, publisher: String? = null): TransferManifest = locked {
         UUID.fromString(source)
         val sameSource = disk.offlineSource == source
-        require(publisher == null || disk.replica.publisher == null || publisher == disk.replica.publisher || disk.pending.all { it.kind == "contact_change" }) { "Finish queued memory requests with their original CLI before switching peers." }
+        require(publisher == null || disk.replica.publisher == null || publisher == disk.replica.publisher || disk.pending.all { it.portable }) { "Finish the queued profile and review decisions with the Mac they came from, then sync here." }
         require(sameSource || disk.pending.isEmpty() || standaloneQueue()) { "These queued edits belong to another database or sync method. Acknowledge them there before switching." }
         editsManifest(source, if (sameSource) disk.offlineRevision else 0, if (sameSource || standaloneQueue()) disk.pending else emptyList(), publisher, sameSource || standaloneQueue())
     }

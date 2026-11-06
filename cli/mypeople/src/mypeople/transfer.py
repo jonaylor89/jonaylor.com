@@ -216,6 +216,8 @@ def export_snapshot(conn: sqlite3.Connection, path: Path, password: str, *, incl
         "records": [{"kind": kind, "id": rid, "data": record} for (kind, rid), record in records.items()],
         "results": results,
     }
+    if peer is None:  # memory files can reach another Mac; a phone doesn't need what's forgotten
+        manifest["fact_state"] = _fact_state(conn)
     if replicated:
         manifest.update(contact_version=1, contact_history=contact_changes, contact_heads=history.heads)
     # QR transfers use avatar-sized JPEGs, not full-size contact originals. This
@@ -297,34 +299,50 @@ class _Transaction:
         return getattr(self.conn, name)
 
 
-def _merge_facts(conn: sqlite3.Connection, manifest: dict) -> None:
-    """Add facts this database doesn't have, under the contact they belong to.
+def _fact_state(conn: sqlite3.Connection) -> dict:
+    """What a memory file's event records don't say: facts past their first generation, and forgotten ones."""
+    moved = {str(r["id"]): r["generation"] for r in conn.execute("SELECT id, generation FROM events WHERE status = 'active' AND generation > 1")}
+    forgotten = [dict(r) for r in conn.execute(
+        "SELECT p.contact_uid, e.type, e.value, e.date, e.generation FROM events e JOIN people p ON p.id = e.person_id "
+        "WHERE e.status = 'rejected' AND p.contact_uid IS NOT NULL AND p.contact_uid != ''")]
+    return {"generations": moved, "forgotten": forgotten}
 
-    One-way and add-only. A fact forgotten here keeps its rejected row, so it can't come back,
-    but forgetting a fact on the other Mac doesn't remove it here.
-    """
-    from .events import NOTE, add_event
+
+def _merge_facts(conn: sqlite3.Connection, manifest: dict) -> dict:
+    """Join the other Mac's notes and facts in, under the contact they belong to. See events.reconcile."""
+    from .events import reconcile
     from .extract import NOTE_READ
+    from .identity import canonical
 
     records = manifest.get("records", [])
+    state = manifest.get("fact_state") or {}
+    generations = state.get("generations") or {}
     uids = {r["id"]: r["data"].get("contact_uid") for r in records if r.get("kind") == "person"}
+
+    def person(uid):
+        row = conn.execute("SELECT id FROM people WHERE contact_uid = ?", (uid,)).fetchone() if uid else None
+        return canonical(conn, row["id"]) if row else None
+
+    def join(uid, fact, generation):
+        pid = person(uid)
+        if pid is None or not isinstance(fact.get("value"), str) or not fact["value"].strip() or not isinstance(generation, int):
+            return
+        # Marked read: the Mac that wrote a note reads it for facts, and they arrive from there.
+        counts[reconcile(conn, pid, fact, generation, NOTE_READ if fact.get("type") == "note" else None)] += 1
+
+    counts = {"added": 0, "forgotten": 0, None: 0}
     for r in records:
-        if r.get("kind") != "event":
-            continue
-        e = r["data"]
-        uid = uids.get(str(e.get("person_id")))
-        row = conn.execute("SELECT id FROM people WHERE contact_uid = ? AND merged_into IS NULL", (uid,)).fetchone() if uid else None
-        if row is None or not isinstance(e.get("value"), str) or not e["value"].strip():
-            continue
-        add_event(conn, row["id"], e.get("type"), e["value"], e.get("date") or None, float(e.get("confidence", 1.0)),
-                  str(e.get("source") or ""), NOTE_READ if e.get("type") == NOTE else None,  # read where it was written
-                  e.get("evidence"), e.get("said_at"))
+        if r.get("kind") == "event":
+            join(uids.get(str(r["data"].get("person_id"))), r["data"], generations.get(r["id"], 1))
+    for fact in state.get("forgotten") or []:
+        join(fact.get("contact_uid"), fact, fact.get("generation"))
+    return {"facts_added": counts["added"], "facts_forgotten": counts["forgotten"]}
 
 
-def merge_snapshot(conn: sqlite3.Connection, path: Path, password: str) -> int:
+def merge_snapshot(conn: sqlite3.Connection, path: Path, password: str) -> dict:
     """Join an empty CLI to a collection, or reconcile another peer's contact history.
 
-    Facts and notes come along, matched to people by contact. Messages stay behind.
+    Notes and facts reconcile too, matched to people by contact. Messages stay behind.
     An existing unrelated address book is never implicitly combined with this one.
     """
     from . import replica
@@ -345,8 +363,9 @@ def merge_snapshot(conn: sqlite3.Connection, path: Path, password: str) -> int:
             if not combined.past(manifest.get("contact_heads", [])).issuperset(c["id"] for c in manifest.get("contact_history", [])):
                 raise ValueError("Invalid contact history frontier")
             conn.execute("UPDATE transfer_state SET source=? WHERE slot=1", (manifest["source"],))
-            _merge_facts(conn, manifest)
-        return len(combined.changes) - len(history.changes)
+            facts = _merge_facts(conn, manifest)
+        conflicts = sum(bool(combined.contact(uid).conflicts) for uid in {c["contact_uid"] for c in combined.changes} if combined.contact(uid))
+        return {"contacts": len(combined.changes) - len(history.changes), "conflicts": conflicts, **facts}
     except (ValueError, TypeError) as exc:
         raise TransferError(str(exc)) from exc
 
@@ -370,8 +389,7 @@ def apply_edits(conn: sqlite3.Connection, encrypted: bytes, password: str, *, en
     if not isinstance(pending, list) or len(pending) > 10_000:
         raise TransferError("Invalid edit list.")
     publisher = conn.execute("SELECT publisher FROM transfer_state WHERE slot=1").fetchone()[0]
-    if manifest.get("publisher") not in (None, publisher) and any(op.get("kind") != "contact_change" for op in pending if isinstance(op, dict)):
-        raise TransferError("These memory requests belong to another CLI publisher; sync them with their original peer.")
+    foreign = manifest.get("publisher") not in (None, publisher)
     validated = []
     seen_ids = set()
     for op in pending:
@@ -411,6 +429,10 @@ def apply_edits(conn: sqlite3.Connection, encrypted: bytes, password: str, *, en
             stats["already_applied"] += 1
             continue
         if op["kind"] in ops.ENRICHMENT and not enrich:
+            stats["deferred"] += 1
+            continue
+        if foreign and not ops.portable(op):
+            # Names a row on the Mac it came from. It stays queued on the phone until they next sync.
             stats["deferred"] += 1
             continue
         conn.execute("BEGIN IMMEDIATE")

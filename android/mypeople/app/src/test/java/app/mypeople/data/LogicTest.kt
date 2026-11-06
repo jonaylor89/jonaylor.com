@@ -139,4 +139,18 @@ class LogicTest {
         assertEquals("name is missing", next.notices.single().message)
         assertEquals(next.notices, next.receive(page).notices)
     }
+
+    @Test fun forgettingByWhatItSaysFindsAFactNotSyncedYet() {
+        val base = Records(people = mapOf("1" to Person("Sam Rivera")).mapKeys { 1 })
+        fun op(kind: String, vararg fields: Pair<String, String>) = PendingOp("c-$kind", kind, buildJsonObject {
+            put("person_id", 1); fields.forEach { (k, v) -> put(k, v) }
+        })
+        val added = optimistic(base, listOf(op("event_add", "type" to "job", "value" to "Works at Example", "date" to "")))
+        assertEquals(1, added.events.size)
+        val gone = optimistic(base, listOf(
+            op("event_add", "type" to "job", "value" to "Works at Example", "date" to ""),
+            op("event_forget", "type" to "job", "value" to "Works at Example", "date" to ""),
+        ))
+        assertEquals(0, gone.events.size)
+    }
 }

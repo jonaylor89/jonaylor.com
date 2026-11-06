@@ -55,6 +55,7 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
     var evidence by remember { mutableStateOf<Event?>(null) }
     var evidenceKey by remember { mutableStateOf<String?>(null) }
     var forget by remember { mutableStateOf<String?>(null) }
+    var merging by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val list = rememberLazyListState()
@@ -99,6 +100,7 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
                 FlowRow(Modifier.padding(top = KinSpace.s3), horizontalArrangement = Arrangement.spacedBy(KinSpace.s2)) {
                     FilledTonalButton(onClick = { dialog = "Add note" }) { Icon(Icons.Outlined.EditNote, null, Modifier.size(18.dp)); Spacer(Modifier.width(KinSpace.s2)); Text("Add a note") }
                     OutlinedButton(onClick = { dialog = "Add fact" }) { Icon(Icons.Outlined.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(KinSpace.s2)); Text("Add fact") }
+                    OutlinedButton(onClick = { merging = true }) { Text("Merge with…") }
                 }
             }
             item { ContactDetails(person, id, graph, edit = { editContact = true }) }
@@ -164,12 +166,18 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
                     Text("${event.origin} · ${if (event.isManual) "on" else "said on"} ${formatDate(event.said_at?.take(10))}", style = MaterialTheme.typography.bodySmall)
                 }
             }, confirmButton = { TextButton(onClick = { evidence = null }) { Text("Close") } }, dismissButton = {
-                if (evidenceKey?.startsWith("-") == false) TextButton(onClick = { forget = evidenceKey; evidence = null }) { Text(if (event.isNote) "Forget note" else "Forget fact", color = MaterialTheme.colorScheme.error) }
+                if (evidenceKey != null) TextButton(onClick = { forget = evidenceKey; evidence = null }) { Text(if (event.isNote) "Forget note" else "Forget fact", color = MaterialTheme.colorScheme.error) }
             })
         }
+        if (merging) MergeWithDialog(id, records, graph, onClose = { merging = false }, onMerged = { merging = false; onBack() })
         forget?.let { eventId ->
-            AlertDialog(onDismissRequest = { forget = null }, title = { Text("Forget this?") }, text = { Text("It stays forgotten on your Mac after your next sync.") },
-                confirmButton = { TextButton(onClick = { graph.edit("event_forget", buildJsonObject { put("event_id", eventId.toInt()) }); forget = null }) { Text("Forget", color = MaterialTheme.colorScheme.error) } },
+            AlertDialog(onDismissRequest = { forget = null }, title = { Text("Forget this?") }, text = { Text("It stays forgotten on your other devices after you next sync. Adding it again brings it back.") },
+                confirmButton = { TextButton(onClick = { val fact = events.firstOrNull { it.key == eventId }?.value
+                    if (fact != null) graph.edit("event_forget", buildJsonObject {
+                        put("person_id", id); put("type", fact.type); put("value", fact.value); put("date", fact.date)
+                        eventId.toIntOrNull()?.takeIf { it > 0 }?.let { put("event_id", it) }  // for an older CLI
+                    })
+                    forget = null }) { Text("Forget", color = MaterialTheme.colorScheme.error) } },
                 dismissButton = { TextButton(onClick = { forget = null }) { Text("Cancel") } })
         }
     }

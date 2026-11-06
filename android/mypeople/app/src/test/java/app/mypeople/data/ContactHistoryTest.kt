@@ -174,6 +174,13 @@ class ContactHistoryTest {
         assertEquals(1, store.state.value.pending.size)
         assertEquals(publisher, store.exportOffline().publisher)
     }
+    @Test fun `edits naming their contact can sync with any Mac in the collection`() = runBlocking {
+        val store = Store(temp.newFolder()); val h = base(); store.installOffline(snapshot(h))
+        store.enqueue("note", buildJsonObject { put("contact_uid", a); put("person_id", 1); put("text", "Written on the phone") })
+        assertEquals(1, store.bluetoothEdits(source, b).ops.size)
+        store.installOffline(snapshot(h, 2).copy(publisher = b))
+        assertEquals(1, store.state.value.pending.size)
+    }
     @Test fun `legacy receipt-before-publication upgrades without dropping its contact save`() = runBlocking {
         val dir = temp.newFolder()
         val clientId = newContactUid()

@@ -76,7 +76,13 @@ fun optimistic(base: Records, pending: List<PendingOp>): Records {
             "alias_remove" -> if (person != null) people[pid!!] = person.copy(aliases = person.aliases.filterNot { it.equals(p.text("alias"), true) })
             "event_add" -> if (pid != null && person != null) events[(-index - 1).toString()] = Event(pid, p.text("type"), p.text("value"), normalizeDate(p.text("date")), source = "manual", created_at = op.created_at, said_at = op.created_at)
             "note" -> if (pid != null && person != null) events[(-index - 1).toString()] = Event(pid, "note", p.text("text").trim(), source = "manual")
-            "event_forget" -> events.remove(p.text("event_id"))
+            "event_forget" -> {
+                events.remove(p.text("event_id"))
+                // Named by what it says, so it also finds a fact added on this phone and not synced yet.
+                if (pid != null && p.text("value").isNotEmpty()) events.entries.removeAll {
+                    it.value.person_id == pid && it.value.type == p.text("type") && it.value.value == p.text("value") && it.value.date == normalizeDate(p.text("date"))
+                }
+            }
             "relationship" -> if (person != null) people[pid!!] = person.copy(
                 category = p["category"]?.let { if (it == JsonNull) base.people[pid]?.category else p.text("category") } ?: person.category,
                 closeness = if ("closeness" in p) (p["closeness"] as? JsonPrimitive)?.doubleOrNull ?: base.people[pid]?.closeness ?: 0.0 else person.closeness,
@@ -140,6 +146,12 @@ fun formatDate(raw: String?): String {
 }
 /** Written by you, as opposed to read from messages or imported. */
 val Event.isManual: Boolean get() = source == "manual"
+private val portableKinds = setOf("contact_save", "contact_trash", "contact_restore", "rename", "alias_add", "alias_remove", "event_add", "note", "event_forget", "relationship")
+
+/** Means the same on any Mac in the collection. Keep in step with `portable` in ops.py. */
+val PendingOp.portable: Boolean get() = kind == "contact_change" ||
+    (kind in portableKinds && payload.text("contact_uid").isNotEmpty() && (kind != "event_forget" || payload.text("value").isNotEmpty()))
+
 val Event.isNote: Boolean get() = type == "note"
 /** Where this came from, in words. Keep in step with `origin` in Derivations.swift. */
 val Event.origin: String get() = when (source) {

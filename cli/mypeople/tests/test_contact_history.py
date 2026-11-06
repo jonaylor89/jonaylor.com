@@ -212,7 +212,7 @@ def test_clone_has_an_independent_publisher_and_cannot_hijack_an_existing_collec
     original = transfer.unpack(transfer.decrypt(memory.read_bytes(), PASSWORD))
     clone = db.connect(":memory:")
     try:
-        assert transfer.merge_snapshot(clone, memory, PASSWORD) == 1
+        assert transfer.merge_snapshot(clone, memory, PASSWORD)["contacts"] == 1
         transfer.export_snapshot(clone, memory, PASSWORD, include_photos=False)
         copied = transfer.unpack(transfer.decrypt(memory.read_bytes(), PASSWORD))
         assert original["source"] == copied["source"]
@@ -291,14 +291,21 @@ def test_concurrent_cli_writers_serialize_history_and_sql_projection(tmp_path):
     finally: c.close()
 
 
-def test_foreign_publisher_cannot_apply_integer_addressed_memory_requests(conn):
+def test_edits_tied_to_another_mac_wait_while_portable_ones_apply(conn):
     person = identity.create_person(conn, "Ada"); conn.commit()
+    uid = conn.execute("SELECT contact_uid FROM people WHERE id = ?", (person,)).fetchone()[0] or A
+    conn.execute("UPDATE people SET contact_uid = ? WHERE id = ?", (uid, person)); conn.commit()
     source, _ = transfer._prepare(conn)
-    manifest = {"format": 1, "type": "edits", "source": source, "publisher": B,
-                "ops": [{"client_id": str(uuid.uuid4()), "kind": "event_add", "payload": {"person_id": person, "value": "Wrong database"}}]}
-    with pytest.raises(transfer.TransferError, match="original peer"):
-        transfer.apply_edits(conn, transfer.encrypt(transfer.pack(manifest), PASSWORD), PASSWORD)
-    assert not conn.execute("SELECT 1 FROM events").fetchone()
+    def op(kind, **payload):
+        return {"client_id": str(uuid.uuid4()), "kind": kind, "payload": payload}
+    manifest = {"format": 1, "type": "edits", "source": source, "publisher": B, "ops": [
+        op("event_add", person_id=person, value="A row number means nothing here"),
+        op("event_forget", event_id=1),
+        op("event_add", person_id=-1, contact_uid=uid, type="job", value="Named by contact"),
+    ]}
+    stats = transfer.apply_edits(conn, transfer.encrypt(transfer.pack(manifest), PASSWORD), PASSWORD)
+    assert (stats["applied"], stats["deferred"]) == (1, 2)
+    assert [r[0] for r in conn.execute("SELECT value FROM events")] == ["Named by contact"]
 
 
 def test_cached_avatars_and_photo_inventory_avoid_reprocessing_and_resending(tmp_path, monkeypatch):

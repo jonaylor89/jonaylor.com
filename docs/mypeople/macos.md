@@ -1,14 +1,14 @@
 # MyPeople for macOS: architecture
 
-A native SwiftUI app for reading and writing contacts, as the Android app is. Importing messages,
-reading them for facts, finding profiles, collecting photos, and Google sync stay in the CLI. This
-page records why it is built the way it is. To build and run it, see
+A native SwiftUI app for your contacts, as the Android app is, plus message imports, Google sync, and
+Ask. Reading messages for facts, finding profiles, and collecting photos stay in the CLI. This page
+records why it is built the way it is. To build and run it, see
 [`macos/mypeople/README.md`](../../macos/mypeople/README.md).
 
 ## Decision
 
 **The Mac app is a native shell around the Python CLI's own code. It contains no domain
-logic that can change data, and never calls a model.** The CLI gains one command, `mypeople app-server`: a
+logic that can change data.** The CLI gains one command, `mypeople app-server`: a
 long-running local engine that the app starts as a child process and talks to over
 stdin/stdout.
 
@@ -26,7 +26,7 @@ stdin/stdout.
 │  job runner    one `mypeople …` child process each  │
 └───┬──────────────────────────────────────┬──────────┘
     ▼                                      ▼
-publish / ops / replica / contacts      mypeople import vcf | transfer
+publish / ops / replica / contacts      mypeople import | ask | google | transfer
     └──────────► ~/.mypeople/mypeople.db ◄─┘
 ```
 
@@ -105,12 +105,12 @@ derived: `manual` is you, and anything else was read from messages or a note, or
   failure leaves the note saved and unread.
 - **Merges carry them** with the rest of a person's records.
 - **Phones get them in the memory snapshot,** and send new ones back as queued operations.
-- **Another Mac gets them through `transfer merge`,** matched by contact: see the limits in
-  [contact replication](contact-replication.md#deliberate-boundaries).
+- **Another Mac reconciles them through `transfer merge`,** including what was forgotten: see
+  [contact replication](contact-replication.md#notes-and-facts).
 
 ## Long-running work runs as CLI processes
 
-vCard imports and phone exchanges run as `python -m mypeople …` children, supervised by the engine.
+Imports, questions, Google sync and phone exchanges run as `python -m mypeople …` children, supervised by the engine.
 Threads would not work: Python cannot interrupt a thread, and the Bluetooth listener must own its
 main thread. Child processes mean:
 
@@ -123,9 +123,9 @@ main thread. Child processes mean:
 The pairing QR reaches the app through one small addition: `jobevents.emit()` prints a sentinel line
 only when `MYPEOPLE_JOB_EVENTS` is set.
 
-**The app can't start a model.** No job or engine method calls one. An older phone can still queue
-an enrichment request, so the app's transfer jobs always pass `--no-enrich`, which leaves it for the
-next CLI transfer.
+**Only Ask calls a model from the app.** Reading messages for facts has no job, and an older phone
+can still queue that request, so the app's transfer jobs always pass `--no-enrich`, which leaves it
+for the next CLI transfer. A question stays out of job announcements (`_public`).
 
 ## Data safety
 
@@ -160,8 +160,8 @@ change this when tested, so the app registers `ApplePersistenceIgnoreState` at s
 
 ## macOS permissions
 
-The app cannot be sandboxed: it reads `~/.mypeople` and spawns an interpreter. It needs no Full Disk
-Access, because reading other apps' message stores is the CLI's job.
+The app cannot be sandboxed: it reads `~/.mypeople` and spawns an interpreter. Importing iMessage needs
+Full Disk Access, which Settings reports and explains.
 `NSBluetoothAlwaysUsageDescription` lives in the app's Info.plist. Without it, macOS would kill the
 Bluetooth child outright as soon as it touched the radio.
 
@@ -191,8 +191,10 @@ Bundling a relocatable Python later would change only `EngineLocator`.
 | Encrypted phone backup | `transfer export` on the Phone screen |
 | Android Provider account, QR camera | Not applicable on a Mac |
 
-**CLI only:** `import` of everything but vCards, `extract`, `ask`, `socials find`, `photos`,
-`instagram-links`, `google login`, `google sync`, `recover-phones`, and the model's verdict in
+**Mac only:** message imports, Google sign-in and sync, phone number recovery, Ask, and the model
+setting they use.
+
+**CLI only:** `extract`, `socials find`, `photos`, `instagram-links`, and the model's verdict in
 `dupes --merge`. Their results appear in both apps. The CLI remains complete on its own.
 
 ## Testing
@@ -200,9 +202,9 @@ Bundling a relocatable Python later would change only `EngineLocator`.
 - **Python, `tests/test_appserver.py`:** the real engine over real stdio against synthetic
   databases. It covers framing and stdout protection, read-your-writes ordering, scoped-versus-full
   equivalence, compare-and-swap, job argument validation against the real parser, cancellation,
-  and that no job can start a model.
+  and that reading messages stays out of the app's jobs.
 - **Python, `tests/test_notes_and_facts.py`:** notes saved without a model, read once by `extract`,
-  carried through merges and `transfer merge`.
+  and reconciled through merges and `transfer merge` in any order.
 - **Swift, `MyPeopleKit/Tests`:** the client against a fake transport, derivations ported from
   `LogicTest.kt`, and lossless card round trips.
 - **Cross-language:** `EngineIntegrationTests` starts the real Python engine from Swift against a

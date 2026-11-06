@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 from . import db, identity, moments, relationships
-from .events import CURRENT_STATE, EVENT_TYPES, add_event, current_profile, events_for, format_date, is_superseded
+from .events import CURRENT_STATE, EVENT_TYPES, forget, remember, current_profile, events_for, format_date, is_superseded
 
 
 def _date(value: str) -> dt.date:
@@ -348,15 +348,17 @@ def cmd_note(conn, args) -> None:
 
 def cmd_add(conn, args) -> None:
     p = identity.lookup(conn, args.person)
-    eid = add_event(conn, p["id"], args.type, args.value, args.date, 1.0, "manual")
+    eid = remember(conn, p["id"], args.type, args.value, args.date)
     conn.commit()
     print(f"Added #{eid} for {p['name']}." if eid else "Already known.")
 
 
 def cmd_forget(conn, args) -> None:
-    cur = conn.execute("UPDATE events SET status = 'rejected' WHERE id = ?", (args.event_id,))
+    row = conn.execute("SELECT person_id, type, value, date FROM events WHERE id = ?", (args.event_id,)).fetchone()
+    if row is not None:
+        forget(conn, row["person_id"], row["type"], row["value"], row["date"])
     conn.commit()
-    print("Forgotten." if cur.rowcount else f"No event #{args.event_id}.")
+    print("Forgotten." if row is not None else f"No event #{args.event_id}.")
 
 
 def cmd_set(conn, args) -> None:
@@ -774,8 +776,11 @@ def cmd_transfer(conn, args) -> None:
         elif args.action == "merge":
             if args.path is None:
                 sys.exit("Choose a memory file: mypeople transfer merge /path/to/MyPeople-memory.sherloq")
-            count = transfer.merge_snapshot(conn, args.path, password)
-            print(f"Reconciled {count} contact changes locally. No messages were imported.")
+            done = transfer.merge_snapshot(conn, args.path, password)
+            print(f"Reconciled {done['contacts']} contact changes, {done['facts_added']} facts added and "
+                  f"{done['facts_forgotten']} forgotten. No messages were imported.")
+            if done["conflicts"]:
+                print(f"{done['conflicts']} contacts have two versions of something. See `mypeople contact conflicts`.")
         else:
             if args.path is None:
                 sys.exit("Choose the edits file: mypeople transfer import /path/to/MyPeople-edits.sherloq")

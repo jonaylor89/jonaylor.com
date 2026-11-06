@@ -1,9 +1,11 @@
 """Notes and facts belong to the contact, and everyone can tell what you wrote from what was derived."""
 
+import itertools
+
 import pytest
 
 from mypeople import cli, contacts, extract, identity, ops, photos, publish, replica, transfer
-from mypeople.events import add_event
+from mypeople.events import add_event, forget, reconcile, remember
 
 
 def person(conn, name="Sam Rivera"):
@@ -170,3 +172,101 @@ def test_a_clone_gets_notes_and_facts_with_their_provenance(conn, tmp_path, key)
     transfer.merge_snapshot(clone, path, key)
     assert values(clone) == {("Allergic to peanuts", "manual")}
     clone.close()
+
+
+FACT = {"type": "job", "value": "Works at Example", "date": "", "source": "imessage"}
+
+
+def state(conn, pid):
+    return conn.execute("SELECT generation, status FROM events WHERE person_id = ?", (pid,)).fetchall()
+
+
+@pytest.mark.parametrize("order", list(itertools.permutations([1, 2, 3])))
+def test_any_order_of_syncing_gives_the_same_answer(conn, order):
+    # Seen by one device, forgotten by another, brought back by a third.
+    pid = person(conn)
+    for generation in order:
+        reconcile(conn, pid, FACT, generation)
+    assert [tuple(r) for r in state(conn, pid)] == [(3, "active")]
+
+
+def test_a_forget_that_arrives_first_still_wins(conn):
+    pid = person(conn)
+    forget(conn, pid, "job", "Works at Example", None)
+    assert reconcile(conn, pid, FACT, 1) is None
+    assert [tuple(r) for r in state(conn, pid)] == [(2, "rejected")]
+
+
+def test_the_model_cannot_bring_back_what_you_forgot_but_you_can(conn):
+    pid = person(conn)
+    add_event(conn, pid, "job", "Works at Example", None, 0.9, "imessage")
+    forget(conn, pid, "job", "Works at Example", None)
+    assert add_event(conn, pid, "job", "Works at Example", None, 0.9, "imessage") is None
+    assert state(conn, pid)[0]["status"] == "rejected"
+    assert remember(conn, pid, "job", "Works at Example", None)
+    assert [tuple(r) for r in state(conn, pid)] == [(3, "active")]
+    source = conn.execute("SELECT source FROM events WHERE person_id = ?", (pid,)).fetchone()[0]
+    assert source == "manual"
+
+
+def test_a_phone_can_forget_a_fact_by_what_it_says(conn):
+    pid = contact(conn, "Sam Rivera")
+    uid = conn.execute("SELECT contact_uid FROM people WHERE id = ?", (pid,)).fetchone()[0]
+    add_event(conn, pid, "job", "Works at Example", "2024", 0.9, "imessage")
+    ops.apply(conn, "event_forget", {"person_id": -7, "contact_uid": uid, "type": "job", "value": "Works at Example", "date": "2024"})
+    assert state(conn, pid)[0]["status"] == "rejected"
+
+
+def test_merging_contacts_keeps_a_forget_from_either_side(conn):
+    keep, drop = person(conn, "Sam Rivera"), person(conn, "Sam R")
+    add_event(conn, keep, "job", "Works at Example", None, 0.9, "imessage")
+    add_event(conn, drop, "job", "Works at Example", None, 0.9, "imessage")
+    forget(conn, drop, "job", "Works at Example", None)
+    identity.merge(conn, keep, drop)
+    assert [tuple(r) for r in state(conn, keep)] == [(2, "rejected")]
+
+
+def test_two_macs_converge_whichever_merges_first(conn, tmp_path, key):
+    import mypeople.db as db
+
+    pid = contact(conn, "Sam Rivera")
+    add_event(conn, pid, "job", "Forgotten on the other Mac", None, 0.9, "imessage")
+    conn.commit()
+    path, back = tmp_path / "a.sherloq", tmp_path / "b.sherloq"
+    transfer.export_snapshot(conn, path, key)
+    other = db.connect(tmp_path / "other.db")
+    transfer.merge_snapshot(other, path, key)
+    # Offline, each changes something different.
+    ops.apply(conn, "note", {"person_id": pid, "text": "Written on the first Mac"})
+    other_pid = other.execute("SELECT id FROM people WHERE merged_into IS NULL").fetchone()[0]
+    ops.apply(other, "note", {"person_id": other_pid, "text": "Written on the second Mac"})
+    row = other.execute("SELECT id FROM events WHERE type = 'job'").fetchone()
+    ops.apply(other, "event_forget", {"event_id": row["id"]})
+    transfer.export_snapshot(conn, path, key)
+    transfer.export_snapshot(other, back, key)
+    done = transfer.merge_snapshot(conn, back, key)
+    assert (done["facts_added"], done["facts_forgotten"]) == (1, 1)
+    transfer.merge_snapshot(other, path, key)
+    assert values(conn) == values(other) == {("Written on the first Mac", "manual"), ("Written on the second Mac", "manual")}
+    other.close()
+
+
+def test_a_fact_brought_back_on_one_mac_comes_back_on_the_other(conn, tmp_path, key):
+    import mypeople.db as db
+
+    pid = contact(conn, "Sam Rivera")
+    add_event(conn, pid, "job", "Works at Example", None, 0.9, "imessage")
+    path = tmp_path / "a.sherloq"
+    transfer.export_snapshot(conn, path, key)
+    other = db.connect(tmp_path / "other.db")
+    transfer.merge_snapshot(other, path, key)
+    forget(conn, pid, "job", "Works at Example", None)
+    transfer.export_snapshot(conn, path, key)
+    transfer.merge_snapshot(other, path, key)
+    assert other.execute("SELECT status FROM events").fetchone()[0] == "rejected"
+    remember(conn, pid, "job", "Works at Example", None)
+    conn.commit()
+    transfer.export_snapshot(conn, path, key)
+    transfer.merge_snapshot(other, path, key)
+    assert tuple(other.execute("SELECT generation, status, source FROM events").fetchone()) == (3, "active", "manual")
+    other.close()

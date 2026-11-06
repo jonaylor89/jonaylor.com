@@ -123,17 +123,39 @@ Receipts only track delivery. Losing a reply cannot roll back a completed local 
 change. Backups retain history, unresolved alternatives, original UUIDs, and unsent work.
 Switching to a foreign collection never uploads the old collection's history.
 
+## Notes and facts
+
+A fact's identity is its contact, type, text and date. It also has a generation: odd means
+present and even means forgotten. Adding or forgetting moves it to the next generation, and
+devices keep the higher one. That makes the merge commutative and idempotent, so devices agree
+whatever order they sync in, with no clocks and nothing to resolve by hand.
+
+- **The same fact added on two devices is one fact.** Different facts both stay.
+- **Forgetting wins over what it saw.** A device that hasn't received the fact yet keeps the
+  forget and applies it when the fact arrives.
+- **Adding it again on purpose brings it back,** because that's a newer generation and marks it
+  `manual`. A model rediscovering it never does: `add_event` leaves a forgotten fact alone.
+- **If one device forgets a fact while another independently forgets and re-adds it,** the higher
+  generation wins, which is the re-add.
+- **Merging contacts keeps the higher generation** of a fact both records hold.
+- **Editing a fact is forgetting it and adding the new text.**
+
+Phones send these as `event_add`, `note` and `event_forget`, addressed by contact UUID and by what
+the fact says. Macs exchange them in memory files through `transfer merge`, whose `fact_state`
+carries generations and forgotten facts. Only the Mac that wrote a note reads it for facts.
+
+Contact conflicts are different, because two values of one field both matter: they stay until you
+choose. Android lists them under **Review → Versions** and reports them after a sync. The Mac lists
+them under **Review → Conflicts**, and the CLI under `mypeople contact conflicts`.
+
 ## Deliberate boundaries
 
 - **This is contact replication, not replication of the whole SQLite database.** Imported
   conversations, relationship inference/overrides, aliases, profile decisions, moments, and
   model/enrichment requests retain their existing Mac workflow.
-- **Notes and facts travel with the contact, but one way and add-only.** `transfer merge` adds
-  those it doesn't have to the matching contact, keeping their source. A fact forgotten here
-  stays forgotten, but forgetting one on the other Mac doesn't remove it here, and only the Mac
-  that wrote a note reads it for facts. They aren't in the causal history above.
-  Queued Mac-only memory requests must finish with their original publisher before switching
-  peers, because their integer fact/profile IDs are not portable across CLI databases.
+- **Notes and facts reconcile by state, not through the causal history.** See below. Profile,
+  moment and "not the same person" decisions still name integer IDs from one CLI database, so
+  they finish with that CLI before a phone switches peers, and another Mac defers them.
 - **Splitting a replicated identity/undoing its merge is not implemented.** Android hides
   that action and the backend refuses it. The compatibility SQL view still coalesces
   existing message/event foreign keys; a safe split needs provenance for that data too.

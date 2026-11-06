@@ -5,8 +5,9 @@ A native Mac app for [MyPeople](../../cli/mypeople/README.md). Like the
 details, notes and facts, plus reviewing duplicates, conflicts and suggested profiles. It also runs
 the Mac's side of the QR and Bluetooth exchange with your phone.
 
-Importing messages, reading them for facts, finding profiles, collecting photos and Google sync stay
-in the [CLI](../../cli/mypeople/README.md). Their results show up here on each contact.
+Only the Mac imports messages, syncs with Google, and answers questions with Ask. Reading messages for
+facts, finding profiles and collecting photos stay in the [CLI](../../cli/mypeople/README.md). Their
+results show up here on each contact.
 
 It works on the same database as the CLI, `~/.mypeople/mypeople.db`, and contains no logic that can
 change your data: every edit goes through the CLI's own code, which the app runs as a background
@@ -32,6 +33,7 @@ update the app, because the app refuses a CLI whose protocol doesn't match and s
 ## Permissions
 
 - **Bluetooth** is requested when you first exchange data with your phone.
+- **Full Disk Access** is needed only to import iMessage. Settings shows whether it's on, and how to turn it on.
 
 ## Development
 

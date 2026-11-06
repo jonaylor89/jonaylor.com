@@ -214,6 +214,10 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "said_at" not in {r["name"] for r in conn.execute("PRAGMA table_info(events)")}:
         conn.execute("ALTER TABLE events ADD COLUMN said_at TEXT")
         backfill_said_at(conn)
+    if "generation" not in {r["name"] for r in conn.execute("PRAGMA table_info(events)")}:
+        # Odd is present and even is forgotten; see events.reconcile.
+        conn.execute("ALTER TABLE events ADD COLUMN generation INTEGER NOT NULL DEFAULT 1")
+        conn.execute("UPDATE events SET generation = 2 WHERE status = 'rejected'")
     from .snapchat_links import backfill
     backfill(conn)
     conn.commit()

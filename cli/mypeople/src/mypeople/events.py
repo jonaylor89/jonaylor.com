@@ -144,7 +144,60 @@ def add_event(
 
 def add_note(conn: sqlite3.Connection, person_id: int, text: str) -> int | None:
     """Save a note as written. Needs no model; `mypeople extract` reads it later for facts."""
-    return add_event(conn, person_id, NOTE, text, None, 1.0, MANUAL)
+    return remember(conn, person_id, NOTE, text, None)
+
+
+# Facts reconcile between devices without clocks or conflicts. Each fact is identified by its
+# contact, type, text and date, and has a generation: odd is present, even is forgotten. Adding
+# or forgetting moves it to the next generation, and devices keep the higher one, so any devices
+# reach the same answer whatever order they sync in. The model can't undo a choice of yours:
+# add_event never revives a forgotten fact. Only `remember`, for what you add yourself, does.
+
+def _fact(conn: sqlite3.Connection, person_id: int, type: str, value: str, date: str | None) -> sqlite3.Row | None:
+    return conn.execute("SELECT id, generation, status, source FROM events WHERE person_id = ? AND type = ? AND value = ? AND date = ?",
+                        (person_id, type, value.strip(), normalize_date(date))).fetchone()
+
+
+def remember(conn: sqlite3.Connection, person_id: int, type: str, value: str, date: str | None) -> int | None:
+    """Add a fact you stated, bringing it back if it was forgotten. None if it's already known."""
+    row = _fact(conn, person_id, type, value, date)
+    if row is None:
+        return add_event(conn, person_id, type, value, date, 1.0, MANUAL)
+    if row["status"] == "active":
+        return None
+    conn.execute("UPDATE events SET generation = generation + 1, status = 'active', source = ?, source_ref = NULL WHERE id = ?",
+                 (MANUAL, row["id"]))
+    return row["id"]
+
+
+def forget(conn: sqlite3.Connection, person_id: int, type: str, value: str, date: str | None) -> None:
+    """Forget a fact, even one this device hasn't received yet: it stays gone when it arrives."""
+    if _fact(conn, person_id, type, value, date) is None:
+        add_event(conn, person_id, type, value, date, 1.0, MANUAL)
+    row = _fact(conn, person_id, type, value, date)
+    if row["status"] == "active":
+        conn.execute("UPDATE events SET generation = generation + 1, status = 'rejected' WHERE id = ?", (row["id"],))
+
+
+def reconcile(conn: sqlite3.Connection, person_id: int, fact: dict, generation: int, source_ref: str | None = None) -> str | None:
+    """Join another device's fact into this database. Says what changed: 'added', 'forgotten' or None."""
+    type, value, date = fact["type"], fact["value"], fact.get("date")
+    now = "active" if generation % 2 else "rejected"
+    row = _fact(conn, person_id, type, value, date)
+    if row is None:
+        rowid = add_event(conn, person_id, type, value, date, float(fact.get("confidence", 1.0)), str(fact.get("source") or MANUAL),
+                          source_ref, fact.get("evidence"), fact.get("said_at"))
+        if rowid is None:
+            return None
+        conn.execute("UPDATE events SET generation = ?, status = ? WHERE id = ?", (generation, now, rowid))
+        return "added" if now == "active" else None  # forgotten there, and never shown here
+    if generation >= row["generation"] and fact.get("source") == MANUAL:
+        conn.execute("UPDATE events SET source = ? WHERE id = ?", (MANUAL, row["id"]))  # the same on every device
+    if generation > row["generation"]:
+        conn.execute("UPDATE events SET generation = ?, status = ? WHERE id = ?", (generation, now, row["id"]))
+        if row["status"] != now:
+            return "added" if now == "active" else "forgotten"
+    return None
 
 
 def said_on(event: sqlite3.Row) -> dt.date | None:

@@ -74,11 +74,13 @@ struct RootView: View {
         case .today: TodayView()
         case .upcoming: UpcomingView()
         case .people: EmptyView()
+        case .ask: AskView()
         case .profiles: ReviewProfilesView()
         case .duplicates: ReviewDuplicatesView()
         case .conflicts: ReviewConflictsView()
         case .importData: ImportView()
         case .phone: PhoneView()
+        case .google: GoogleView()
         case .activity: ActivityView()
         }
     }
@@ -90,9 +92,9 @@ private struct Sidebar: View {
     var body: some View {
         @Bindable var model = model
         List(selection: $model.screen) {
-            Section("Memory") { rows([.today, .upcoming, .people]) }
+            Section("Memory") { rows([.today, .upcoming, .people, .ask]) }
             Section("Review") { rows([.profiles, .duplicates, .conflicts]) }
-            Section("Connect") { rows([.importData, .phone]) }
+            Section("Connect") { rows([.importData, .phone, .google]) }
             Section { rows([.activity]) }
         }
         .listStyle(.sidebar)

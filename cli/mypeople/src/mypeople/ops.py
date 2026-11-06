@@ -9,7 +9,7 @@ from __future__ import annotations
 import sqlite3
 
 from . import identity, relationships
-from .events import EVENT_TYPES, MANUAL, add_event, add_note
+from .events import EVENT_TYPES, NOTE, add_note, forget, remember
 
 EDITS = ("contact_change", "contact_save", "contact_trash", "contact_restore", "merge_undo", "rename", "alias_add", "alias_remove", "event_add", "event_forget", "note", "relationship",
          "profile_status", "merge", "distinct", "moment_status")
@@ -17,6 +17,19 @@ EDITS = ("contact_change", "contact_save", "contact_trash", "contact_restore", "
 # Requests only older phones still send. Kept so that an edit bundle queued before they went CLI-only still applies.
 ENRICHMENT = ("extract", "find_profiles", "photos")
 KINDS = EDITS + ENRICHMENT
+# Name their contact by UUID, so they mean the same thing on any Mac in the collection.
+# Keep in step with `portable` in Logic.kt.
+PORTABLE = ("contact_save", "contact_trash", "contact_restore", "rename", "alias_add", "alias_remove", "event_add", "note",
+            "event_forget", "relationship")
+
+
+def portable(op: dict) -> bool:
+    payload = op.get("payload") or {}
+    if op.get("kind") == "contact_change":
+        return True
+    if op.get("kind") == "event_forget" and not payload.get("value"):
+        return False
+    return op.get("kind") in PORTABLE and bool(payload.get("contact_uid"))
 
 
 class OpError(ValueError):
@@ -137,12 +150,17 @@ def apply(conn: sqlite3.Connection, kind: str, payload: dict) -> str:
     elif kind == "event_add":
         p, value = _person(conn, payload), _text(payload, "value")
         type = payload.get("type") if payload.get("type") in EVENT_TYPES else "other"
-        eid = add_event(conn, p["id"], type, value, payload.get("date") or None, 1.0, MANUAL)
+        eid = remember(conn, p["id"], type, value, payload.get("date") or None)
         message = "Added." if eid else "Already known."
     elif kind == "event_forget":
-        cur = conn.execute("UPDATE events SET status = 'rejected' WHERE id = ?", (payload.get("event_id"),))
-        if not cur.rowcount:
-            raise OpError(f"No fact #{payload.get('event_id')}")
+        if payload.get("value"):  # names the fact itself, so it means the same on any device
+            type = payload.get("type") if payload.get("type") in (*EVENT_TYPES, NOTE) else "other"
+            forget(conn, _person(conn, payload)["id"], type, _text(payload, "value"), payload.get("date") or None)
+        else:  # the Mac app, or an edit queued by an older phone
+            row = conn.execute("SELECT person_id, type, value, date FROM events WHERE id = ?", (payload.get("event_id"),)).fetchone()
+            if row is None:
+                raise OpError(f"No fact #{payload.get('event_id')}")
+            forget(conn, row["person_id"], row["type"], row["value"], row["date"])
         message = "Forgotten."
     elif kind == "relationship":
         p = _person(conn, payload)

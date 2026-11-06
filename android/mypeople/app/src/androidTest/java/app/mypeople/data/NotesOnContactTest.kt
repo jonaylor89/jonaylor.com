@@ -17,6 +17,13 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.put
 import org.junit.After
+import androidx.compose.ui.test.performTextInput
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.performSemanticsAction
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
@@ -62,6 +69,41 @@ class NotesOnContactTest {
         compose.onNodeWithText("Added by you · Not yet on your Mac").assertIsDisplayed()
         list.performScrollToNode(hasText("Has a sister called Ana"))
         compose.onNodeWithText("family · Derived from your note").assertIsDisplayed()
+        Unit
+    }
+
+    @Test fun aFactIsForgottenByWhatItSaysAndAContactMergesWithAnyOther() = runBlocking {
+        seeded = true
+        graph.store.receive(Changes(1, false, listOf(
+            RecordChange("person", "1", json.encodeToJsonElement(Person("Sam Rivera"))),
+            RecordChange("person", "2", json.encodeToJsonElement(Person("Samuel R"))),
+            RecordChange("event", "1", json.encodeToJsonElement(Event(1, "family", "Has a sister called Ana", date = "2024", source = "imessage"))),
+        ), emptyList()))
+        val state = graph.store.state.value
+        var left = false
+        compose.setContent { MyPeopleTheme { PersonScreen(1, state, graph, onBack = { left = true }) } }
+        compose.onNodeWithTag("person-list").performScrollToNode(hasText("Has a sister called Ana"))
+        compose.onNodeWithText("Has a sister called Ana").performSemanticsAction(SemanticsActions.OnClick)
+        // Through semantics: this emulator refuses injected touches on a dialog's window.
+        fun tapWhenReady(text: String) {
+            compose.waitUntil(10_000) { compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText(text).performSemanticsAction(SemanticsActions.OnClick)
+        }
+        tapWhenReady("Forget fact")
+        tapWhenReady("Forget")
+        compose.waitUntil(5_000) { graph.store.state.value.pending.any { it.kind == "event_forget" } }
+        val forget = graph.store.state.value.pending.first { it.kind == "event_forget" }.payload
+        assertEquals("Has a sister called Ana", forget.text("value"))
+        assertEquals("2024", forget.text("date"))
+
+        compose.onNodeWithTag("person-list").performScrollToNode(hasText("Merge with…"))
+        tapWhenReady("Merge with…")
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("merge-search").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("merge-search").performTextInput("samuel")
+        tapWhenReady("Samuel R")
+        tapWhenReady("Merge")
+        compose.waitUntil(5_000) { left }
+        assertTrue(graph.store.state.value.pending.any { it.kind == "merge" })
         Unit
     }
 }

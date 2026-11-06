@@ -110,7 +110,7 @@ struct EngineIntegrationTests {
 
             let vcard = h.home.appendingPathComponent("people.vcf")
             try "BEGIN:VCARD\nVERSION:3.0\nFN:Katherine Johnson\nEND:VCARD\n".write(to: vcard, atomically: true, encoding: .utf8)
-            let job: StartedJob = try await client.call("job.start", ["kind": "import_vcf", "params": ["path": .string(vcard.path)]])
+            let job: StartedJob = try await client.call("job.start", ["kind": "import", "params": ["source": "vcf", "path": .string(vcard.path)]])
             var finished: JobFinished?
             for _ in 0..<400 {
                 let all = await h.sink.events

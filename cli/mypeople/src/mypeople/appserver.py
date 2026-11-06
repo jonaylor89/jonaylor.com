@@ -24,6 +24,7 @@ import json
 import math
 import os
 import queue
+import shutil
 import signal
 import sqlite3
 import sys
@@ -34,9 +35,9 @@ import uuid
 from pathlib import Path
 from typing import Callable
 
-from . import appjobs, contacts, db, identity, moments, ops, publish, replica
+from . import appjobs, contacts, db, identity, llm, moments, ops, publish, replica
 
-PROTOCOL = 2
+PROTOCOL = 3
 POLL_SECONDS = 2.0
 MIN_REFRESH_SECONDS = 5.0
 REFRESH_BACKOFF = 5  # never spend more than a fifth of the time refreshing
@@ -46,6 +47,7 @@ HISTORY_LIMIT = 200
 # Edits the app may send straight to ops.apply. Contact edits go through replica instead, as
 # `mypeople contact` does, so they enter causal history immediately. Model-backed operations
 # are jobs.
+SECRET_KEYS = ("ANTHROPIC_API_KEY",)
 EDIT_KINDS = ("alias_add", "alias_remove", "event_add", "event_forget", "note", "relationship", "profile_status",
               "distinct", "moment_status", "merge_undo")
 Key = tuple[str, str]
@@ -397,6 +399,8 @@ def _error(exc: Exception) -> dict:
         return {"code": "invalid", "message": str(exc)}
     if isinstance(exc, identity.PersonNotFound):
         return {"code": "not_found", "message": str(exc)}
+    if isinstance(exc, llm.LLMError):
+        return {"code": "model", "message": str(exc)}
     if isinstance(exc, sqlite3.OperationalError) and "locked" in str(exc):
         return {"code": "busy", "message": "The database is busy with another MyPeople process. Nothing was changed; try again."}
     if isinstance(exc, sqlite3.Error):
@@ -434,17 +438,56 @@ def _exists(path: Path) -> bool:
         return False
 
 
+def _full_disk_access() -> bool | None:
+    """Can this process read another app's data? None when there's nothing there to test against."""
+    probe = Path.home() / "Library" / "Messages" / "chat.db"
+    try:
+        with open(probe, "rb"):
+            return True
+    except PermissionError:
+        return False
+    except OSError:
+        return None
+
+
 @method("system.status")
 def system_status(self: Engine, conn, p: dict) -> dict:
-    from . import transfer
+    from . import google, transfer
+    from .importers import imessage, mino, whatsapp
 
+    backend = llm.backend()
+    home = Path.home()
+    secrets = Path(os.environ.get("MYPEOPLE_ENV_FILE", home / ".mypeople" / "secrets.ini")).expanduser()
     return {
         "db": str(self.db_path),
         "version": _version(),
         "python": sys.version.split()[0],
+        "llm": {"backend": backend.name, "model": backend.model, "local": backend.local, "choices": list(llm.BACKENDS)},
+        # Whether a credential exists, never its value.
+        "secrets": {"path": str(secrets), "exists": _exists(secrets), "keys": {k: bool(os.environ.get(k)) for k in SECRET_KEYS}},
+        "pi_auth": _exists(llm.AUTH_PATH),
         "transfer_key": _exists(transfer.KEY_FILE),
-        "extras": {"bluetooth": all(importlib.util.find_spec(m) for m in ("IOBluetooth", "qrcode"))},
+        "full_disk_access": _full_disk_access(),
+        "extras": {
+            "bluetooth": all(importlib.util.find_spec(m) for m in ("IOBluetooth", "qrcode")),
+        },
+        "sqlcipher": shutil.which("sqlcipher") is not None,
+        "sources": {
+            "imessage": _exists(imessage.DEFAULT_DB),
+            "whatsapp": _exists(whatsapp.DEFAULT_DIR),
+            "mino": _exists(mino.DEFAULT_DB),
+        },
+        "google": {"client": _exists(google.CLIENT_PATH), "signed_in": _exists(google.TOKEN_PATH)},
     }
+
+
+@method("settings.llm")
+def settings_llm(self: Engine, conn, p: dict) -> dict:
+    name = _text(p, "backend")
+    if name not in llm.BACKENDS:
+        raise RpcError("invalid", f"Unknown model backend {name!r}")
+    os.environ["MYPEOPLE_LLM"] = name
+    return {}
 
 
 # --- contacts -----------------------------------------------------------------------------
@@ -699,6 +742,35 @@ def dupes_cards(self: Engine, conn, p: dict) -> dict:
     } for c in cards], "clues": dupes.shared_clues(cards, conn)}
 
 
+@method("twitter.unnamed", "slow")
+def twitter_unnamed(self: Engine, conn, p: dict) -> dict:
+    """The conversations `import twitter --review` would ask about."""
+    from .importers import twitter
+
+    root = Path(_text(p, "root")).expanduser()
+    try:
+        todo = twitter.unnamed(conn, root)
+    except (OSError, ValueError, KeyError, IndexError) as exc:
+        raise RpcError("invalid", f"Couldn't read that X archive: {exc}") from None
+    return {"conversations": [{
+        "account_id": u.account_id, "link": u.link, "tweets_shared": u.tweets_shared,
+        "messages": [{"at": at, "mine": mine, "text": text} for at, mine, text in u.messages],
+    } for u in todo]}
+
+
+@method("twitter.name")
+def twitter_name(self: Engine, conn, p: dict) -> dict:
+    from .importers import twitter
+
+    name, handle = p.get("name") or None, p.get("handle") or None
+    person_id = p.get("person_id")
+    if not (name or handle or person_id):
+        raise RpcError("invalid", "Give a name, an @handle, or an existing person.")
+    pid = twitter.name_account(conn, _text(p, "account_id"), name, handle, person_id)
+    self.touched.add(pid)
+    return {"person_id": pid}
+
+
 # --- jobs ---------------------------------------------------------------------------------
 
 @method("job.start", "now")
@@ -750,6 +822,7 @@ def serve(db_path: Path) -> None:
         finally:
             os._exit(0)
 
+    llm.load_env_file()  # as the CLI does, so status and model calls see the same credentials
     engine = Engine(db_path, emit)
     signal.signal(signal.SIGTERM, shutdown)
     signal.signal(signal.SIGINT, shutdown)

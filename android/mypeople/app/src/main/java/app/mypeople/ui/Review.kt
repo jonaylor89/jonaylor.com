@@ -38,22 +38,24 @@ fun ReviewScreen(records: Records, graph: AppGraph, scrollToTopRequest: Long = 0
     val latest by rememberUpdatedState(unordered)
     DisposableEffect(Unit) { onDispose { graph.settings.seenDuplicates = seen.orEmpty() + latest.map { it.key } } }
     val fresh = groups.count { duplicateRank(it.key, seen) < 2 }
+    val versions = remember(records) { records.people.entries.filter { it.value.contact_conflicts.isNotEmpty() }.sortedBy { it.value.name.lowercase() } }
+    val versionsList = rememberLazyListState()
     val profilesList = rememberLazyListState()
     val duplicatesList = rememberLazyListState()
-    val list = if (tab == 0) profilesList else duplicatesList
+    val list = when (tab) { 0 -> profilesList; 1 -> duplicatesList; else -> versionsList }
     OnScrollToTopRequest(scrollToTopRequest) { list.scrollToItem(0) }
     key(tab) {
         LazyColumn(state = list, modifier = Modifier.testTag("review-list"), contentPadding = PaddingValues(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item { Heading("A second look", "Good memory starts with getting people right.", onAccount = openSettings) }
             stickyHeader {
                 Surface(color = MaterialTheme.colorScheme.surface) {
-                    Box(Modifier.padding(vertical = 8.dp)) { JournalTabs(tab, listOf("Profiles", "Duplicates")) { tab = it } }
+                    Box(Modifier.padding(vertical = 8.dp)) { JournalTabs(tab, listOf("Profiles", "Duplicates", "Versions")) { tab = it } }
                 }
             }
             item {
                 Column(Modifier.padding(horizontal = KinSpace.s4, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(if (tab == 0) "${profiles.size} suggested profiles" else "${groups.size} groups to review" + if (fresh > 0) " · $fresh new" else "", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(if (tab == 0) "A suggestion is never a confirmed identity. Even a supported assessment needs your confirmation." else "Compare the details before combining records. Similar names don’t always mean the same person.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (tab == 2) "${versions.size} contacts with two versions" else if (tab == 0) "${profiles.size} suggested profiles" else "${groups.size} groups to review" + if (fresh > 0) " · $fresh new" else "", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (tab == 2) "These changed on two devices before they synced. Both are kept until you choose." else if (tab == 0) "A suggestion is never a confirmed identity. Even a supported assessment needs your confirmation." else "Compare the details before combining records. Similar names don’t always mean the same person.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             if (tab == 0) {
@@ -77,6 +79,14 @@ fun ReviewScreen(records: Records, graph: AppGraph, scrollToTopRequest: Long = 0
                                 TextButton(onClick = { status("rejected") }) { Text("Reject") }
                             }
                         }
+                    }
+                }
+            } else if (tab == 2) {
+                if (loading) item { SavedRowsPlaceholder() }
+                else if (versions.isEmpty()) item { EmptyState("Nothing to reconcile", "Your devices agree. Edits to the same detail on two devices will appear here.") }
+                items(versions, key = { it.key }) { (id, person) ->
+                    JournalCard(Modifier.padding(horizontal = KinSpace.s4)) {
+                        PersonRow(person, graph, person.contact_conflicts.keys.joinToString { if (it == "_trashed") "Trash status" else it.replace('_', ' ') }) { openPerson(id) }
                     }
                 }
             } else {
@@ -163,4 +173,46 @@ private fun duplicateRank(key: String, seen: Set<String>?): Int = when {
     key.startsWith(LOCAL_DUPES_PREFIX) -> 0
     seen != null && key !in seen -> 1
     else -> 2
+}
+
+/** Merge this contact with any other, for duplicates the review didn't suggest. */
+@Composable
+internal fun MergeWithDialog(id: Int, records: Records, graph: AppGraph, onClose: () -> Unit, onMerged: () -> Unit) {
+    var query by rememberSaveable { mutableStateOf("") }
+    var chosen by remember { mutableStateOf<Int?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val matches = remember(records, query) {
+        records.people.entries.filter { it.key != id && !it.value.trashed && query.isNotBlank() && it.value.name.contains(query.trim(), ignoreCase = true) }
+            .sortedBy { it.value.name.lowercase() }.take(30)
+    }
+    AlertDialog(onDismissRequest = { if (!busy) onClose() }, title = { Text("Merge ${records.people[id]?.name.orEmpty()} with…") }, text = {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(query, { query = it; chosen = null }, label = { Text("Search people") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("merge-search"))
+            LazyColumn(Modifier.heightIn(max = 280.dp)) {
+                items(matches, key = { it.key }) { (other, person) ->
+                    Surface(onClick = { chosen = other }, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium,
+                        color = if (chosen == other) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface) {
+                        Text(person.name, Modifier.padding(12.dp), style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+            Text("Their details, notes and facts are combined, and your other devices follow when they sync.", style = MaterialTheme.typography.bodySmall)
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        }
+    }, confirmButton = {
+        TextButton(enabled = chosen != null && !busy, onClick = {
+            val other = chosen ?: return@TextButton
+            scope.launch {
+                busy = true; error = null
+                try {
+                    graph.submitEdit("merge", buildJsonObject { putJsonArray("person_ids") { add(id); add(other) } })
+                    onMerged()
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) { error = graph.editError(e) }
+                finally { busy = false }
+            }
+        }) { Text(if (busy) "Merging…" else "Merge") }
+    }, dismissButton = { TextButton(enabled = !busy, onClick = onClose) { Text("Cancel") } })
 }

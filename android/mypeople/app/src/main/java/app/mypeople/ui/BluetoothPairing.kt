@@ -41,12 +41,14 @@ fun BluetoothPairing(graph: AppGraph, state: StoreState, feedback: (String) -> U
                 val result = graph.bluetooth.sync(current) { next -> scope.launch { transfer = next } }
                 offer = null
                 val remaining = graph.store.state.value.pending.size
+                val twoVersions = graph.store.state.value.records.people.values.count { it.contact_conflicts.isNotEmpty() }
+                val toReview = if (twoVersions > 0) " $twoVersions contact(s) have two versions to choose between in Review." else ""
                 feedback(when {
                     !result.bidirectional -> "Memory imported. This older QR does not upload edits; use a fresh QR for two-way sync."
                     !result.peerConfirmed -> "Updated memory imported. The final Mac confirmation was interrupted; retrying sync is safe."
                     remaining > 0 -> "Synced with your Mac. $remaining request(s) still queued for a later attempt."
                     else -> "Sync complete. Phone edits and updated memory are saved on both devices."
-                })
+                } + toReview)
             } catch (e: CancellationException) { throw e }
             catch (e: IllegalArgumentException) { feedback(e.message ?: "Couldn’t import that memory."); offer = null }
             catch (_: Exception) { feedback("Bluetooth connection interrupted. Keep both devices nearby, approve pairing prompts, and scan a fresh QR."); offer = null }

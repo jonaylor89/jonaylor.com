@@ -150,3 +150,62 @@ struct UpcomingView: View {
         }
     }
 }
+
+struct AskView: View {
+    @Environment(AppModel.self) private var model
+    @State private var question = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        Page(title: "Ask", subtitle: "A question about the people you know, answered from your memory.") {
+            HStack {
+                TextField("Who do I know in Lisbon?", text: $question, axis: .vertical)
+                    .lineLimit(1...4)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($focused)
+                    .onSubmit(ask)
+                Button("Ask", action: ask)
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .disabled(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !model.isReady)
+            }
+            if let llm = model.status?.llm {
+                Muted("Answered by \(llm.model)\(llm.local ? " on this Mac" : ", so relevant facts leave this Mac"). Change it in Settings.", font: .caption)
+            }
+            ForEach(model.asks.reversed(), id: \.jobId) { ask in
+                CardBox {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(ask.question).font(.headline).textSelection(.enabled)
+                        if let job = model.jobs[ask.jobId] {
+                            if job.isRunning && job.lines.isEmpty {
+                                HStack(spacing: 8) {
+                                    ProgressView().controlSize(.small)
+                                    Muted("Thinking…")
+                                }
+                            }
+                            Text(job.outputLines.joined(separator: "\n"))
+                                .textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if job.isRunning {
+                                Button("Stop") { model.cancel(job) }
+                            } else if job.status == .failed {
+                                Text(job.message.isEmpty ? "That didn't work." : job.message).foregroundStyle(Kin.error)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .onAppear { focused = true }
+    }
+
+    private func ask() {
+        let text = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, model.isReady else { return }
+        question = ""
+        Task {
+            if let id = await model.startJob("ask", ["question": .string(text)]) {
+                model.asks.append((question: text, jobId: id))
+            }
+        }
+    }
+}

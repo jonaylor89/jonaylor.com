@@ -4,9 +4,9 @@ import Observation
 import SwiftUI
 
 enum Screen: String, Hashable, CaseIterable, Identifiable {
-    case today, upcoming, people
+    case today, upcoming, people, ask
     case profiles, duplicates, conflicts
-    case importData, phone
+    case importData, phone, google
     case activity
 
     var id: String { rawValue }
@@ -16,11 +16,13 @@ enum Screen: String, Hashable, CaseIterable, Identifiable {
         case .today: "Today"
         case .upcoming: "Upcoming"
         case .people: "People"
+        case .ask: "Ask"
         case .profiles: "Profiles"
         case .duplicates: "Duplicates"
         case .conflicts: "Conflicts"
-        case .importData: "Import vCard"
+        case .importData: "Import"
         case .phone: "Phone"
+        case .google: "Google"
         case .activity: "Activity"
         }
     }
@@ -30,11 +32,13 @@ enum Screen: String, Hashable, CaseIterable, Identifiable {
         case .today: "sun.max"
         case .upcoming: "calendar"
         case .people: "person.2"
+        case .ask: "questionmark.bubble"
         case .profiles: "person.crop.circle.badge.questionmark"
         case .duplicates: "square.on.square"
         case .conflicts: "arrow.triangle.branch"
         case .importData: "square.and.arrow.down"
         case .phone: "iphone.radiowaves.left.and.right"
+        case .google: "person.crop.rectangle.stack"
         case .activity: "list.bullet.rectangle"
         }
     }
@@ -235,6 +239,9 @@ final class AppModel {
                 await client.stop()
                 return
             }
+            if let backend = UserDefaults.standard.string(forKey: "llmBackend"), !backend.isEmpty {
+                let _: NoReply? = try? await client.call("settings.llm", ["backend": .string(backend)])
+            }
             let snapshot: ViewSnapshot = try await client.call("view.snapshot")
             guard generation == self.generation else { return }
             records = Records(snapshot: snapshot.records)
@@ -434,15 +441,32 @@ final class AppModel {
         paths[screen, default: []].append(PersonRoute(id: id, uid: person.contactUid))
     }
 
+    func setBackend(_ backend: String) {
+        perform { [self] in
+            let _: NoReply = try await call("settings.llm", ["backend": .string(backend)])
+            UserDefaults.standard.set(backend, forKey: "llmBackend")
+            refreshStatus()
+        }
+    }
+
     func name(_ id: Int) -> String { records.people[id]?.name ?? "Person #\(id)" }
 
     private func jobTitle(kind: String, params: JSONValue) -> String {
         switch kind {
-        case "import_vcf": return "Import vCard"
+        case "import":
+            let names = ["imessage": "iMessage", "whatsapp": "WhatsApp", "vcf": "vCard file", "gvoice": "Google Voice", "mbox": "mbox",
+                         "linkedin": "LinkedIn", "google": "Google Contacts"]
+            let source = params["source"]?.string ?? ""
+            return "Import \(names[source] ?? source.prefix(1).uppercased() + source.dropFirst())"
+        case "ask": return "Ask"
+        case "google_login": return "Google sign-in"
+        case "google_sync": return params["apply"]?.bool == true ? "Google sync" : "Google preview"
         case "transfer_qr": return "Phone pairing"
         case "transfer_export": return "Export memory file"
         case "transfer_import": return "Import phone edits"
         case "transfer_merge": return "Merge memory file"
+        case "recover_phones": return params["apply"]?.bool == true ? "Recover phone numbers" : "Preview phone recovery"
+        case "signal_export": return "Export Signal"
         default: return kind
         }
     }

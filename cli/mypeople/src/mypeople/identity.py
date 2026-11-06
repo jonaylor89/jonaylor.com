@@ -195,6 +195,10 @@ def merge(conn: sqlite3.Connection, keep_id: int, drop_id: int) -> None:
     conn.execute("DELETE FROM extraction_state WHERE person_id IN (?, ?)", (keep_id, drop_id))
     conn.execute("UPDATE identifiers SET person_id = ? WHERE person_id = ?", (keep_id, drop_id))
     conn.execute("UPDATE interactions SET person_id = ? WHERE person_id = ?", (keep_id, drop_id))
+    conn.execute(
+        "UPDATE events SET generation = d.generation, status = d.status FROM events d WHERE events.person_id = ? AND d.person_id = ? "
+        "AND events.type = d.type AND events.value = d.value AND events.date = d.date AND d.generation > events.generation",
+        (keep_id, drop_id))
     conn.execute("UPDATE OR IGNORE events SET person_id = ? WHERE person_id = ?", (keep_id, drop_id))
     conn.execute("DELETE FROM events WHERE person_id = ?", (drop_id,))
     conn.execute("UPDATE moments SET person_id = ? WHERE person_id = ?", (keep_id, drop_id))
