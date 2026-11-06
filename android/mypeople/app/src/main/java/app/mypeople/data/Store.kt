@@ -78,7 +78,11 @@ fun DiskState.receive(page: Changes): DiskState {
 }
 
 /** Durable local graph plus retained upgrade outbox; atomic typed checkpoints and journal deltas. */
-class Store(private val directory: File, private val startupTiming: (String, Long) -> Unit = { _, _ -> }) {
+class Store(private val directory: File, private val saveTiming: (String, Long) -> Unit = { _, _ -> }, private val startupTiming: (String, Long) -> Unit = { _, _ -> }) {
+    private inline fun <T> timedSave(stage: String, block: () -> T): T {
+        val start = System.nanoTime()
+        return block().also { saveTiming(stage, (System.nanoTime() - start) / 1_000_000) }
+    }
     private val mutex = Mutex()
     private val journal = StoreJournal(directory)
     private val startupIndex = StartupIndex(directory)
@@ -116,7 +120,20 @@ class Store(private val directory: File, private val startupTiming: (String, Lon
                         !bookkeeping && kind in setOf("Person", "Name", "ContactPoint", "same_person", "distinct_person")
                     }
                 }
-                val projected = gs.project(computeDuplicates = changed, derived = base)
+                // Reuse only projections independent of a small card-shaped delta.
+                // Merges/splits, evidence/reviews, non-card graph deltas and
+                // changed derived inputs keep the full projection path.
+                val edits = next.bundle.commits.filterNot { it.id in oldIds }.flatMap { it.operations }
+                val cardTypes = setOf("Person", "Name", "ContactPoint", "Note", "Claim", "Asset", "RelationshipPreferences", "has_name", "has_contact_point", "has_note", "subject_of", "has_asset", "has_preferences")
+                val incremental = previous != null && !replaced && previous.bundle.collection == next.bundle.collection &&
+                    previous.localIds.all { (uid, id) -> next.localIds[uid] == id } &&
+                    viewRecords === disk.records && viewPending === disk.pending && viewReplica === disk.replica &&
+                    edits.all { (gs.graph.objects[it.target] ?: gs.graph.edges[it.target])?.type in cardTypes }
+                val targets = if (incremental) edits.flatMap { op ->
+                    val edge = gs.graph.edges[op.target]
+                    listOfNotNull(op.target, edge?.from, edge?.to)
+                }.toSet() else null
+                val projected = gs.project(computeDuplicates = changed, derived = base, previous = if (incremental) view else null, changedTargets = targets)
                 if (changed) projected else projected.copy(dupes = view.dupes)
             } ?: if (disk.replica.enabled) contactHistory().project(base, disk.replica.localIds) else base
             viewRecords = disk.records; viewPending = disk.pending; viewReplica = disk.replica; viewGraph = disk.graph
@@ -174,11 +191,11 @@ class Store(private val directory: File, private val startupTiming: (String, Lon
         runCatching { startupIndex.save(current()) }
     }
     private fun save(next: DiskState) {
-        journal.save(disk, next)
+        timedSave("journal") { journal.save(disk, next) }
         disk = next
-        publish()
-        if (journal.checkpointWritten) runCatching { journal.cacheView(disk, current()) }
-        runCatching { startupIndex.save(current()) }
+        timedSave("publish") { publish() }
+        timedSave("checkpoint_cache") { if (journal.checkpointWritten) runCatching { journal.cacheView(disk, current()) } }
+        timedSave("startup_index") { runCatching { startupIndex.save(current()) } }
     }
     private suspend fun <T> locked(block: () -> T): T = withContext(Dispatchers.IO) {
         mutex.withLock { load(); block() }
@@ -234,8 +251,9 @@ class Store(private val directory: File, private val startupTiming: (String, Lon
         val uid = person?.contact_uid?.takeIf { it.isNotEmpty() } ?: newContactUid()
         val standalone = disk.offlineSource == null && disk.cursor == 0L && disk.records.people.isEmpty() && disk.pending.isEmpty() && !disk.replica.enabled
         if (disk.graph != null || standalone) {
-            val gs = GraphStore(disk.graph ?: GraphStore.empty())
-            saveGraph(gs.saveCard(uid, card.copy(user_edited = true), restore))
+            val gs = timedSave("graph_open") { GraphStore(disk.graph ?: GraphStore.empty()) }
+            val next = timedSave("graph_edit") { gs.saveCard(uid, card.copy(user_edited = true), restore) }
+            saveGraph(next)
             return@locked current().people.entries.first { uid == it.value.contact_uid || uid in it.value.contact_aliases }.key
         }
         if (disk.replica.enabled) {
@@ -255,7 +273,7 @@ class Store(private val directory: File, private val startupTiming: (String, Lon
         localId
     }
     private fun saveGraph(next: GraphState) {
-        val indexed = GraphStore(next).indexed()
+        val indexed = timedSave("graph_index") { GraphStore(next).indexed() }
         save(disk.copy(graph = indexed, nextLocalId = minOf(disk.nextLocalId, (indexed.localIds.values.minOrNull() ?: 0) - 1)))
     }
     suspend fun associations(uid: String): GraphSelection = locked {

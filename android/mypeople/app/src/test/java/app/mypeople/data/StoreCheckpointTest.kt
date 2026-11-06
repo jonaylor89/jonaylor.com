@@ -12,6 +12,35 @@ import java.security.MessageDigest
 
 class StoreCheckpointTest {
     @get:Rule val temp = TemporaryFolder()
+    @Test fun `old full graph ID frames and new ID deltas replay with stable identities`() {
+        val dir = temp.newFolder()
+        val a = java.util.UUID.randomUUID().toString()
+        val b = java.util.UUID.randomUUID().toString()
+        val initial = GraphStore(GraphStore(GraphStore.empty()).saveCard(a, ContactCard("A"))).indexed()
+        File(dir, "store.bin").writeBytes(StoreCheckpoint.encode(DiskState(graph = initial)))
+        val next = GraphStore(GraphStore(initial).saveCard(b, ContactCard("B"))).indexed()
+        val delta = next.copy(bundle = next.bundle.copy(commits = next.bundle.commits.drop(initial.bundle.commits.size)))
+        // Format used before incremental IDs: no graph_ids_delta marker, full ID map.
+        val bytes = buildJsonObject {
+            put("journalSequence", 1)
+            put("graph_reset", false)
+            put("graph_delta", json.encodeToJsonElement(delta))
+        }.toString().toByteArray()
+        java.io.DataOutputStream(File(dir, "store.journal").outputStream()).use { out ->
+            out.writeInt(bytes.size); out.write(bytes); out.write(MessageDigest.getInstance("SHA-256").digest(bytes))
+        }
+        val journal = StoreJournal(dir)
+        val loaded = journal.load()
+        assertEquals(next, loaded.graph)
+        val edited = GraphStore(next).saveCard(a, ContactCard("Renamed A"))
+        journal.save(loaded, loaded.copy(graph = edited))
+        assertEquals(edited, StoreJournal(dir).load().graph)
+        // A replaced ID map cannot be merged as additions: it requires a reset.
+        val remapped = edited.copy(localIds = edited.localIds.mapValues { it.value - 100 })
+        journal.save(loaded.copy(graph = edited), loaded.copy(graph = remapped))
+        assertEquals(remapped, StoreJournal(dir).load().graph)
+    }
+
     private fun fullState(): DiskState {
         val uid = "11111111-1111-4111-8111-111111111111"
         val id = "22222222-2222-4222-8222-222222222222"

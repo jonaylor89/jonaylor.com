@@ -70,7 +70,10 @@ internal class StoreJournal(private val directory: File) {
                         graph = if ("graph_delta" in patch) {
                             val delta = json.decodeFromJsonElement<GraphState>(patch.getValue("graph_delta"))
                             val base = if (patch["graph_reset"]?.jsonPrimitive?.boolean == true) null else state.graph
-                            delta.copy(bundle = delta.bundle.copy(commits = base?.bundle?.commits.orEmpty() + delta.bundle.commits, blobs = base?.bundle?.blobs.orEmpty() + delta.bundle.blobs))
+                            delta.copy(
+                                bundle = delta.bundle.copy(commits = base?.bundle?.commits.orEmpty() + delta.bundle.commits, blobs = base?.bundle?.blobs.orEmpty() + delta.bundle.blobs),
+                                localIds = if (patch["graph_ids_delta"]?.jsonPrimitive?.boolean == true) base?.localIds.orEmpty() + delta.localIds else delta.localIds,
+                            )
                         } else if ("graph" in patch) patch["graph"]?.takeUnless { it == JsonNull }?.let { json.decodeFromJsonElement<GraphState>(it) } else state.graph,
                         cursor = patch["cursor"]?.jsonPrimitive?.long ?: state.cursor,
                         nextLocalId = patch["nextLocalId"]?.jsonPrimitive?.int ?: state.nextLocalId,
@@ -170,10 +173,16 @@ internal class StoreJournal(private val directory: File) {
                 else {
                     val old = previous.graph
                     val ids = old?.bundle?.commits.orEmpty().map { it.id }.toSet()
-                    val reset = old == null || old.bundle.collection != graph.bundle.collection || !graph.bundle.commits.map { it.id }.containsAll(ids)
+                    val reset = old == null || old.bundle.collection != graph.bundle.collection || !graph.bundle.commits.map { it.id }.containsAll(ids) ||
+                        old.localIds.any { (uid, id) -> graph.localIds[uid] != id }
                     put("graph_reset", reset)
-                    put("graph_delta", json.encodeToJsonElement(if (reset) graph else graph.copy(bundle = graph.bundle.copy(
-                        commits = graph.bundle.commits.filterNot { it.id in ids }, blobs = graph.bundle.blobs.filterKeys { it !in old!!.bundle.blobs }))))
+                    // Do not repeat the entire native identity index in each tiny
+                    // edit frame (which otherwise forces a full checkpoint every
+                    // few saves on a large book). Old frames still carry full ids.
+                    put("graph_ids_delta", !reset)
+                    put("graph_delta", json.encodeToJsonElement(if (reset) graph else graph.copy(
+                        localIds = graph.localIds.filterKeys { it !in old!!.localIds },
+                        bundle = graph.bundle.copy(commits = graph.bundle.commits.filterNot { it.id in ids }, blobs = graph.bundle.blobs.filterKeys { it !in old!!.bundle.blobs }))))
                 }
             }
             if (previous.pending !== next.pending) put("pending", json.encodeToJsonElement(next.pending))

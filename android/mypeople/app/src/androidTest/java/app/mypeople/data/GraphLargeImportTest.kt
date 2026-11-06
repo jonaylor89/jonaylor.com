@@ -25,17 +25,46 @@ class GraphLargeImportTest {
         check(!directory.exists()) { "Use a fresh synthetic load directory." }
         val started = System.nanoTime()
         val manifest = Transfer.unpack(Transfer.decrypt(File(archive).readBytes(), "synthetic-load-passphrase"))
-        val store = Store(directory)
+        val timings = mutableListOf<Pair<String, Long>>()
+        val store = Store(directory, saveTiming = { stage, ms -> timings += stage to ms })
         store.initialize()
         store.installOffline(manifest)
         val loaded = (System.nanoTime() - started) / 1_000_000
         assertEquals(2600, store.state.value.records.people.size)
         assertEquals(329000, store.state.value.records.people.values.sumOf { p -> p.channels.sumOf { it.count } })
         val target = store.state.value.records.people.entries.first()
+        val untouched = store.state.value.records.people.entries.last()
+        val checkpoint = File(directory, "store.bin")
+        val checkpointTime = checkpoint.lastModified()
+        timings.clear()
         val editStart = System.nanoTime()
         store.saveContact(target.value.contactCard().copy(favorite = true), target.key)
         val edit = (System.nanoTime() - editStart) / 1_000_000
+        println("Synthetic edit stages: $timings")
         assertTrue(store.state.value.records.people.getValue(target.key).contactCard().favorite)
+        assertSame(untouched.value, store.state.value.records.people.getValue(untouched.key))
+        assertEquals(checkpointTime, checkpoint.lastModified())
+        assertTrue("Synthetic edit regressed to full-book latency: ${edit}ms", edit < 5000)
+        val repeated = (0 until 6).map { n ->
+            val start = System.nanoTime()
+            store.saveContact(store.state.value.records.people.getValue(target.key).contactCard().copy(favorite = n % 2 == 1), target.key)
+            (System.nanoTime() - start) / 1_000_000
+        }
+        println("Synthetic repeated edits: ${repeated}ms journal=${File(directory, "store.journal").length()} bytes")
+        assertTrue(repeated.all { it < 5000 })
+        assertEquals("Small edits must not trigger full-book checkpoints", checkpointTime, checkpoint.lastModified())
+        assertTrue("Card edits must journal small deltas", File(directory, "store.journal").length() < 64 * 1024)
+        for (kind in listOf("rename", "phone")) {
+            val before = store.state.value.records.people.getValue(target.key).contactCard()
+            val card = if (kind == "rename") before.copy(name = "Synthetic edited person")
+                else before.copy(fields = before.fields + ContactField("phone", "+12025550199", "Synthetic"))
+            val start = System.nanoTime()
+            store.saveContact(card, target.key)
+            val elapsed = (System.nanoTime() - start) / 1_000_000
+            println("Synthetic identity edit $kind: ${elapsed}ms")
+            assertTrue("Identity edit regressed: ${elapsed}ms", elapsed < 5000)
+        }
+        assertEquals(329000, store.state.value.records.people.values.sumOf { p -> p.channels.sumOf { it.count } })
         assertEquals(manifest.graph!!.blobs, store.snapshot().graph!!.bundle.blobs)
         println("Synthetic graph 2600 people / 329000 messages: import=${loaded}ms edit=${edit}ms maxHeap=${Runtime.getRuntime().maxMemory()}")
     }

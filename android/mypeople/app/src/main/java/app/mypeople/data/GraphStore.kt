@@ -51,20 +51,23 @@ class GraphStore(val state: GraphState) {
         require(graph.collection == null || graph.collection == state.bundle.collection)
         require(state.bundle.heads.toSet() == graph.heads.toSet()) { "Invalid graph frontier" }
         if (!state.bundle.blobsVerified) {
-        state.bundle.blobs.forEach { (hash, body) ->
+            verifyBlobs(state.bundle.blobs, graph.ordered)
+            state.bundle.blobsVerified = true
+        }
+    }
+    private fun verifyBlobs(blobs: Map<String, String>, commits: List<GraphCommit>, available: Map<String, String> = state.bundle.blobs) {
+        blobs.forEach { (hash, body) ->
             require(hash.matches(Regex("[0-9a-f]{64}")))
             require(digest(Base64.getDecoder().decode(body)) == hash) { "Damaged graph blob" }
         }
         fun references(value: JsonElement) {
             when (value) {
-                is JsonObject -> { value["blob_hash"]?.jsonPrimitive?.content?.let { require(it in state.bundle.blobs) { "Missing graph blob" } }; value.values.forEach(::references) }
+                is JsonObject -> { value["blob_hash"]?.jsonPrimitive?.content?.let { require(it in available) { "Missing graph blob" } }; value.values.forEach(::references) }
                 is JsonArray -> value.forEach(::references)
                 else -> Unit
             }
         }
-        graph.ordered.forEach { c -> c.operations.forEach { references(it.payload) } }
-        state.bundle.blobsVerified = true
-        }
+        commits.forEach { c -> c.operations.forEach { references(it.payload) } }
     }
     companion object {
         fun empty() = GraphState(GraphBundle(UUID.randomUUID().toString()))
@@ -119,7 +122,11 @@ class GraphStore(val state: GraphState) {
         val c = graph.commit(state.peer, ops, state.bundle.collection)
         val reduced = graph.appended(c)
         val bundle = state.bundle.copy(heads = listOf(c.id), commits = state.bundle.commits + c, blobs = state.bundle.blobs + blobs).also { it.reducer = reduced }
-        return state.copy(bundle = bundle).also { GraphStore(it) }
+        // This store already validated the immutable base. Only new bytes and
+        // references need checking; never rehash every conversation on a card edit.
+        verifyBlobs(blobs, listOf(c), bundle.blobs)
+        bundle.blobsVerified = true
+        return state.copy(bundle = bundle)
     }
     fun receive(bundle: GraphBundle): GraphState {
         require(bundle.collection == state.bundle.collection) { "This graph belongs to another collection. Back up this device before switching." }
@@ -172,15 +179,25 @@ class GraphStore(val state: GraphState) {
         graph.objects.filterValues { it.type == "Person" }.keys.sorted().forEach { if (it !in ids) ids[it] = next-- }
         return state.copy(localIds = ids)
     }
-    fun project(computeDuplicates: Boolean = true, derived: Records = Records()): Records {
+    fun project(computeDuplicates: Boolean = true, derived: Records = Records(), previous: Records? = null, changedTargets: Set<String>? = null): Records {
         val hints = derived.people.values.flatMap { p -> (listOf(p.contact_uid) + p.contact_aliases).map { it to p } }.toMap()
         val ids = indexed().localIds
         val people = mutableMapOf<Int, Person>(); val events = mutableMapOf<String, Event>(); val profiles = mutableMapOf<String, Profile>(); val moments = mutableMapOf<String, Moment>()
         val groups = components.groups
+        val reused = mutableSetOf<Int>()
         val personIds = groups.flatMap { (root, members) -> members.map { it to ids.getValue(root) } }.toMap()
         groups.forEach { (uid, members) ->
             if (members.any { (graph.value(it, "is_me") as? JsonPrimitive)?.booleanOrNull == true }) return@forEach
             val edges = associated(uid)
+            val decisions = members.flatMap { incoming[it].orEmpty() }.filter { (_, e) -> e.type == "targets" && graph.active(e.from!!) }.map { it.second.from!! }
+            val entities = (members + edges.map { it.first } + edges.map { if (it.second.type == "participant") it.second.from!! else it.second.to!! } + decisions).distinct()
+            val pid = ids.getValue(uid)
+            val cached = previous?.people?.get(pid)
+            if (changedTargets != null && cached != null && entities.none { it in changedTargets }) {
+                people[pid] = cached
+                reused += pid
+                return@forEach
+            }
             fun objects(type: String) = edges.filter { it.second.type == type }.map { it.second.to!! }.filter { graph.active(it) }.distinct()
             val names = objects("has_name"); val claims = objects("subject_of"); val notes = objects("has_note")
             val primary = primaryName(uid)
@@ -191,7 +208,6 @@ class GraphStore(val state: GraphState) {
                     if (members.size > 1 && field.kind == "phone" && field.region.isEmpty() && ownerRegions[e.from] != null) field.copy(region = ownerRegions.getValue(e.from)) else field
                 }
             }.distinctBy { it.object_id }
-            val decisions = members.flatMap { incoming[it].orEmpty() }.filter { (_, e) -> e.type == "targets" && graph.active(e.from!!) }.map { it.second.from!! }
             val preferences = objects("has_preferences").map(::properties).fold(JsonObject(emptyMap())) { a, b -> JsonObject(a + b) }
             fun decision(action: String): JsonElement? = decisions.lastOrNull { text(it, "action") == action }?.let { graph.value(it, "value") } ?: preferences[action]
             fun claim(key: String) = claims.firstOrNull { text(it, "predicate") == key }?.let { text(it, "value") }.orEmpty()
@@ -206,9 +222,7 @@ class GraphStore(val state: GraphState) {
             fun interactionCount(obj: String) = if (graph.objects[obj]?.type == "InteractionBatch") (graph.value(obj, "count") as? JsonPrimitive)?.intOrNull ?: 0 else 1
             val firstContact = interactions.map { interactionTime(it, false) }.filter { it.isNotBlank() }.minOrNull()
             val lastContact = interactions.map { interactionTime(it, true) }.filter { it.isNotBlank() }.maxOrNull()
-            val pid = ids.getValue(uid)
             val conflicts = mutableMapOf<String, List<ContactConflict>>()
-            val entities = (members + edges.map { it.first } + edges.map { if (it.second.type == "participant") it.second.from!! else it.second.to!! } + decisions).distinct()
             entities.forEach { entity ->
                 (graph.propertyNames(entity) + "_lifecycle").filter { graph.conflicted(entity, it) }.forEach { property ->
                     conflicts["$entity/$property"] = graph.alternatives(entity, property).map { ContactConflict(it.operation, it.value) }
@@ -243,6 +257,10 @@ class GraphStore(val state: GraphState) {
                     events[obj] = Event(pid, if (obj in notes) "note" else predicate.ifBlank { p.text("type") }, if (obj in notes) p.text("body").ifBlank { p.text("value") } else p.text("value"), p.text("date"), p["confidence"]?.jsonPrimitive?.doubleOrNull ?: 1.0, p.text("source").ifBlank { "manual" }, evidence ?: p.text("evidence").ifBlank { null }, p.text("said_at").ifBlank { null }, p.text("created_at"))
                 }
             }
+        }
+        previous?.let { cached ->
+            events.putAll(cached.events.filterValues { it.person_id in reused })
+            profiles.putAll(cached.profiles.filterValues { it.person_id in reused })
         }
         graph.edges.forEach { (id, e) -> if (e.type == "about" && graph.active(id) && graph.objects[e.from]?.type == "Moment" && graph.active(e.from!!)) {
             val pid = personIds[e.to] ?: return@forEach; val p = properties(e.from)

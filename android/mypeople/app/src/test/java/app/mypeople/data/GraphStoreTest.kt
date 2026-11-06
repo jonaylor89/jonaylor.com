@@ -18,6 +18,54 @@ class GraphStoreTest {
     private fun snapshot(bundle: GraphBundle, source: String = bundle.collection, revision: Long = 1) = TransferManifest(type = "snapshot", source = source, revision = revision, graph = bundle)
     private fun base(): GraphState = GraphStore(GraphStore.empty()).saveCard(uuid(), ContactCard("Cameron", given = "Cameron", notes = "Card note", fields = listOf(ContactField("phone", "+49123456789", "Mobile"), ContactField("email", "cameron@example.test")), originals = listOf("original vCard")))
 
+    @Test fun `small card saves reuse unrelated people and match a complete projection`() = runBlocking {
+        val directory = temp.newFolder()
+        val store = Store(directory)
+        val a = store.saveContact(ContactCard("Cameron", notes = "Old note", fields = listOf(ContactField("email", "cam@example.test"))))
+        val b = store.saveContact(ContactCard("Other", notes = "Keep this note"))
+        val unrelated = store.state.value.records.people.getValue(b)
+        suspend fun edit(card: ContactCard) {
+            store.saveContact(card, a)
+            assertSame(unrelated, store.state.value.records.people.getValue(b))
+            assertEquals(GraphStore(store.snapshot().graph!!).project(), store.state.value.records)
+        }
+        fun card() = store.state.value.records.people.getValue(a).contactCard()
+        edit(card().copy(favorite = true))
+        edit(card().copy(notes = "New note", organization = "Synthetic company"))
+        edit(card().copy(name = "Renamed Cameron"))
+        edit(card().copy(fields = emptyList()))
+        edit(card().copy(fields = listOf(ContactField("phone", "+49123456789"))))
+        edit(card().copy(fields = card().fields.map { it.copy(label = "Mobile") }))
+        // Shared graph objects invalidate every owner, not just the edited card.
+        val gs = GraphStore(store.snapshot().graph!!)
+        val point = card().fields.single().object_id
+        val owner = store.state.value.records.people.getValue(b).contact_uid
+        val shared = gs.commit(listOf(VersionedGraph.createEdge("has_contact_point", owner, point)))
+        store.installOffline(snapshot(shared.bundle))
+        store.saveContact(card().copy(fields = card().fields.map { it.copy(label = "Shared") }), a)
+        assertEquals(GraphStore(store.snapshot().graph!!).project(), store.state.value.records)
+        assertEquals("Shared", store.state.value.records.people.getValue(b).contactFields().single().label)
+        val restarted = Store(directory)
+        restarted.initialize()
+        assertEquals(store.snapshot().graph!!.localIds, restarted.snapshot().graph!!.localIds)
+        assertEquals(store.state.value.records, restarted.state.value.records)
+    }
+
+    @Test fun `verified base never bypasses validation of newly appended blobs and references`() {
+        val gs = GraphStore(base())
+        assertTrue(gs.state.bundle.blobsVerified)
+        val missing = VersionedGraph.createObject("Asset", buildJsonObject { putJsonObject("content") { put("blob_hash", "0".repeat(64)) } })
+        try { gs.commit(listOf(missing)); fail("Missing blob accepted") } catch (_: IllegalArgumentException) { }
+        try { gs.commit(listOf(missing), mapOf("0".repeat(64) to "YmFk")); fail("Damaged blob accepted") } catch (_: IllegalArgumentException) { }
+        val bytes = "synthetic photo".toByteArray()
+        val hash = GraphStore.digest(bytes)
+        val asset = VersionedGraph.createObject("Asset", buildJsonObject { putJsonObject("content") { put("blob_hash", hash) } })
+        val next = gs.commit(listOf(asset), mapOf(hash to java.util.Base64.getEncoder().encodeToString(bytes)))
+        assertTrue(next.bundle.blobsVerified)
+        assertTrue(GraphStore(next).graph.objects.containsKey(asset.target))
+        assertTrue(gs.state.bundle.blobs.isEmpty())
+    }
+
     @Test fun `known peer delta retains all data without resending acknowledged blobs`() {
         val initial = GraphStore(base())
         val bytes = "synthetic original evidence".toByteArray()
