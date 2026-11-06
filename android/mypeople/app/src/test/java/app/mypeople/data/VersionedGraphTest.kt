@@ -10,6 +10,19 @@ class VersionedGraphTest {
     private fun commits() = VersionedGraph.wire.decodeFromJsonElement<List<GraphCommit>>(fixture().getValue("commits"))
     private fun id() = UUID.randomUUID().toString()
 
+    @Test fun decoderSharesExactUuidAndPropertyStringsWithoutChangingWireValues() {
+        val person = VersionedGraph.createObject("Person", buildJsonObject { put("label", "Synthetic 🌱\u0000 value") })
+        val name = VersionedGraph.createObject("Name", buildJsonObject { put("display", "Synthetic 🌱\u0000 value") })
+        val edge = VersionedGraph.createEdge("has_name", person.target, name.target)
+        val commit = VersionedGraph().commit(id(), listOf(person, name, edge))
+        val raw = VersionedGraph.wire.encodeToString(GraphCommit.serializer(), commit)
+        val decoded = GraphAtoms.decoding { VersionedGraph.wire.decodeFromString<GraphCommit>(raw) }
+        assertEquals(commit, decoded)
+        assertSame(decoded.operations[0].target, decoded.operations[2].payload.getValue("from").jsonPrimitive.content)
+        assertSame(decoded.operations[0].kind, decoded.operations[1].kind)
+        assertEquals(raw, VersionedGraph.wire.encodeToString(GraphCommit.serializer(), decoded))
+    }
+
     @Test fun sharedFixtureConvergesAndSplitPreservesAmbiguity() {
         val expected = fixture().getValue("expect").jsonObject
         val input = commits()
@@ -123,6 +136,31 @@ class VersionedGraphTest {
         assertEquals(1, next.components().groups.size)
         assertFalse(base.people.contains(other.target))
         assertTrue(expanded.people.contains(other.target))
+    }
+
+    @Test fun incrementalRemoteBranchesMatchFullReplayAndPreserveDecisionOrdering() {
+        val input = commits()
+        val base = VersionedGraph(input)
+        val person = fixture().getValue("expect").jsonObject.getValue("person").jsonPrimitive.content
+        fun decision(value: Boolean): GraphCommit {
+            val obj = VersionedGraph.createObject("Decision", buildJsonObject { put("action", "favorite"); put("value", value) })
+            return base.commit(id(), listOf(obj, VersionedGraph.createEdge("targets", obj.target, person)))
+        }
+        val left = decision(true); val right = decision(false)
+        val replay = VersionedGraph(input + left + right)
+        val expected = GraphStore(GraphState(GraphBundle(input.first().collection, replay.heads, replay.ordered))).project()
+        for (branches in listOf(listOf(left, right), listOf(right, left))) {
+            var incremental = base
+            branches.forEach { incremental = incremental.received(it) }
+            assertEquals(replay.heads, incremental.heads)
+            assertEquals(replay.ordered, incremental.ordered)
+            val bundle = GraphBundle(input.first().collection, incremental.heads, incremental.ordered).also { it.reducer = incremental }
+            val store = GraphStore(GraphState(bundle))
+            assertEquals(expected, store.project())
+            val unchanged = store.receive(bundle.copy(commits = emptyList(), blobs = emptyMap()))
+            assertSame(incremental, unchanged.bundle.reducer)
+        }
+        assertEquals(input.size, base.commits.size)
     }
 
     @Test fun identityLinksCanBeRetractedWithoutDeletingObjects() {

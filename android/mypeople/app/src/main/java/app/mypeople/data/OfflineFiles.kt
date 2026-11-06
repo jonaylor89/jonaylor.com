@@ -13,27 +13,31 @@ class OfflineFiles(private val context: Context, private val store: Store, priva
     private val photos = File(context.filesDir, "offline-photos")
     fun photo(hash: String): File {
         require(Regex("[0-9a-f]{64}").matches(hash)) { "Invalid photo reference." }
-        return File(photos, hash)
+        val preview = File(photos, hash)
+        return if (preview.isFile) preview else File(context.filesDir, "memory/graph-blobs/$hash")
     }
     fun savePhoto(hash: String, bytes: ByteArray) {
         require(BackupArchive.hash(bytes) == hash) { "Damaged photo." }
-        photos.mkdirs(); atomicWrite(photo(hash), bytes)
+        photos.mkdirs(); atomicWrite(File(photos, hash), bytes)
     }
 
     suspend fun importMemory(uri: Uri, password: String, expectedSource: String? = null) = withContext(Dispatchers.IO) {
-        val encrypted = context.contentResolver.openInputStream(uri)?.use { Transfer.readLimited(it, Transfer.MAX_FILE) }
+        val encrypted = File.createTempFile(".import-", ".sherloq", context.cacheDir)
+        try {
+        context.contentResolver.openInputStream(uri)?.use { input -> encrypted.outputStream().use { LargeArchive.copyLimited(input, it) } }
             ?: throw IllegalArgumentException("Couldn’t open that memory file.")
         fun timed(stage: String, start: Long) {
             if (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0)
                 android.util.Log.i("MyPeopleBluetooth", "$stage=${(System.nanoTime() - start) / 1_000_000}ms")
         }
         var start = System.nanoTime()
-        val plain = Transfer.decrypt(encrypted, password)
-        timed("decrypt", start); start = System.nanoTime()
-        val snapshot = Transfer.unpack(plain) { hash, bytes ->
-            photos.mkdirs()
-            val destination = File(photos, hash)
-            if (!destination.exists()) atomicWrite(destination, bytes)
+        val snapshot = if (LargeArchive.isStreaming(encrypted)) {
+            requireNotNull(LargeArchive.read(encrypted, password, context.cacheDir, File(context.filesDir, "memory/graph-blobs"), ::savePhoto).memory) { "Choose a memory file, not a phone backup." }
+        } else {
+            require(encrypted.length() <= Transfer.MAX_FILE)
+            val plain = Transfer.decrypt(encrypted.readBytes(), password)
+            timed("decrypt", start); start = System.nanoTime()
+            Transfer.unpack(plain, ::savePhoto)
         }
         timed("archive", start)
         require(expectedSource == null || snapshot.source == expectedSource) { "This memory doesn’t match the Mac in the QR." }
@@ -43,6 +47,7 @@ class OfflineFiles(private val context: Context, private val store: Store, priva
         // App-private, excluded from backups, never saved UI state.
         // Retaining this lets tomorrow's edits use the same Mac's transfer key.
         settings.transferPassword = password
+        } finally { encrypted.delete() }
     }
 
     suspend fun bluetoothEdits(source: String, password: String, publisher: String? = null, graphCollection: String? = null): ByteArray = withContext(Dispatchers.IO) {
@@ -57,7 +62,8 @@ class OfflineFiles(private val context: Context, private val store: Store, priva
         val directory = File(context.cacheDir, "transfers").apply { mkdirs() }
         directory.listFiles()?.filter { it.lastModified() < System.currentTimeMillis() - 86_400_000 }?.forEach { it.delete() }
         val destination = File(directory, "MyPeople-edits-${System.currentTimeMillis()}.sherloq")
-        atomicWrite(destination, Transfer.encrypt(Transfer.pack(manifest), password))
+        if (manifest.graph != null) destination.outputStream().buffered().use { LargeArchive.writeMemory(manifest, it, password, context.cacheDir) }
+        else atomicWrite(destination, Transfer.encrypt(Transfer.pack(manifest), password))
         destination
     }
 

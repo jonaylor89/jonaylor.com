@@ -20,14 +20,16 @@ internal class StoreJournal(private val directory: File) {
     private var frames = 0
     var cachedRecords: Records? = null
         private set
+    private var supportsBlobRefs = false
     var checkpointWritten = false
         private set
     private fun hash(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes)
 
     fun load(): DiskState {
+        supportsBlobRefs = binary.isFile && java.io.DataInputStream(binary.inputStream()).use { it.skipBytes(8); it.readInt() >= 8 }
         val migrate = !binary.exists() && checkpoint.exists()
         var state = when {
-            binary.exists() -> StoreCheckpoint.snapshot(binary.readBytes()).also { cachedRecords = it.view }.state
+            binary.exists() -> StoreCheckpoint.snapshot(binary, File(directory, "graph-blobs")).also { cachedRecords = it.view }.state
             checkpoint.exists() -> json.decodeFromString<DiskState>(checkpoint.readText())
             else -> DiskState()
         }
@@ -70,8 +72,9 @@ internal class StoreJournal(private val directory: File) {
                         graph = if ("graph_delta" in patch) {
                             val delta = json.decodeFromJsonElement<GraphState>(patch.getValue("graph_delta"))
                             val base = if (patch["graph_reset"]?.jsonPrimitive?.boolean == true) null else state.graph
+                            val blobs = patch["graph_blob_files"]?.let { GraphBlobs.files(File(directory, "graph-blobs"), json.decodeFromJsonElement<List<String>>(it)) } ?: delta.bundle.blobs
                             delta.copy(
-                                bundle = delta.bundle.copy(commits = base?.bundle?.commits.orEmpty() + delta.bundle.commits, blobs = base?.bundle?.blobs.orEmpty() + delta.bundle.blobs),
+                                bundle = delta.bundle.copy(commits = base?.bundle?.commits.orEmpty() + delta.bundle.commits, blobs = GraphBlobs.merge(base?.bundle?.blobs.orEmpty(), blobs)),
                                 localIds = if (patch["graph_ids_delta"]?.jsonPrimitive?.boolean == true) base?.localIds.orEmpty() + delta.localIds else delta.localIds,
                             )
                         } else if ("graph" in patch) patch["graph"]?.takeUnless { it == JsonNull }?.let { json.decodeFromJsonElement<GraphState>(it) } else state.graph,
@@ -97,14 +100,39 @@ internal class StoreJournal(private val directory: File) {
         cachedRecords = view; checkpointWritten = false
     }
 
-    private fun checkpoint(state: DiskState, view: Records? = null) {
+    fun fingerprint(): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        for (file in listOf(checkpoint, binary, journal)) {
+            digest.update(file.name.toByteArray())
+            if (file.isFile) file.inputStream().use { input ->
+                val buffer = ByteArray(65536)
+                while (true) { val n = input.read(buffer); if (n < 0) break; digest.update(buffer, 0, n) }
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+    fun preserveMigration() = preserveRecovery("pre-wifi-graph-${fingerprint().take(16)}")
+    /** Maintenance-only commit while the app is stopped. Reject any intervening
+     * store write both before encoding and immediately before atomic rename. */
+    fun commitMigration(next: DiskState, view: Records, previousSequence: Long, expected: String) {
+        require(fingerprint() == expected) { "Phone changed during migration; nothing was replaced." }
+        preserveMigration()
+        sequence = previousSequence + 1
+        checkpoint(next, view) { require(fingerprint() == expected) { "Phone changed during migration; nothing was replaced." } }
+    }
+    private fun checkpoint(state: DiskState, view: Records? = null, beforeCommit: () -> Unit = {}) {
+        // Version 8 can refer to app-private blob files. Retain the previous
+        // self-contained store before its first format upgrade, never overwrite it.
+        if (binary.isFile && java.io.DataInputStream(binary.inputStream()).use { it.skipBytes(8); it.readInt() < 8 }) preserveRecovery("pre-blob-storage-backup")
         directory.mkdirs()
         val temp = File(directory, "store.bin.tmp")
         FileOutputStream(temp).use { stream ->
-            StoreCheckpoint.write(state.copy(journalSequence = sequence), java.io.BufferedOutputStream(stream, 65536), view)
+            StoreCheckpoint.write(state.copy(journalSequence = sequence), java.io.BufferedOutputStream(stream, 65536), view, blobDirectory = File(directory, "graph-blobs"))
             stream.fd.sync()
         }
+        beforeCommit()
         Files.move(temp.toPath(), binary.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        supportsBlobRefs = true
         // Old frames can be replayed idempotently if killed between rename and truncation.
         // The rename is the commit point. A failed cleanup must not report a committed
         // direct checkpoint as a failed edit; old frames are skipped by sequence on read.
@@ -157,7 +185,7 @@ internal class StoreJournal(private val directory: File) {
         }
         val oldGraphIds = previous.graph?.bundle?.commits.orEmpty().map { it.id }.toSet()
         val graphOperations = next.graph?.bundle?.commits.orEmpty().filterNot { it.id in oldGraphIds }.sumOf { it.operations.size.toLong() }
-        if (newEdges > 4096 || graphOperations > 4096) {
+        if (newEdges > 4096 || graphOperations > 4096 || (next.graph != null && (previous.graph == null || !supportsBlobRefs))) {
             val before = sequence
             sequence++
             try { checkpoint(next) } catch (error: Exception) { sequence = before; throw error }
@@ -180,9 +208,12 @@ internal class StoreJournal(private val directory: File) {
                     // edit frame (which otherwise forces a full checkpoint every
                     // few saves on a large book). Old frames still carry full ids.
                     put("graph_ids_delta", !reset)
-                    put("graph_delta", json.encodeToJsonElement(if (reset) graph else graph.copy(
-                        localIds = graph.localIds.filterKeys { it !in old!!.localIds },
-                        bundle = graph.bundle.copy(commits = graph.bundle.commits.filterNot { it.id in ids }, blobs = graph.bundle.blobs.filterKeys { it !in old!!.bundle.blobs }))))
+                    val blobs = if (reset) graph.bundle.blobs else if (graph.bundle.blobs === old!!.bundle.blobs) emptyMap() else GraphBlobs.filter(graph.bundle.blobs) { it !in old.bundle.blobs }
+                    val external = GraphBlobs.storedIn(graph.bundle.blobs, File(directory, "graph-blobs"))
+                    if (external) put("graph_blob_files", json.encodeToJsonElement(blobs.keys.toList()))
+                    put("graph_delta", json.encodeToJsonElement(graph.copy(
+                        localIds = if (reset) graph.localIds else graph.localIds.filterKeys { it !in old!!.localIds },
+                        bundle = graph.bundle.copy(commits = if (reset) graph.bundle.commits else graph.bundle.commits.filterNot { it.id in ids }, blobs = if (external) emptyMap() else blobs))))
                 }
             }
             if (previous.pending !== next.pending) put("pending", json.encodeToJsonElement(next.pending))

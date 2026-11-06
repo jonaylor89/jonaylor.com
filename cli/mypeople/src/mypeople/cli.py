@@ -761,6 +761,8 @@ def cmd_transfer(conn, args) -> None:
                             published = transfer.export_snapshot(worker, reply, password, include_photos=not args.no_photos, compact_photos=True,
                                                                  peer=transfer.unpack(transfer.decrypt(encrypted, password)))
                             print(f"Fresh memory: {published['updated']} changed view records, {published['changes']} graph commits, {published['photos']} new UI avatars.", flush=True)
+                            if reply.stat().st_size > transfer.MAX_FILE:
+                                raise transfer.TransferError("The complete graph needs a Wi-Fi/USB memory-file transfer for this first migration. Uploaded phone edits were retained; do not reset either device.")
                             return reply.read_bytes()
                     finally:
                         worker.close()

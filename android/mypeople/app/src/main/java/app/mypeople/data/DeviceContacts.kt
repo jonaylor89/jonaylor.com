@@ -89,13 +89,20 @@ class DeviceContacts(private val context: Context, private val graph: app.mypeop
             buildMap { while (c.moveToNext()) c.getString(0)?.let { put(it, c.getLong(1)) } }
         }.orEmpty()
     }
+    /** Baselines track provider-visible values, not duplicate full images/vCards.
+     * Full originals remain in the authoritative graph; photos compare by bytes. */
+    private fun baseline(card: ContactCard): ContactCard = card.copy(
+        originals = emptyList(), source_records = emptyList(), edit_id = "", user_edited = false,
+        photo_hash = if (card.photo.isNotEmpty()) GraphStore.digest(Base64.getDecoder().decode(card.photo)) else card.photo_hash,
+        photo = "",
+    )
     private fun needsPhones(card: ContactCard) = card.legacy_unverified && card.fields.any { it.kind == "phone" }
     /** Nothing changed on either side since this contact last settled. */
     private fun settled(person: Person, old: MirrorEntry?, version: Long?, prefer: String): Boolean {
         if (prefer.isNotEmpty() || version == null || old == null || person.trashed || person.contact_conflicts.isNotEmpty()) return false
         if (settledVersions[person.contact_uid] != version) return false
         val local = person.contactCard()
-        return local == old.local && !needsPhones(local) && !(local.fields.any { it.kind == "phone" } && old.phoneFormat != 1)
+        return baseline(local) == baseline(old.local) && !needsPhones(local) && !(local.fields.any { it.kind == "phone" } && old.phoneFormat != 1)
     }
     private fun readCard(rawId: Long, importing: Boolean = false): ContactCard {
         var card = ContactCard(""); val fields = mutableListOf<ContactField>(); var unknownCountry = false
@@ -158,8 +165,8 @@ class DeviceContacts(private val context: Context, private val graph: app.mypeop
         if (card.notes.isNotEmpty()) data(K.Note.CONTENT_ITEM_TYPE, mapOf(K.Note.NOTE to card.notes))
         if (card.organization.isNotEmpty() || card.title.isNotEmpty()) data(K.Organization.CONTENT_ITEM_TYPE, mapOf(K.Organization.COMPANY to card.organization, K.Organization.TITLE to card.title))
         if (card.birthday.isNotEmpty()) data(K.Event.CONTENT_ITEM_TYPE, mapOf(K.Event.START_DATE to card.birthday, K.Event.TYPE to K.Event.TYPE_BIRTHDAY))
-        if (card.photo.isNotEmpty()) {
-            val original = Base64.getDecoder().decode(card.photo)
+        if (card.photo.isNotEmpty() || card.photo_hash.isNotEmpty()) {
+            val original = if (card.photo.isNotEmpty()) Base64.getDecoder().decode(card.photo) else graph.offline.photo(card.photo_hash).readBytes()
             val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
             android.graphics.BitmapFactory.decodeByteArray(original, 0, original.size, bounds)
             require(bounds.outWidth > 0 && bounds.outHeight > 0) { "Unreadable contact photo." }
@@ -272,8 +279,8 @@ class DeviceContacts(private val context: Context, private val graph: app.mypeop
             val external = raw?.takeUnless { it.third }?.let { readCard(it.first) }
             // Never overwrite an existing provider copy after losing our baseline.
             if (raw != null && old == null && prefer.isEmpty()) { conflicts.add(person.name); continue }
-            val externalChanged = (raw != null && old == null) || (old != null && (external == null || external != old.exported))
-            val localChanged = old != null && local != old.local
+            val externalChanged = (raw != null && old == null) || (old != null && (external == null || baseline(external) != baseline(old.exported)))
+            val localChanged = old != null && baseline(local) != baseline(old.local)
             if (externalChanged && (localChanged || person.trashed) && prefer.isEmpty()) { conflicts.add(person.name); continue }
             val preferLocal = externalChanged && (localChanged || person.trashed || old == null) && prefer == "mypeople"
             if (externalChanged && !preferLocal) {
@@ -285,10 +292,11 @@ class DeviceContacts(private val context: Context, private val graph: app.mypeop
                 } else {
                     // Preserve fields the provider can't represent and imported original properties.
                     val retained = local.fields.filter { it.kind !in setOf("phone", "email", "address", "website", "im", "anniversary") }
-                    val updated = local.copy(favorite = external.favorite, name = external.name, given = external.given, family = external.family, middle = external.middle, prefix = external.prefix, suffix = external.suffix, phonetic = external.phonetic, fields = external.fields.map { f -> originalField(f, old, local) } + retained, birthday = external.birthday, organization = external.organization, title = external.title, notes = external.notes, photo = if (external.photo == old?.exported?.photo) local.photo else external.photo)
+                    val updated = local.copy(favorite = external.favorite, name = external.name, given = external.given, family = external.family, middle = external.middle, prefix = external.prefix, suffix = external.suffix, phonetic = external.phonetic, fields = external.fields.map { f -> originalField(f, old, local) } + retained, birthday = external.birthday, organization = external.organization, title = external.title, notes = external.notes, photo = if (old != null && baseline(external).photo_hash == baseline(old.exported).photo_hash) local.photo else external.photo,
+                        photo_hash = if (old != null && baseline(external).photo_hash == baseline(old.exported).photo_hash) local.photo_hash else "")
                     try { graph.store.saveContact(updated, id, expectedPerson = person, restore = person.trashed) }
                     catch (_: EditRejected) { conflicts.add(person.name); continue }
-                    next[uid] = MirrorEntry(raw.first, external, updated, old?.phoneFormat ?: 0)
+                    next[uid] = MirrorEntry(raw.first, baseline(external), baseline(graph.store.state.value.records.people[id]?.contactCard() ?: updated), old?.phoneFormat ?: 0)
                     settledNow.add(uid)
                 }
                 changed++; edited = true; continue
@@ -300,7 +308,7 @@ class DeviceContacts(private val context: Context, private val graph: app.mypeop
             if (raw == null || raw.third || localChanged || preferLocal || (local.fields.any { it.kind == "phone" } && old?.phoneFormat != 1)) {
                 if (raw?.third == true) resolver.delete(syncUri(ContentUris.withAppendedId(C.RawContacts.CONTENT_URI, raw.first)), null, null)
                 val rawId = write(uid, local, raw?.takeUnless { it.third }?.first)
-                next[uid] = MirrorEntry(rawId, readCard(rawId), local, phoneFormat = 1); changed++
+                next[uid] = MirrorEntry(rawId, baseline(readCard(rawId)), baseline(local), phoneFormat = 1); changed++
             }
             settledNow.add(uid)
         }

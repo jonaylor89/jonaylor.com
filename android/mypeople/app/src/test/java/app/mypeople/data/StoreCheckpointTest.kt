@@ -12,6 +12,19 @@ import java.security.MessageDigest
 
 class StoreCheckpointTest {
     @get:Rule val temp = TemporaryFolder()
+    @Test fun `streamed inode reader matches all byte codecs and rejects corruption without writes`() {
+        for (version in 1..8) {
+            val state = if (version >= 7) fullState() else DiskState(records = Records(people = mapOf(1 to Person("Synthetic 🌱", card = ContactCard("Synthetic 🌱")))))
+            val view = if (version == 1) null else state.records
+            val bytes = StoreCheckpoint.encode(state, view, formatVersion = version)
+            val file = temp.newFile("checkpoint-$version.bin").also { it.writeBytes(bytes) }
+            assertEquals(StoreCheckpoint.snapshot(bytes), StoreCheckpoint.snapshot(file))
+            val damaged = bytes.copyOf().also { it[20] = (it[20].toInt() xor 1).toByte() }
+            file.writeBytes(damaged)
+            try { StoreCheckpoint.snapshot(file); fail("Damaged checksum") } catch (_: IllegalArgumentException) { }
+            assertArrayEquals(damaged, file.readBytes())
+        }
+    }
     @Test fun `old full graph ID frames and new ID deltas replay with stable identities`() {
         val dir = temp.newFolder()
         val a = java.util.UUID.randomUUID().toString()
@@ -66,7 +79,7 @@ class StoreCheckpointTest {
     @Test fun `model additions require an explicit checkpoint codec update`() {
         val shapes = listOf(
             DiskState.serializer().descriptor to 13, Records.serializer().descriptor to 6,
-            Person.serializer().descriptor to 19, ContactCard.serializer().descriptor to 21,
+            Person.serializer().descriptor to 19, ContactCard.serializer().descriptor to 22,
             ContactField.serializer().descriptor to 8, Identifier.serializer().descriptor to 2,
             ChannelCount.serializer().descriptor to 2, Event.serializer().descriptor to 9,
             Profile.serializer().descriptor to 8, Moment.serializer().descriptor to 7,
@@ -84,7 +97,7 @@ class StoreCheckpointTest {
         val bytes = StoreCheckpoint.encode(fullState())
         val bad = bytes.copyOf().also { it[30] = (it[30].toInt() xor 1).toByte() }
         val future = bytes.copyOf().also {
-            it[11] = 8
+            it[11] = 9
             val hash = MessageDigest.getInstance("SHA-256").digest(it.copyOf(it.size - 32))
             hash.copyInto(it, it.size - 32)
         }

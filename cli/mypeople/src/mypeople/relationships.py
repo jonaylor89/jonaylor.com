@@ -95,6 +95,22 @@ def infer(conn: sqlite3.Connection, person_id: int, today: dt.date | None = None
     )
 
 
+def view_hints(rel: Relationship) -> dict:
+    """Rebuildable screen hints, shared by normal sync and read-only migration.
+
+    These are calculated from interactions/overrides, not columns on people.
+    Keep the existing scoring formula and published precision unchanged.
+    """
+    return {
+        "category": rel.category,
+        "closeness": round(rel.closeness, 2),
+        "cadence_days": rel.cadence_days,
+        "trend": rel.trend,
+        "days_365": rel.days_365,
+        "muted": rel.muted,
+    }
+
+
 def set_override(conn: sqlite3.Connection, person_id: int, **fields) -> None:
     conn.execute("INSERT OR IGNORE INTO relationship_overrides (person_id) VALUES (?)", (person_id,))
     for key, value in fields.items():

@@ -183,7 +183,14 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
         // A cached screen projection is not a warm authority. Build/verify the
         // reducer and its indexes before enabling editing, not on the first Save.
         val graphStart = System.nanoTime()
-        disk.graph?.let { GraphStore(it).graph.components().membersByPerson }
+        disk.graph?.let { state ->
+            val gs = GraphStore(state, startupTiming)
+            gs.graph.components().membersByPerson
+            val blobs = GraphBlobs.persist(state.bundle.blobs, File(directory, "graph-blobs"))
+            if (blobs !== state.bundle.blobs) disk = disk.copy(graph = state.copy(bundle = state.bundle.copy(blobs = blobs).also {
+                it.reducer = gs.graph; it.blobsVerified = true
+            }))
+        }
         journal.cachedRecords?.let {
             if (disk.graph != null) it.duplicateIndex = GraphDuplicateIndex().updated(it.people, it.people.keys)
             view = it; viewRecords = disk.records; viewPending = disk.pending; viewReplica = disk.replica; viewGraph = disk.graph
@@ -197,8 +204,15 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
         runCatching { startupIndex.save(current()) }
     }
     private fun save(next: DiskState) {
-        timedSave("journal") { journal.save(disk, next) }
-        disk = next
+        val graph = next.graph?.let { state ->
+            val blobs = GraphBlobs.persist(state.bundle.blobs, File(directory, "graph-blobs"))
+            if (blobs === state.bundle.blobs) state else state.copy(bundle = state.bundle.copy(blobs = blobs).also {
+                it.reducer = state.bundle.reducer; it.blobsVerified = state.bundle.blobsVerified
+            })
+        }
+        val prepared = if (graph === next.graph) next else next.copy(graph = graph)
+        timedSave("journal") { journal.save(disk, prepared) }
+        disk = prepared
         timedSave("publish") { publish() }
         timedSave("checkpoint_cache") { if (journal.checkpointWritten) runCatching { journal.cacheView(disk, current()) } }
         timedSave("startup_index") { runCatching { startupIndex.save(current()) } }
@@ -509,12 +523,33 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
             }
             converted.onSuccess { merged = it; migrated++ }.onFailure { retained += op.copy(sent = false) }
         }
+        if (disk.graph == null && (disk.replica.changes.isNotEmpty() || disk.pending.isNotEmpty() || disk.failedEdits.isNotEmpty())) {
+            // Retain the complete old causal ledger/outbox inside the authority,
+            // using its interned binary representation rather than expanding
+            // shared parent arrays into enormous JSON in every future backup.
+            val blobDirectory = File(directory, "graph-blobs").apply { mkdirs() }
+            val temporary = File.createTempFile(".legacy-", ".tmp", blobDirectory)
+            try {
+                val legacy = disk.copy(records = Records(), graph = null)
+                java.io.FileOutputStream(temporary).use { out ->
+                    StoreCheckpoint.write(legacy, out, formatVersion = 7); out.fd.sync()
+                }
+                val hash = temporary.inputStream().use(GraphBlobs::verifiedHash)
+                temporary.inputStream().use { GraphBlobs.put(blobDirectory, hash, it) }
+                GraphBlobs.syncDirectory(blobDirectory)
+                val original = VersionedGraph.createObject("SourceRecord", buildJsonObject {
+                    put("system", "mypeople-android-pre-graph"); put("format", "checkpoint-v7")
+                    put("original", buildJsonObject { put("blob_hash", hash) })
+                })
+                merged = GraphStore(merged).commit(listOf(original), GraphBlobs.files(blobDirectory, listOf(hash)))
+            } finally { temporary.delete() }
+        }
         merged = GraphStore(merged).indexed()
         if (migrated > 0) notices += Notice(message = "$migrated queued legacy edits were committed into local graph history.")
         if (retained.isNotEmpty()) notices += Notice(message = "${retained.size} legacy requests remain queued for the Mac; nothing was discarded.")
         save(disk.copy(graph = merged, pending = retained, failedEdits = failed, notices = notices, records = derived,
             offlineSource = snapshot.source, offlineRevision = snapshot.revision, cursor = 0,
-            replica = disk.replica.copy(publisher = snapshot.publisher), lastSync = Instant.now().toString(), lastError = null))
+            replica = ReplicaState(publisher = snapshot.publisher), lastSync = Instant.now().toString(), lastError = null))
     }
     suspend fun exportOffline(): TransferManifest = locked {
         val source = requireNotNull(disk.offlineSource) { "Import a memory file from your Mac first." }

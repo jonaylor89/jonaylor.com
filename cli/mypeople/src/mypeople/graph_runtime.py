@@ -13,6 +13,7 @@ import hashlib
 import json
 import sqlite3
 from collections import defaultdict
+from collections.abc import Mapping
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -338,7 +339,7 @@ def _card_entities(card, name, store):
     return wanted
 
 
-def bundle(conn, heads=None):
+def bundle(conn, heads=None, *, lazy=False):
     graph = capture(conn)
     known = graph.past(heads or [])
     store = Store(conn)
@@ -355,9 +356,11 @@ def bundle(conn, heads=None):
                 references(child)
     for commit_id in known:
         references(graph.commits[commit_id]["operations"])
+    from .stream_archive import SqlBlobs
+    blobs = SqlBlobs(conn, [r for r in conn.execute("SELECT hash,rowid,length(content) FROM graph_blobs") if r[0] not in acknowledged_blobs])
     return {"collection": store.collection, "heads": graph.heads,
             "commits": [graph.commits[c] for c in graph.order if c not in known],
-            "blobs": {r[0]: base64.b64encode(r[1]).decode("ascii") for r in conn.execute("SELECT hash,content FROM graph_blobs") if r[0] not in acknowledged_blobs}}
+            "blobs": blobs if lazy else dict(blobs.items())}
 
 
 def receive(conn, data):
@@ -369,7 +372,7 @@ def receive(conn, data):
         if not isinstance(data, dict) or set(data) != {"collection", "heads", "commits", "blobs"}:
             raise GraphError("Invalid graph bundle")
         valid_uuid(data["collection"])
-        if not isinstance(data["commits"], list) or not isinstance(data["heads"], list) or not isinstance(data["blobs"], dict):
+        if not isinstance(data["commits"], list) or not isinstance(data["heads"], list) or not isinstance(data["blobs"], Mapping):
             raise GraphError("Invalid graph bundle fields")
         store = Store(conn)
         if data["collection"] != store.collection and (current.commits or conn.execute("SELECT 1 FROM people LIMIT 1").fetchone()):
@@ -383,7 +386,6 @@ def receive(conn, data):
             raise GraphError("Bundle frontier omits commits")
         if len(set(data["heads"])) != len(data["heads"]):
             raise GraphError("Duplicate graph frontier")
-        blobs = {}
         for digest, value in data["blobs"].items():
             try:
                 content = base64.b64decode(value, validate=True) if isinstance(value, str) else None
@@ -391,12 +393,10 @@ def receive(conn, data):
                 raise GraphError("Invalid graph blob encoding") from None
             if content is None or hashlib.sha256(content).hexdigest() != digest:
                 raise GraphError("Blob hash does not match content")
-            blobs[digest] = content
-        # One validation/reduction per bundle, not a replay for every commit or
-        # SQL row. All referenced blob availability is checked before writes.
-        store.verify_references(merged, available_blobs=blobs)
-        for content in blobs.values():
+            # Bound memory to one blob, not the complete conversation/photo book.
+            # The surrounding transaction rolls these writes back on any failure.
             store.put_blob(content)
+        store.verify_references(merged)
         for commit in data["commits"]:
             conn.execute("INSERT OR IGNORE INTO graph_commits VALUES (?,?)", (commit["id"],encoded(commit)))
         if store.collection != data["collection"]:

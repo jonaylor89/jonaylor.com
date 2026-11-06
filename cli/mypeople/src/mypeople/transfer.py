@@ -18,6 +18,8 @@ import tempfile
 import uuid
 import zipfile
 from pathlib import Path
+from collections.abc import Mapping
+from contextlib import contextmanager
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -192,10 +194,11 @@ def validate_inventory(manifest: dict) -> None:
             raise TransferError("Invalid graph collection or frontier") from None
         if not isinstance(graph["commits"], list) or len(graph["commits"]) > 100_000:
             raise TransferError("Invalid graph commit list")
-        if not isinstance(graph["blobs"], dict) or len(graph["blobs"]) > 1_000_000 or any(
-            not isinstance(key, str) or re.fullmatch(r"[a-f0-9]{64}", key) is None or not isinstance(value, str)
-            for key, value in graph["blobs"].items()
-        ):
+        from .stream_archive import FileBlobs, SqlBlobs
+        blobs = graph["blobs"]
+        if not isinstance(blobs, Mapping) or len(blobs) > 1_000_000 or any(
+            not isinstance(key, str) or re.fullmatch(r"[a-f0-9]{64}", key) is None for key in blobs
+        ) or (not isinstance(blobs, (FileBlobs, SqlBlobs)) and any(not isinstance(value, str) for value in blobs.values())):
             raise TransferError("Invalid graph blob inventory")
     hashes, photos = manifest.get("record_hashes", {}), manifest.get("photo_hashes", [])
     if not isinstance(hashes, dict) or len(hashes) > 100_000 or any(
@@ -250,7 +253,7 @@ def export_snapshot(conn: sqlite3.Connection, path: Path, password: str, *, incl
     for (kind, _), record in records.items():
         if kind == "person" and record.get("card"):
             record["card"] = {key: value for key, value in record["card"].items() if key not in ("photo", "originals", "source_records")}
-    graph = graph_runtime.bundle(conn, (peer.get("graph") or {}).get("heads", []) if peer else [])
+    graph = graph_runtime.bundle(conn, (peer.get("graph") or {}).get("heads", []) if peer else [], lazy=True)
     conn.commit()
     requested = {op.get("client_id") for op in peer.get("ops", []) if isinstance(op, dict)} if peer is not None else None
     results = [dict(row) for row in conn.execute("SELECT client_id, kind, payload, status, message FROM transfer_applied")
@@ -330,11 +333,15 @@ def export_snapshot(conn: sqlite3.Connection, path: Path, password: str, *, incl
         photos = {h: p for h, p in photos.items() if h not in known_photos}
         manifest["contact_wire"] = 1
         compact_history = peer is None or peer.get("contact_wire", 0) >= 1
-        data = encrypt(pack(manifest, photos if include_photos else None, compact_history=compact_history), password)
-    write_file(path, data)
+        from . import stream_archive
+        if graph["blobs"].raw_bytes >= 64 * 1024 * 1024:
+            stream_archive.write_memory(manifest, path, password, photos if include_photos else None)
+        else:
+            graph["blobs"] = dict(graph["blobs"].items())
+            write_file(path, encrypt(pack(manifest, photos if include_photos else None, compact_history=compact_history), password))
     conn.commit()
     return {"records": len(records), "updated": len(manifest["records"]), "changes": len(graph["commits"]),
-            "photos": len(photos) if include_photos else 0, "bytes": len(data)}
+            "photos": len(photos) if include_photos else 0, "bytes": path.stat().st_size}
 
 
 class _Transaction:
@@ -407,16 +414,31 @@ def _receive_contact_history(conn, manifest):
     return replica.receive(conn, missing) if missing else history
 
 
-def merge_snapshot(conn: sqlite3.Connection, path: Path, password: str) -> dict:
-    """Join an empty CLI or reconcile a trusted peer's complete graph.
+@contextmanager
+def _manifest_file(path, password):
+    from . import stream_archive
+    try:
+        if stream_archive.is_streaming(path):
+            with stream_archive.read_memory(path, password) as manifest:
+                yield manifest
+        else:
+            if path.stat().st_size > MAX_FILE:
+                raise TransferError("Transfer exceeds the safe size limit.")
+            yield unpack(decrypt(path.read_bytes(), password))
+    except (ValueError, zipfile.BadZipFile, OSError) as exc:
+        if isinstance(exc, TransferError):
+            raise
+        raise TransferError(str(exc)) from exc
 
-    Raw conversations, decisions, provenance, full assets and retractions travel
-    with contacts. A foreign existing collection is never implicitly combined.
-    """
+
+def merge_snapshot(conn: sqlite3.Connection, path: Path, password: str) -> dict:
+    """Join an empty CLI or reconcile a trusted peer's complete graph."""
+    with _manifest_file(path, password) as manifest:
+        return _merge_snapshot_manifest(conn, manifest)
+
+
+def _merge_snapshot_manifest(conn, manifest):
     from . import replica
-    if path.stat().st_size > MAX_FILE:
-        raise TransferError("Transfer exceeds the safe size limit.")
-    manifest = unpack(decrypt(path.read_bytes(), password))
     validate_inventory(manifest)
     if manifest.get("type") != "snapshot" or (manifest.get("graph") is None and manifest.get("contact_version") != 1):
         raise TransferError("Choose a memory file with a versioned graph.")
@@ -453,16 +475,24 @@ def merge_snapshot(conn: sqlite3.Connection, path: Path, password: str) -> dict:
 
 
 def import_edits(conn: sqlite3.Connection, path: Path, password: str, *, enrich: bool = True) -> dict:
-    if path.stat().st_size > MAX_FILE:
-        raise TransferError("Transfer exceeds the safe size limit.")
-    return apply_edits(conn, path.read_bytes(), password, enrich=enrich)
+    with _manifest_file(path, password) as manifest:
+        return _apply_edits_manifest(conn, manifest, enrich=enrich)
 
 
 def apply_edits(conn: sqlite3.Connection, encrypted: bytes, password: str, *, enrich: bool = True) -> dict:
     """Apply a fully received encrypted bundle, from a file or a Bluetooth session."""
     if len(encrypted) > MAX_FILE:
         raise TransferError("Transfer exceeds the safe size limit.")
-    manifest = unpack(decrypt(encrypted, password))
+    from . import stream_archive
+    if encrypted.startswith(stream_archive.MAGIC):
+        with tempfile.TemporaryDirectory(prefix="mypeople-upload-") as directory:
+            path = Path(directory) / "upload.sherloq"
+            path.write_bytes(encrypted)
+            return import_edits(conn, path, password, enrich=enrich)
+    return _apply_edits_manifest(conn, unpack(decrypt(encrypted, password)), enrich=enrich)
+
+
+def _apply_edits_manifest(conn, manifest, *, enrich=True):
     source, _ = _prepare(conn)
     if manifest.get("type") != "edits" or manifest.get("source") != source:
         raise TransferError("These edits belong to a different Mac database, or this is not an edits file.")

@@ -243,6 +243,7 @@ class ContactHistoryTest {
     }
     @Test fun `journal complete-frame corruption is never silently overwritten`() = runBlocking {
         val dir = temp.newFolder(); val store = Store(dir); store.saveContact(ContactCard("Ada"))
+        store.succeeded() // The initial graph now commits a typed checkpoint.
         val file = File(dir, "store.journal")
         RandomAccessFile(file, "rw").use { it.seek(12); val value = it.readByte(); it.seek(12); it.writeByte(value.toInt() xor 1) }
         val bytes = file.readBytes()
@@ -251,6 +252,7 @@ class ContactHistoryTest {
     }
     @Test fun `journal checkpoints and replayed old frames are idempotent`() = runBlocking {
         val dir = temp.newFolder(); val store = Store(dir); store.saveContact(ContactCard("Ada"))
+        store.succeeded()
         val old = File(dir, "store.journal").readBytes()
         repeat(255) { store.succeeded() }
         assertTrue(File(dir, "store.bin").exists())

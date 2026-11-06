@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
 /** Validated, immutable graph authority shared by storage, editors and transport. */
-@Serializable
+@Serializable(with = GraphOperationSerializer::class)
 data class GraphOperation(
     val id: String,
     val kind: String,
@@ -36,9 +36,10 @@ data class GraphComponents(val groups: Map<String, List<String>>, val contradict
     val membersByPerson by lazy { groups.values.flatMap { members -> members.map { it to members } }.toMap() }
 }
 
-class VersionedGraph private constructor(input: List<GraphCommit>, base: VersionedGraph?) {
+class VersionedGraph private constructor(input: List<GraphCommit>, base: VersionedGraph?, local: Boolean = true) {
     constructor(input: List<GraphCommit> = emptyList()) : this(input, null)
     companion object {
+        private val activeValue = JsonPrimitive("active")
         val wire = Json { encodeDefaults = true; ignoreUnknownKeys = false }
         val objectTypes = setOf("Person", "Name", "ContactPoint", "Note", "Claim", "SourceRecord", "Evidence", "Interaction", "InteractionBatch", "Conversation", "Asset", "Relationship", "RelationshipPreferences", "Decision", "ProcessingRun", "Moment")
         private val person = setOf("Person")
@@ -61,6 +62,19 @@ class VersionedGraph private constructor(input: List<GraphCommit>, base: Version
             "about" to (setOf("Moment") to setOf("Person", "Claim")),
         )
         val attributions = setOf("has_name", "has_contact_point", "has_note", "subject_of", "has_asset", "has_preferences", "participant")
+        private fun order(index: Map<String, GraphCommit>): List<GraphCommit> {
+            val pending = index.mapValues { it.value.parents.size }.toMutableMap()
+            val children = mutableMapOf<String, MutableList<String>>()
+            index.values.forEach { c -> c.parents.forEach { parent -> children.getOrPut(parent) { mutableListOf() }.add(c.id) } }
+            val ready = PriorityQueue<String>(); pending.filterValues { it == 0 }.keys.forEach(ready::add)
+            val result = ArrayList<GraphCommit>(index.size)
+            while (ready.isNotEmpty()) {
+                val id = ready.remove(); result += index.getValue(id)
+                children[id].orEmpty().forEach { child -> pending[child] = pending.getValue(child) - 1; if (pending[child] == 0) ready.add(child) }
+            }
+            require(result.size == index.size) { "Invalid graph ancestry" }
+            return result.toPersistentList()
+        }
         private fun id() = UUID.randomUUID().toString()
         private fun uuid(value: String) { require(UUID.fromString(value).toString() == value) { "Expected a canonical UUID" } }
         private fun string(value: JsonElement?): String {
@@ -95,8 +109,11 @@ class VersionedGraph private constructor(input: List<GraphCommit>, base: Version
     private val mutableEdges: PersistentMap.Builder<String, GraphEntity> = (base?.mutableEdges?.build() ?: persistentHashMapOf()).builder()
     val objects: Map<String, GraphEntity> = java.util.Collections.unmodifiableMap(mutableObjects)
     val edges: Map<String, GraphEntity> = java.util.Collections.unmodifiableMap(mutableEdges)
-    private val versions: PersistentMap.Builder<Pair<String, String>, MutableMap<String, JsonElement>> = (base?.versions?.build() ?: persistentHashMapOf<Pair<String, String>, MutableMap<String, JsonElement>>()).builder()
-    private val propertyIndex: PersistentMap.Builder<String, MutableSet<String>> = (base?.propertyIndex?.build() ?: persistentHashMapOf<String, MutableSet<String>>()).builder()
+    // Most registers have one live version. Reference its existing immutable
+    // operation directly instead of allocating a singleton map/value per property.
+    private class ConcurrentVersions(val operations: Map<String, GraphOperation>)
+    private val versions: PersistentMap.Builder<Pair<String, String>, Any> = (base?.versions?.build() ?: persistentHashMapOf<Pair<String, String>, Any>()).builder()
+    private val propertyIndex: PersistentMap.Builder<String, PersistentSet<String>> = (base?.propertyIndex?.build() ?: persistentHashMapOf<String, PersistentSet<String>>()).builder()
     private val operations: PersistentMap.Builder<String, GraphOperation> = (base?.operations?.build() ?: persistentHashMapOf<String, GraphOperation>()).builder()
     private val origins: PersistentMap.Builder<String, String> = (base?.origins?.build() ?: persistentHashMapOf<String, String>()).builder()
     private val creation: PersistentMap.Builder<String, String> = (base?.creation?.build() ?: persistentHashMapOf<String, String>()).builder()
@@ -105,10 +122,13 @@ class VersionedGraph private constructor(input: List<GraphCommit>, base: Version
     private val edgeTypeIndex: PersistentMap.Builder<String, PersistentList<String>> = (base?.edgeTypeIndex?.build() ?: persistentHashMapOf<String, PersistentList<String>>()).builder()
     private val personIndex: PersistentSet.Builder<String> = (base?.personIndex?.build() ?: persistentHashSetOf<String>()).builder()
     private var componentCache: GraphComponents? = base?.componentCache
-
-    fun outgoing(id: String) = outgoingIndex[id].orEmpty().map { it to edges.getValue(it) }
-    fun incoming(id: String) = incomingIndex[id].orEmpty().map { it to edges.getValue(it) }
-    fun edgesOfType(type: String) = edgeTypeIndex[type].orEmpty().map { it to edges.getValue(it) }
+    private var propertySetPool: MutableMap<Set<String>, PersistentSet<String>>? = HashMap()
+    private val edgePositions: PersistentMap.Builder<String, Int> = (base?.edgePositions?.build() ?: persistentHashMapOf<String, Int>()).builder()
+    private val commitRanks by lazy { ordered.mapIndexed { i, c -> c.id to i }.toMap() }
+    private fun edgeRows(ids: List<String>) = ids.sortedWith(compareBy<String> { commitRanks.getValue(creation.getValue(it)) }.thenBy { edgePositions.getValue(it) }).map { it to edges.getValue(it) }
+    fun outgoing(id: String) = edgeRows(outgoingIndex[id].orEmpty())
+    fun incoming(id: String) = edgeRows(incomingIndex[id].orEmpty())
+    fun edgesOfType(type: String) = edgeRows(edgeTypeIndex[type].orEmpty())
     val people: Set<String> get() = personIndex.build()
 
     init {
@@ -118,25 +138,16 @@ class VersionedGraph private constructor(input: List<GraphCommit>, base: Version
             val c = input.single()
             listOf(c.id, c.collection, c.peer).forEach(::uuid)
             require(c.id !in base.commits && c.version == 1 && c.operations.isNotEmpty())
-            require(c.parents == base.heads && (base.collection == null || c.collection == base.collection))
+            require((!local || c.parents == base.heads) && (base.collection == null || c.collection == base.collection))
+            require(c.parents.size <= 100_000 && c.parents.distinct().size == c.parents.size && c.parents.all { it in base.commits }) { "Missing graph parent" }
+            c.parents.forEach(::uuid)
             OffsetDateTime.parse(c.recorded_at)
             c.operations.forEach { validateJson(it.payload, 3) }
             require(base.commits.size < 100_000 && base.operations.size.toLong() + c.operations.size <= 1_000_000)
             commits = base.commits.toPersistentHashMap().put(c.id, c)
-            ordered = base.ordered.toPersistentList().add(c)
-            heads = listOf(c.id)
+            ordered = if (c.parents == base.heads) base.ordered.toPersistentList().add(c) else order(commits)
+            heads = if (c.parents == base.heads) listOf(c.id) else ((base.heads - c.parents.toSet()) + c.id).sorted()
             collection = c.collection
-            c.operations.map { it.target }.distinct().forEach { target ->
-                propertyIndex[target] = base.propertyIndex[target].orEmpty().toMutableSet()
-            }
-            c.operations.forEach { op ->
-                val property = when (op.kind) {
-                    "set_property" -> (op.payload["property"] as? JsonPrimitive)?.content
-                    "set_lifecycle" -> "_lifecycle"
-                    else -> null
-                }
-                if (property != null) versions[op.target to property] = base.versions[op.target to property].orEmpty().toMutableMap()
-            }
             c.operations.forEach { apply(c.id, it) }
         } else {
         val index = mutableMapOf<String, GraphCommit>()
@@ -179,9 +190,11 @@ class VersionedGraph private constructor(input: List<GraphCommit>, base: Version
         heads = (index.keys - children.keys).sorted()
         ordered.forEach { c -> c.operations.forEach { apply(c.id, it) } }
         }
+        propertySetPool = null
     }
 
     fun appended(commit: GraphCommit): VersionedGraph = VersionedGraph(listOf(commit), this)
+    fun received(commit: GraphCommit): VersionedGraph = VersionedGraph(listOf(commit), this, local = false)
 
     fun observed(origin: String, commit: String): Boolean {
         if (origin == commit) return true
@@ -223,12 +236,13 @@ class VersionedGraph private constructor(input: List<GraphCommit>, base: Version
                     require((allowed.first == null || mutableObjects[from]?.type in allowed.first!!) && (allowed.second == null || mutableObjects[to]?.type in allowed.second!!)) { "Invalid edge endpoint type" }
                     require(type !in setOf("same_person", "distinct_person") || from != to) { "Identity assertions need two people" }
                     mutableEdges[op.target] = GraphEntity(type, from, to)
+                    edgePositions[op.target] = operations.size
                     outgoingIndex[from] = (outgoingIndex[from] ?: persistentListOf()).add(op.target)
                     incomingIndex[to] = (incomingIndex[to] ?: persistentListOf()).add(op.target)
                     edgeTypeIndex[type] = (edgeTypeIndex[type] ?: persistentListOf()).add(op.target)
                 }
                 creation[op.target] = commit
-                values = props + ("_lifecycle" to JsonPrimitive("active"))
+                values = props + ("_lifecycle" to activeValue)
             }
             "set_property", "set_lifecycle" -> {
                 requireEntity(op.target, commit)
@@ -251,7 +265,7 @@ class VersionedGraph private constructor(input: List<GraphCommit>, base: Version
                         else -> false
                     }
                     require(earlier.target == op.target && matches) { "Replacement targets another property" }
-                    versions[op.target to prop]?.remove(old)
+                    removeVersion(op.target to prop, old)
                 }
                 values = mapOf(prop to p.getValue("value"))
             }
@@ -259,30 +273,62 @@ class VersionedGraph private constructor(input: List<GraphCommit>, base: Version
         }
         if (mutableEdges[op.target]?.type in setOf("same_person", "distinct_person")) componentCache = null
         operations[op.id] = op; origins[op.id] = commit
-        values.forEach { (prop, value) ->
-            versions.getOrPut(op.target to prop) { mutableMapOf() }[op.id] = value
-            propertyIndex.getOrPut(op.target) { mutableSetOf() }.add(prop)
+        values.keys.forEach { prop ->
+            val key = op.target to prop
+            versions[key] = when (val previous = versions[key]) {
+                null -> op
+                is GraphOperation -> ConcurrentVersions(mapOf(previous.id to previous, op.id to op))
+                is ConcurrentVersions -> ConcurrentVersions(previous.operations + (op.id to op))
+                else -> error("Invalid register")
+            }
+            val names = (propertyIndex[op.target] ?: persistentHashSetOf()).add(prop)
+            propertyIndex[op.target] = propertySetPool!!.getOrPut(names) { names }
         }
     }
 
     fun propertyNames(target: String): Set<String> = propertyIndex[target].orEmpty() - "_lifecycle"
-    fun alternatives(target: String, property: String) = versions[target to property].orEmpty().toSortedMap().map { (id, value) -> GraphAlternative(id, value) }
+    private fun registerOperations(register: Any?): Collection<GraphOperation> = when (register) {
+        null -> emptyList()
+        is GraphOperation -> listOf(register)
+        is ConcurrentVersions -> register.operations.values
+        else -> error("Invalid register")
+    }
+    private fun removeVersion(key: Pair<String, String>, id: String) {
+        when (val register = versions[key]) {
+            is GraphOperation -> if (register.id == id) versions.remove(key)
+            is ConcurrentVersions -> {
+                val remaining = register.operations - id
+                when (remaining.size) {
+                    0 -> versions.remove(key)
+                    1 -> versions[key] = remaining.values.single()
+                    else -> versions[key] = ConcurrentVersions(remaining)
+                }
+            }
+        }
+    }
+    private fun operationValue(op: GraphOperation, property: String): JsonElement = when (op.kind) {
+        "create_object", "create_edge" -> if (property == "_lifecycle") activeValue else op.payload.getValue("properties").jsonObject.getValue(property)
+        else -> op.payload.getValue("value")
+    }
+    fun alternatives(target: String, property: String) = registerOperations(versions[target to property]).sortedBy { it.id }.map { GraphAlternative(it.id, operationValue(it, property)) }
     fun value(target: String, property: String): JsonElement? {
         val register = versions[target to property] ?: return null
-        if (register.size == 1) return register.values.first()
-        return register.keys.maxOrNull()?.let(register::get)
+        val operation = if (register is GraphOperation) register else (register as ConcurrentVersions).operations.maxByOrNull { it.key }?.value
+        return operation?.let { operationValue(it, property) }
     }
     fun conflicted(target: String, property: String): Boolean {
-        val register = versions[target to property] ?: return false
-        return register.size > 1 && register.values.distinct().size > 1
+        val register = versions[target to property] as? ConcurrentVersions ?: return false
+        return register.operations.values.map { operationValue(it, property) }.distinct().size > 1
     }
     fun deletionConflicts(target: String): List<GraphAlternative> {
         val conflicts = mutableMapOf<String, JsonElement>()
-        versions[target to "_lifecycle"].orEmpty().forEach { (lifecycle, state) ->
-            if (state != JsonPrimitive("active")) {
+        registerOperations(versions[target to "_lifecycle"]).forEach { lifecycleOp ->
+            val lifecycle = lifecycleOp.id; val state = operationValue(lifecycleOp, "_lifecycle")
+            if (state != activeValue) {
                 val deletion = origins.getValue(lifecycle)
                 propertyNames(target).forEach { property ->
-                    versions[target to property].orEmpty().forEach { (operation, value) ->
+                    registerOperations(versions[target to property]).forEach { propertyOp ->
+                        val operation = propertyOp.id; val value = operationValue(propertyOp, property)
                         val edit = origins.getValue(operation)
                         if (!observed(deletion, edit) && !observed(edit, deletion)) {
                             conflicts[lifecycle] = buildJsonObject { put("property", "_lifecycle"); put("value", state) }
@@ -294,11 +340,11 @@ class VersionedGraph private constructor(input: List<GraphCommit>, base: Version
         }
         return conflicts.toSortedMap().map { (id, value) -> GraphAlternative(id, value) }
     }
-    fun active(target: String) = !conflicted(target, "_lifecycle") && value(target, "_lifecycle") == JsonPrimitive("active")
+    fun active(target: String) = !conflicted(target, "_lifecycle") && value(target, "_lifecycle") == activeValue
     fun edit(target: String, property: String, value: JsonElement, replaces: List<String>? = null): GraphOperation {
         require(target in creation) { "Unknown entity" }
         val lifecycle = property == "_lifecycle"
-        return GraphOperation(id(), if (lifecycle) "set_lifecycle" else "set_property", target, buildJsonObject { if (!lifecycle) put("property", property); put("value", value) }, replaces ?: versions[target to property].orEmpty().keys.sorted())
+        return GraphOperation(id(), if (lifecycle) "set_lifecycle" else "set_property", target, buildJsonObject { if (!lifecycle) put("property", property); put("value", value) }, replaces ?: registerOperations(versions[target to property]).map { it.id }.sorted())
     }
     fun commit(peer: String, operations: List<GraphOperation>, collection: String? = this.collection): GraphCommit = GraphCommit(id(), collection ?: id(), peer, OffsetDateTime.now(java.time.ZoneOffset.UTC).toString(), 1, heads, operations)
 

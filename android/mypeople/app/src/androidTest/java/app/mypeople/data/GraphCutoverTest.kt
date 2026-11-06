@@ -39,15 +39,18 @@ class GraphCutoverTest {
             "${ContactsContract.RawContacts.ACCOUNT_TYPE}=? AND ${ContactsContract.RawContacts.DELETED}=0", arrayOf(DeviceContacts.ACCOUNT_TYPE), null)!!.use { it.count }
         check(existing == 0) { "Use a fresh disposable Contacts Provider as well as an empty app store." }
         val originalId = app.store.saveContact(ContactCard("Cameron A", notes = "Ambiguous note stays for review", fields = listOf(
-            ContactField("phone", "+12025550101", "Mobile"), ContactField("phone", "+12025550102", "Mobile"))))
+            ContactField("phone", "+12025550101", "Mobile"), ContactField("phone", "+12025550102", "Mobile")),
+            photo = "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAFElEQVR4nGPUyHNjwAaYsIoOWgkAsRIA7LoaLVcAAAAASUVORK5CYII="))
         val original = app.store.state.value.records.people.getValue(originalId)
         assertNotNull(app.store.snapshot().graph)
         app.store.enqueue("note", buildJsonObject { put("person_id", originalId); put("contact_uid", original.contact_uid); put("text", "Explicit graph note") })
         var opened = ""
+        val associationCount = app.store.associations(original.contact_uid).associations.size
         compose.setContent { MyPeopleTheme { SplitContactDialog(original, app, close = {}, opened = { opened = it }) } }
         compose.onNodeWithText("New person's name").performTextInput("Cameron B")
-        compose.waitUntil(5000) { compose.onAllNodesWithText("+12025550102", substring = true).fetchSemanticsNodes().isNotEmpty() }
-        // The sheet/IME can resize the lazy viewport after the row first appears.
+        androidx.test.espresso.Espresso.closeSoftKeyboard()
+        compose.waitUntil(5000) { compose.onAllNodesWithText("0 selected · $associationCount stay with Cameron A").fetchSemanticsNodes().isNotEmpty() }
+        // Scroll after async loading; asset/note rows can put a phone outside the viewport.
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("+12025550102", substring = true))
         compose.onNodeWithText("+12025550102", substring = true).performClick()
         compose.onNodeWithText("Review split").performClick()
@@ -69,6 +72,10 @@ class GraphCutoverTest {
         val count = context.contentResolver.query(ContactsContract.RawContacts.CONTENT_URI, arrayOf(ContactsContract.RawContacts._ID),
             "${ContactsContract.RawContacts.ACCOUNT_TYPE}=? AND ${ContactsContract.RawContacts.DELETED}=0", arrayOf(DeviceContacts.ACCOUNT_TYPE), null)!!.use { it.count }
         assertEquals(2, count)
+        val baseline = ContactMirror(File(context.filesDir, "contacts-mirror.json")).load()
+        assertTrue(baseline.entries.values.all { it.local.photo.isEmpty() && it.exported.photo.isEmpty() })
+        assertTrue(baseline.entries.values.any { it.local.photo_hash.isNotEmpty() && it.exported.photo_hash.isNotEmpty() })
+        assertEquals(original.contactCard().photo_hash, app.store.state.value.records.people.values.first { it.contact_uid == original.contact_uid }.contactCard().photo_hash)
         val stableField = separated.contactCard().fields.single().object_id
         val dataRow = context.contentResolver.query(ContactsContract.Data.CONTENT_URI,
             arrayOf(ContactsContract.Data._ID, ContactsContract.Data.SYNC1),

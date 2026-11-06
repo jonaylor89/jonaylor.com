@@ -57,7 +57,7 @@ object Transfer {
         return out.toByteArray()
     }
 
-    private fun key(password: String, salt: ByteArray): SecretKeySpec {
+    internal fun key(password: String, salt: ByteArray): SecretKeySpec {
         require(password.length >= 12 && password.all { it.code < 128 }) { "Enter the transfer passphrase from your Mac (at least 12 characters)." }
         val spec = PBEKeySpec(password.toCharArray(), salt, 200_000, 256)
         return try { SecretKeySpec(SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded, "AES") }
@@ -97,7 +97,7 @@ object Transfer {
                 val bytes = readLimited(zip, if (entry.name == "graph.json") MAX_EXPANDED else if (match != null) 10 * 1024 * 1024 else 32 * 1024 * 1024)
                 total += bytes.size
                 require(total <= MAX_EXPANDED) { "Transfer exceeds the safe size limit." }
-                if (entry.name == "graph.json") graph = VersionedGraph.wire.decodeFromString<GraphBundle>(bytes.toString(Charsets.UTF_8))
+                if (entry.name == "graph.json") graph = GraphAtoms.decoding { VersionedGraph.wire.decodeFromString<GraphBundle>(bytes.toString(Charsets.UTF_8)) }
                 else if (match == null) manifest = ContactWire.decode(json.parseToJsonElement(bytes.toString(Charsets.UTF_8)).jsonObject)
                 else {
                     val hash = match.groupValues[1]
@@ -120,7 +120,7 @@ object Transfer {
             require(bundle.heads.distinct().size == bundle.heads.size)
             bundle.heads.forEach { UUID.fromString(it) }
             // Delta ancestry is validated atomically with the durable local graph on receive.
-            require(bundle.commits.all { it.collection == bundle.collection })
+            require(bundle.commits.size <= 100_000 && bundle.commits.all { it.collection == bundle.collection })
         }
         manifest.publisher?.let { UUID.fromString(it) }
         require(manifest.records.size <= 100_000 && manifest.ops.size <= 10_000 && manifest.results.size <= 100_000) { "Transfer contains too many records." }

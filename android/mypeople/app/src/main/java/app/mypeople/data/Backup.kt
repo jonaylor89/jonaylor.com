@@ -76,27 +76,39 @@ object BackupArchive {
 
 class Backups(private val context: Context, private val graph: app.mypeople.AppGraph) {
     suspend fun export(uri: Uri, passphrase: String) = withContext(Dispatchers.IO) {
-        val disk = graph.store.snapshot(); val photos = mutableMapOf<String, ByteArray>()
+        val disk = graph.store.snapshot(); val photos = mutableMapOf<String, File>()
         for (hash in disk.records.people.values.mapNotNull { it.photo }.distinct()) {
             require(Regex("[a-f0-9]{64}").matches(hash)) { "Invalid photo reference." }
             val file = graph.offline.photo(hash)
             if (!file.exists()) continue
-            val bytes = file.inputStream().use { Transfer.readLimited(it, 10 * 1024 * 1024) }
-            require(BackupArchive.hash(bytes) == hash) { "Damaged cached photo." }; photos[hash] = bytes
+            require(file.inputStream().use(GraphBlobs::verifiedHash) == hash) { "Damaged cached photo." }; photos[hash] = file
         }
-        val bytes = BackupArchive.encode(ContactBackup(state = disk, peopleFirst = graph.settings.peopleFirst), photos, passphrase)
-        requireNotNull(context.contentResolver.openOutputStream(uri, "wt")) { "Could not open backup destination." }.use { it.write(bytes) }
+        val encrypted = File.createTempFile(".backup-", ".sherloq", context.cacheDir)
+        try {
+            encrypted.outputStream().buffered().use { out ->
+                LargeArchive.writeBackup(ContactBackup(state = disk, peopleFirst = graph.settings.peopleFirst), photos, out, passphrase, context.cacheDir, File(context.filesDir, "memory/graph-blobs"))
+            }
+            requireNotNull(context.contentResolver.openOutputStream(uri, "wt")) { "Could not open backup destination." }.use { out -> encrypted.inputStream().use { it.copyTo(out, 65536) } }
+        } finally { encrypted.delete() }
     }
     suspend fun restore(uri: Uri, passphrase: String) = graph.imports.exclusive {
         graph.deviceContacts.exclusive {
         withContext(Dispatchers.IO) {
-            val bytes = requireNotNull(context.contentResolver.openInputStream(uri)).use { Transfer.readLimited(it, Transfer.MAX_FILE) }
-            val (backup, photos) = BackupArchive.decode(bytes, passphrase)
-            // Validate the whole archive first. Content-addressed files are harmless if a later disk write fails.
-            photos.forEach { (hash, data) -> graph.offline.savePhoto(hash, data) }
+            val encrypted = File.createTempFile(".restore-", ".sherloq", context.cacheDir)
+            try {
+            requireNotNull(context.contentResolver.openInputStream(uri)).use { input -> encrypted.outputStream().use { LargeArchive.copyLimited(input, it) } }
+            val backup = if (LargeArchive.isStreaming(encrypted)) {
+                requireNotNull(LargeArchive.read(encrypted, passphrase, context.cacheDir, File(context.filesDir, "memory/graph-blobs"), graph.offline::savePhoto).backup) { "Choose a phone backup, not a memory file." }
+            } else {
+                require(encrypted.length() <= Transfer.MAX_FILE)
+                val (saved, photos) = BackupArchive.decode(encrypted.readBytes(), passphrase)
+                photos.forEach { (hash, data) -> graph.offline.savePhoto(hash, data) }
+                saved
+            }
             require(graph.store.snapshot().pending.isEmpty()) { "Sync pending edits before restoring." }
             graph.settings.prepareRestore(backup.peopleFirst)
             graph.store.restoreBackup(backup.state)
+            } finally { encrypted.delete() }
         }
         }
     }

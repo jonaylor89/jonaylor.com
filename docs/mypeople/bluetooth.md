@@ -121,11 +121,70 @@ the phone, then choose **Import memory file**. Enter the transfer passphrase onc
 backup-excluded storage for later encrypted exports. `--password-file PATH` selects a
 different shared passphrase. The QR flow supplies this automatically.
 
-QR transfers resize photos to at most 384 pixels and strip unnecessary metadata, so
-Bluetooth sends avatar-sized images instead of large originals. The Mac caches these
+QR transfers resize the optional UI avatars to at most 384 pixels and strip unnecessary
+avatar metadata. This does **not** shrink or omit authoritative graph assets: a complete
+first graph transfer still includes original images/history and may need Wi-Fi or USB. The Mac caches these
 avatars beside the database under `transfer-avatars/`; the phone advertises hashes it
 already has, avoiding unchanged retransmission. Originals on the Mac are unchanged.
 `--no-photos` omits only redundant UI avatars; complete graph assets and originals still travel.
+
+## Large complete graphs: Wi-Fi/USB migration
+
+A complete graph can exceed the legacy 128 MiB encrypted / 256 MiB expanded bounds.
+`--no-photos` cannot fix that: it omits UI avatars, not original assets or conversations.
+File exports automatically use the streamed format when graph blobs total at least 64 MiB.
+Transfer the encrypted `.sherloq` file over Wi-Fi/USB and choose **Import memory file**.
+Keep the phone on the updated APK; older readers reject the new format.
+
+Streamed archives keep JSON metadata and individually hashed **raw** blobs in separate ZIP
+entries. The authenticated `SHERLOQ2` envelope uses independent AES-GCM frames of at most
+1 MiB, bound to their counter, length and header, plus a required authenticated terminal
+frame. Truncation, reordering, trailing data, bad inventories, unsafe names, hash failures,
+invalid graph references and causal failures reject the import before a Store transaction.
+The total file/expanded bound is 4 GiB; metadata and individual blobs are bounded at
+128 MiB. Blobs are never accumulated as one Base64 document in the phone heap.
+Legacy encrypted files remain readable; Bluetooth's existing size bounds are unchanged.
+
+For a particularly large **legacy** store, use the explicit maintenance cutover rather
+than holding the old reducer and complete incoming graph in one process:
+
+1. Close both apps. Save and verify an encrypted phone backup before changing authority.
+2. Export an initialized, clean Mac graph without starting the engine or migrating its DB:
+   ```sh
+   uv run --project cli/mypeople python cli/mypeople/scripts/export-wifi-migration.py \
+     --db "$HOME/.mypeople/mypeople.db" \
+     --output "$HOME/Downloads/MyPeople-wifi-migration.sherloq" \
+     --password-file "$HOME/.mypeople/transfer.key"
+   ```
+   The exporter opens SQLite read-only, refuses dirty/unprojected state and existing output
+   paths, retains every commit/blob and receipt, and includes only small derived hints.
+   Relationship hints use the same `relationships.infer` heuristic/overrides and published
+   precision as normal sync; closeness/cadence/trend are calculated, not `people` columns.
+   A normal Mac sync refreshes these hints after a phone-side merge.
+3. The debug-only `app.mypeople.data.GraphMigration` command provides `backup`,
+   `verify-backup`, `prepare`, `verify`, `commit`, and `check`. Run as the app UID, with the
+   normal app stopped. Prepare the legacy context, verify the incoming archive, and commit
+   in **separate VM processes**. Keep passwords/context in app-private storage, not shell
+   arguments or logs; remove the temporary key, tool APK and staging files afterward.
+4. Install the updated APK **in place before commit**. The maintenance command requires
+   the same source/publisher, a non-stale revision and matching successful/rejected receipts
+   for every pending UUID/payload. It preserves failures and preferred person IDs, archives
+   the entire old Store as a referenced blob, and rechecks the source fingerprint before
+   encoding and immediately before atomic checkpoint rename. Never force acknowledgments,
+   reset the store, uninstall, or clear Contacts Provider to bypass a failed preflight.
+5. Check a fresh process before normal use. Contact-point UUIDs, full blobs/messages and
+   old causal history remain present; first-time provider reconciliation is a separate step.
+
+Local checkpoint v8 stores durable hash inventories backed by `memory/graph-blobs/`.
+**Do not copy `store.bin` alone as a backup.** Use the complete encrypted in-app backup;
+its streamed ZIP contains the typed state, every raw blob and required UI photos. Old
+checkpoint/archive formats remain readable. Contact cards carry `photo_hash`, so opening
+or saving unrelated fields does not decode and copy original images into every card.
+
+All large-load fixtures are wholly synthetic and emulator-only. Tests cover a 272 MiB
+raw-blob import/edit/restart/backup/restore within a 192 MiB heap, a separate 2,600-person /
+329,000-message graph, Python/JVM interoperability, photo lifecycle and actual Provider
+UUID preservation. They must never be seeded into a personal phone.
 
 ## Safety and format
 
@@ -156,7 +215,8 @@ already has, avoiding unchanged retransmission. Originals on the Mac are unchang
 Repeated bootstrap parent arrays use a checksummed `contact_frontiers` table in transfer
 manifest format 2. Readers expand shared arrays directly, without materializing a giant
 expanded JSON document. UUIDs, causal edges, list tags, and retry payloads are unchanged.
-Manifest/ZIP/encrypted-file limits have not been raised, and no history is truncated.
+Legacy manifest/ZIP/encrypted-file limits are unchanged, and no history is truncated.
+The separate streamed format above handles larger file transfers without whole-archive buffers.
 Updated peers advertise `contact_wire=1`; plain format-1 transfers remain readable.
 
 Tests cover Python↔JVM encrypted-file compatibility, queue retention/acknowledgment,

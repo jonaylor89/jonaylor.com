@@ -24,8 +24,13 @@ data class GraphAssociation(val id: String, val kind: String, val label: String,
 data class GraphSelection(val uid: String, val heads: List<String>, val associations: List<GraphAssociation>)
 
 /** Graph is the authority; integer ids exist only for the current native screens. */
-class GraphStore(val state: GraphState) {
-    val graph = state.bundle.reducer ?: VersionedGraph(state.bundle.commits).also { state.bundle.reducer = it }
+class GraphStore(val state: GraphState, private val timing: (String, Long) -> Unit = { _, _ -> }) {
+    val graph = run {
+        val start = System.nanoTime()
+        val result = state.bundle.reducer ?: VersionedGraph(state.bundle.commits).also { state.bundle.reducer = it }
+        timing("graph_reduce", (System.nanoTime() - start) / 1_000_000)
+        result
+    }
     private val components by lazy { graph.components() }
     private val membersByPerson get() = components.membersByPerson
     private fun outgoing(id: String) = graph.outgoing(id).filter { graph.active(it.first) }
@@ -52,25 +57,32 @@ class GraphStore(val state: GraphState) {
         require(graph.collection == null || graph.collection == state.bundle.collection)
         require(state.bundle.heads.toSet() == graph.heads.toSet()) { "Invalid graph frontier" }
         if (!state.bundle.blobsVerified) {
+            val start = System.nanoTime()
             verifyBlobs(state.bundle.blobs, graph.ordered)
+            timing("graph_blobs", (System.nanoTime() - start) / 1_000_000)
             state.bundle.blobsVerified = true
         }
     }
     private fun verifyBlobs(blobs: Map<String, String>, commits: List<GraphCommit>, available: Map<String, String> = state.bundle.blobs) {
-        blobs.forEach { (hash, body) ->
-            require(hash.matches(Regex("[0-9a-f]{64}")))
-            require(digest(Base64.getDecoder().decode(body)) == hash) { "Damaged graph blob" }
+        val buffer = ByteArray(65536)
+        blobs.keys.forEach { hash ->
+            require(hash.matches(blobHashPattern))
+            require(GraphBlobs.open(blobs, hash).use { GraphBlobs.verifiedHash(it, buffer) } == hash) { "Damaged graph blob" }
         }
-        fun references(value: JsonElement) {
-            when (value) {
-                is JsonObject -> { value["blob_hash"]?.jsonPrimitive?.content?.let { require(it in available) { "Missing graph blob" } }; value.values.forEach(::references) }
-                is JsonArray -> value.forEach(::references)
-                else -> Unit
-            }
-        }
-        commits.forEach { c -> c.operations.forEach { references(it.payload) } }
+        verifyReferences(commits, available.keys)
     }
     companion object {
+        private val blobHashPattern = Regex("[0-9a-f]{64}")
+        internal fun verifyReferences(commits: List<GraphCommit>, available: Set<String>) {
+            fun references(value: JsonElement) {
+                when (value) {
+                    is JsonObject -> { value["blob_hash"]?.jsonPrimitive?.content?.let { require(it in available) { "Missing graph blob" } }; value.values.forEach(::references) }
+                    is JsonArray -> value.forEach(::references)
+                    else -> Unit
+                }
+            }
+            commits.forEach { c -> c.operations.forEach { references(it.payload) } }
+        }
         fun empty() = GraphState(GraphBundle(UUID.randomUUID().toString()))
         fun digest(bytes: ByteArray): String {
             val alphabet = "0123456789abcdef"
@@ -122,7 +134,7 @@ class GraphStore(val state: GraphState) {
         if (ops.isEmpty()) return state
         val c = graph.commit(state.peer, ops, state.bundle.collection)
         val reduced = graph.appended(c)
-        val bundle = state.bundle.copy(heads = listOf(c.id), commits = reduced.ordered, blobs = if (blobs.isEmpty()) state.bundle.blobs else state.bundle.blobs + blobs).also { it.reducer = reduced }
+        val bundle = state.bundle.copy(heads = listOf(c.id), commits = reduced.ordered, blobs = GraphBlobs.merge(state.bundle.blobs, blobs)).also { it.reducer = reduced }
         // This store already validated the immutable base. Only new bytes and
         // references need checking; never rehash every conversation on a card edit.
         verifyBlobs(blobs, listOf(c), bundle.blobs)
@@ -131,7 +143,18 @@ class GraphStore(val state: GraphState) {
     }
     fun receive(bundle: GraphBundle): GraphState {
         require(bundle.collection == state.bundle.collection) { "This graph belongs to another collection. Back up this device before switching." }
-        val merged = VersionedGraph(state.bundle.commits + bundle.commits)
+        var merged = if (graph.commits.isEmpty()) bundle.reducer ?: graph else graph
+        val pending = linkedMapOf<String, GraphCommit>()
+        bundle.commits.forEach { c ->
+            val known = merged.commits[c.id] ?: pending[c.id]
+            require(known == null || known == c) { "Commit UUID reused for different content" }
+            if (known == null) pending[c.id] = c
+        }
+        while (pending.isNotEmpty()) {
+            val ready = pending.values.filter { c -> c.parents.all { it in merged.commits } }.sortedBy { it.id }
+            require(ready.isNotEmpty()) { "Missing or cyclic graph parents" }
+            ready.forEach { c -> merged = merged.received(c); pending.remove(c.id) }
+        }
         require(bundle.heads.all { it in merged.commits }) { "Missing remote graph frontier" }
         val past = mutableSetOf<String>()
         val todo = java.util.ArrayDeque(bundle.heads)
@@ -140,7 +163,11 @@ class GraphStore(val state: GraphState) {
             if (past.add(id)) todo.addAll(merged.commits.getValue(id).parents)
         }
         require(bundle.commits.all { it.id in past }) { "Invalid remote graph frontier" }
-        return state.copy(bundle = GraphBundle(bundle.collection, merged.heads, merged.ordered, state.bundle.blobs + bundle.blobs).also { it.reducer = merged }, remoteHeads = bundle.heads).also { GraphStore(it) }
+        val blobs = GraphBlobs.merge(state.bundle.blobs, bundle.blobs)
+        verifyBlobs(if (bundle.blobsVerified) emptyMap() else bundle.blobs, bundle.commits, blobs)
+        return state.copy(bundle = GraphBundle(bundle.collection, merged.heads, merged.ordered, blobs).also {
+            it.reducer = merged; it.blobsVerified = true
+        }, remoteHeads = bundle.heads)
     }
     /** Explicit first-pairing bootstrap only. Archive original bytes; never reuse a changed commit UUID. */
     fun rehome(collection: String): GraphState {
@@ -172,7 +199,7 @@ class GraphStore(val state: GraphState) {
             }
         }
         known.forEach { graph.commits.getValue(it).operations.forEach { op -> references(op.payload) } }
-        return state.bundle.copy(commits = graph.ordered.filterNot { it.id in known }, blobs = state.bundle.blobs.filterKeys { it !in knownBlobs })
+        return state.bundle.copy(commits = graph.ordered.filterNot { it.id in known }, blobs = GraphBlobs.filter(state.bundle.blobs) { it !in knownBlobs })
     }
     fun indexed(): GraphState {
         // Constructor validation established that every mapped UUID is a Person.
@@ -218,8 +245,8 @@ class GraphStore(val state: GraphState) {
             val preferences = objects("has_preferences").map(::properties).fold(JsonObject(emptyMap())) { a, b -> JsonObject(a + b) }
             fun decision(action: String): JsonElement? = decisions.lastOrNull { text(it, "action") == action }?.let { graph.value(it, "value") } ?: preferences[action]
             fun claim(key: String) = claims.firstOrNull { text(it, "predicate") == key }?.let { text(it, "value") }.orEmpty()
-            val photo = objects("has_asset").firstNotNullOfOrNull { asset -> (graph.value(asset, "content") as? JsonObject)?.text("blob_hash")?.let { state.bundle.blobs[it] } }.orEmpty()
-            val card = ContactCard(name, given = primary?.let { text(it, "given") }.orEmpty(), family = primary?.let { text(it, "family") }.orEmpty(), middle = primary?.let { text(it, "middle") }.orEmpty(), prefix = primary?.let { text(it, "prefix") }.orEmpty(), suffix = primary?.let { text(it, "suffix") }.orEmpty(), phonetic = primary?.let { text(it, "phonetic") }.orEmpty(), fields = fields, birthday = claim("birthday"), organization = claim("organization"), title = claim("title"), notes = notes.filter { text(it, "origin") in setOf("contact_card_notes", "legacy_card_notes") }.joinToString("\n\n") { text(it, "body") }, photo = photo,
+            val photoHash = objects("has_asset").firstNotNullOfOrNull { asset -> (graph.value(asset, "content") as? JsonObject)?.text("blob_hash")?.takeIf { it in state.bundle.blobs } }.orEmpty()
+            val card = ContactCard(name, given = primary?.let { text(it, "given") }.orEmpty(), family = primary?.let { text(it, "family") }.orEmpty(), middle = primary?.let { text(it, "middle") }.orEmpty(), prefix = primary?.let { text(it, "prefix") }.orEmpty(), suffix = primary?.let { text(it, "suffix") }.orEmpty(), phonetic = primary?.let { text(it, "phonetic") }.orEmpty(), fields = fields, birthday = claim("birthday"), organization = claim("organization"), title = claim("title"), notes = notes.filter { text(it, "origin") in setOf("contact_card_notes", "legacy_card_notes") }.joinToString("\n\n") { text(it, "body") }, photo_hash = photoHash,
                 favorite = (decision("favorite") as? JsonPrimitive)?.booleanOrNull ?: false, preferred_channel = (decision("preferred_channel") as? JsonPrimitive)?.contentOrNull.orEmpty(), region = (decision("region") as? JsonPrimitive)?.contentOrNull ?: "US", user_edited = members.any { (graph.value(it, "card_metadata") as? JsonObject)?.get("user_edited") == JsonPrimitive(true) }, legacy_unverified = legacyPhones(uid),
                 originals = members.flatMap { ((graph.value(it, "originals") ?: (graph.value(it, "card_metadata") as? JsonObject)?.get("originals")) as? JsonArray).orEmpty().map { v -> v.jsonPrimitive.content } }.distinct(), source_records = members.flatMap { ((graph.value(it, "source_records") ?: (graph.value(it, "card_metadata") as? JsonObject)?.get("source_records")) as? JsonArray).orEmpty().map { v -> v.jsonPrimitive.content } }.distinct())
             val prefs = preferences
@@ -244,7 +271,7 @@ class GraphStore(val state: GraphState) {
             components.contradictions.filter { contradiction -> graph.edges[contradiction]?.from in members }.forEach { contradiction ->
                 conflicts["$contradiction/_lifecycle"] = listOf(ContactConflict("retract:$contradiction", JsonPrimitive("retracted")))
             }
-            people[pid] = Person(name, uid, members.filterNot { it == uid }, card, trashed = members.none { graph.active(it) }, can_undo_merge = members.size > 1, contact_conflicts = conflicts,
+            people[pid] = Person(name, uid, members.filterNot { it == uid }, card, photo = photoHash.ifEmpty { null }, trashed = members.none { graph.active(it) }, can_undo_merge = members.size > 1, contact_conflicts = conflicts,
                 aliases = names.filterNot { it == primary }.map { text(it, "display") }.distinct(), identifiers = objects("has_contact_point").mapNotNull { obj ->
                     val kind = text(obj, "kind"); val value = text(obj, "value")
                     if (kind.isBlank() || kind == "google" || value.isBlank()) null else Identifier(kind, value)
@@ -335,8 +362,10 @@ class GraphStore(val state: GraphState) {
             else attach("Claim", "subject_of", buildJsonObject { put("predicate", k); put("value", v); put("asserted_by", "contact_card"); put("source", "manual") })
         }
         val oldAssets = editable("has_asset")
-        val oldPhoto = oldAssets.firstNotNullOfOrNull { (_, e) -> (graph.value(e.to!!, "content") as? JsonObject)?.text("blob_hash")?.let { state.bundle.blobs[it] } }.orEmpty()
-        if (oldPhoto != card.photo) {
+        val oldPhotoHash = oldAssets.firstNotNullOfOrNull { (_, e) -> (graph.value(e.to!!, "content") as? JsonObject)?.text("blob_hash") }.orEmpty()
+        require(card.photo_hash.isEmpty() || card.photo_hash == oldPhotoHash) { "Photo changed while editing. Reopen the contact; the draft was not applied." }
+        val nextPhotoHash = if (card.photo.isNotEmpty()) digest(Base64.getDecoder().decode(card.photo)) else card.photo_hash
+        if (oldPhotoHash != nextPhotoHash) {
             oldAssets.forEach { ops += graph.edit(it.first, "_lifecycle", JsonPrimitive("retracted")) }
             if (card.photo.isNotEmpty()) {
                 val hash = digest(Base64.getDecoder().decode(card.photo)); blobs[hash] = card.photo

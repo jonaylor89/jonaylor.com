@@ -12,7 +12,7 @@ object StoreMetadata {
         try {
             val directory = File(args.single())
             require(directory.name == "memory")
-            val snapshot = StoreCheckpoint.snapshot(File(directory, "store.bin").readBytes())
+            val snapshot = StoreCheckpoint.snapshot(File(directory, "store.bin"), File(directory, "graph-blobs"))
             val state = snapshot.state
             var graph = state.graph != null
             var replica = state.replica.enabled

@@ -54,7 +54,7 @@ fun ContactEditor(graph: AppGraph, personId: Int? = null, initial: ContactCard =
                     val data = requireNotNull(context.contentResolver.openInputStream(uri)).use { Transfer.readLimited(it, 2 * 1024 * 1024) }
                     Base64.getEncoder().encodeToString(data)
                 }
-                val next = draft.card!!.copy(photo = encoded); next.validate(); update(next)
+                val next = draft.card!!.copy(photo = encoded, photo_hash = ""); next.validate(); update(next)
             } catch (_: Exception) { draft.error = "Choose a JPEG or PNG smaller than 2 MiB." }
         }
     }
@@ -78,7 +78,7 @@ fun ContactEditor(graph: AppGraph, personId: Int? = null, initial: ContactCard =
                     Avatar(Person(card.name, card = card), graph, 88.dp)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(enabled = !draft.saving, onClick = { photo.launch(arrayOf("image/jpeg", "image/png")) }) { Text("Choose photo") }
-                        if (card.photo.isNotEmpty()) TextButton(onClick = { update(card.copy(photo = "")) }) { Text("Remove photo") }
+                        if (card.photo.isNotEmpty() || card.photo_hash.isNotEmpty()) TextButton(onClick = { update(card.copy(photo = "", photo_hash = "")) }) { Text("Remove photo") }
                     }
                     OutlinedTextField(card.name, { update(card.copy(name = it)) }, label = { Text("Display name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                     TextButton(onClick = { showNameFields = !showNameFields }) { Text(if (showNameFields) "Hide name details" else "More name fields") }

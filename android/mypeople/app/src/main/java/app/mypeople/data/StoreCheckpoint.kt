@@ -1,16 +1,22 @@
 package app.mypeople.data
 
 import kotlinx.serialization.json.*
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
+import java.io.InputStream
+import java.io.RandomAccessFile
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.OutputStream
+import java.io.File
 import java.security.DigestOutputStream
 import java.security.MessageDigest
 
 /** Local-only, versioned typed checkpoint. Avoids JSON lexing/reflection/object trees at startup.
- * The transfer/backup formats remain JSON. Every field, including receipts and arbitrary JSON
+ * Wire metadata remains JSON; streamed backups carry this typed state with raw files.
+ * Every field, including receipts and arbitrary JSON
  * payloads, round-trips here. A bad/newer checkpoint is an error, never a fallback to old data.
  */
 internal object StoreCheckpoint {
@@ -20,21 +26,21 @@ internal object StoreCheckpoint {
     private fun hash(bytes: ByteArray, size: Int = bytes.size) = MessageDigest.getInstance("SHA-256").run { update(bytes, 0, size); digest() }
 
     data class Snapshot(val state: DiskState, val view: Records?)
-    private const val PROJECTION_VERSION = 2
+    private const val PROJECTION_VERSION = 3
 
-    fun encode(state: DiskState, view: Records? = null, formatVersion: Int = 7): ByteArray {
+    fun encode(state: DiskState, view: Records? = null, formatVersion: Int = 8): ByteArray {
         val bytes = ByteArrayOutputStream()
         write(state, bytes, view, formatVersion)
         return bytes.toByteArray()
     }
 
     /** Checkpoints stream directly to the fsynced temp file; no full-size buffer copies. */
-    fun write(state: DiskState, output: OutputStream, view: Records? = null, formatVersion: Int = 7) {
-        require(formatVersion in 1..7 && (formatVersion != 1 || view == null))
+    fun write(state: DiskState, output: OutputStream, view: Records? = null, formatVersion: Int = 8, blobDirectory: File? = null) {
+        require(formatVersion in 1..8 && (formatVersion != 1 || view == null))
         require(formatVersion >= 5 || state.graph == null) { "Graph state requires checkpoint version 5." }
         val digest = MessageDigest.getInstance("SHA-256")
         val stream = DigestOutputStream(output, digest)
-        val w = Writer(DataOutputStream(stream), formatVersion)
+        val w = Writer(DataOutputStream(BufferedOutputStream(stream, 128 * 1024)), formatVersion, blobDirectory)
         w.out.write(magic); w.out.writeInt(formatVersion)
         w.records(state.records)
         w.out.writeLong(state.cursor); w.out.writeInt(state.nextLocalId)
@@ -60,15 +66,47 @@ internal object StoreCheckpoint {
 
     fun decode(bytes: ByteArray): DiskState = snapshot(bytes).state
 
-    fun snapshot(bytes: ByteArray): Snapshot {
+    fun snapshot(bytes: ByteArray, blobDirectory: File? = null): Snapshot {
         require(bytes.size in (magic.size + 4 + 32)..MAX_BYTES) { "Invalid local checkpoint size." }
         require(hash(bytes, bytes.size - 32).contentEquals(bytes.copyOfRange(bytes.size - 32, bytes.size))) { "Damaged local checkpoint." }
-        val input = DataInputStream(ByteArrayInputStream(bytes, 0, bytes.size - 32))
+        return readSnapshot(DataInputStream(ByteArrayInputStream(bytes, 0, bytes.size - 32)), blobDirectory)
+    }
+
+    /** Verify and decode the same immutable inode without pinning a metadata-sized
+     * byte array alongside the decoded model/symbol table on a small phone heap. */
+    fun snapshot(file: File, blobDirectory: File? = null): Snapshot = RandomAccessFile(file, "r").use { raw ->
+        val size = raw.length()
+        require(size in (magic.size + 4 + 32).toLong()..MAX_BYTES.toLong()) { "Invalid local checkpoint size." }
+        val digest = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(128 * 1024)
+        var remaining = size - 32
+        while (remaining > 0) {
+            val count = raw.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
+            require(count > 0) { "Incomplete local checkpoint." }
+            digest.update(buffer, 0, count); remaining -= count
+        }
+        val expected = ByteArray(32); raw.readFully(expected)
+        require(digest.digest().contentEquals(expected)) { "Damaged local checkpoint." }
+        raw.seek(0)
+        remaining = size - 32
+        val limited = object : InputStream() {
+            override fun read(): Int = if (remaining == 0L) -1 else raw.read().also { if (it >= 0) remaining-- }
+            override fun read(bytes: ByteArray, offset: Int, length: Int): Int {
+                if (length == 0) return 0
+                if (remaining == 0L) return -1
+                return raw.read(bytes, offset, minOf(length.toLong(), remaining).toInt()).also { if (it > 0) remaining -= it }
+            }
+            override fun available(): Int = remaining.toInt()
+        }
+        readSnapshot(DataInputStream(BufferedInputStream(limited, 128 * 1024)), blobDirectory)
+    }
+
+    private fun readSnapshot(input: DataInputStream, blobDirectory: File?): Snapshot {
         val actual = ByteArray(magic.size); input.readFully(actual)
         require(actual.contentEquals(magic)) { "Unsupported local checkpoint." }
         val version = input.readInt()
-        require(version in 1..7) { "Unsupported local checkpoint version." }
-        val r = Reader(input, version)
+        require(version in 1..8) { "Unsupported local checkpoint version." }
+        val r = Reader(input, version, blobDirectory)
         val records = r.records()
         val cursor = input.readLong(); val nextLocalId = input.readInt()
         val pending = r.list(r::op); val failed = r.list(r::op)
@@ -85,7 +123,7 @@ internal object StoreCheckpoint {
         return Snapshot(DiskState(records, cursor, nextLocalId, pending, failed, lastSync, lastError, notices, source, revision, sequence, replica, graph), view)
     }
 
-    private class Writer(val out: DataOutputStream, val version: Int) {
+    private class Writer(val out: DataOutputStream, val version: Int, val blobDirectory: File?) {
         private val stringLists = mutableMapOf<List<String>, Int>()
         fun string(value: String) {
             val bytes = value.toByteArray(Charsets.UTF_8)
@@ -128,7 +166,12 @@ internal object StoreCheckpoint {
                 out.writeInt(c.operations.size)
                 c.operations.forEach { op -> string(op.id); string(op.kind); string(op.target); element(op.payload); strings(op.replaces) }
             }
-            map(b.blobs, ::string, ::string)
+            val external = version >= 8 && blobDirectory != null
+            if (version >= 8) out.writeBoolean(external)
+            if (external) {
+                GraphBlobs.persist(b.blobs, blobDirectory!!)
+                strings(b.blobs.keys.toList())
+            } else map(b.blobs, ::string, ::string)
             string(state.peer); map(state.localIds, ::string, out::writeInt); strings(state.remoteHeads)
         }
         fun field(f: ContactField) {
@@ -139,11 +182,13 @@ internal object StoreCheckpoint {
             if (version >= 6) string(f.object_id)
         }
         fun card(c: ContactCard) {
+            require(version >= 8 || c.photo_hash.isEmpty()) { "Lazy graph photos require checkpoint version 8." }
             strings(listOf(c.name, c.given, c.family, c.middle, c.prefix, c.suffix, c.phonetic))
             list(c.fields, ::field)
             strings(listOf(c.birthday, c.organization, c.title, c.notes, c.photo))
             out.writeBoolean(c.favorite); string(c.preferred_channel); string(c.region)
             strings(c.originals); strings(c.source_records); out.writeBoolean(c.user_edited); string(c.edit_id); out.writeBoolean(c.legacy_unverified)
+            if (version >= 8) string(c.photo_hash)
         }
         fun person(p: Person) {
             string(p.name); string(p.contact_uid); strings(p.contact_aliases)
@@ -170,13 +215,18 @@ internal object StoreCheckpoint {
         }
     }
 
-    private class Reader(val input: DataInputStream, val version: Int) {
+    private class Reader(val input: DataInputStream, val version: Int, val blobDirectory: File?) {
         private val stringLists = mutableListOf<List<String>>()
+        private val atoms = HashMap<String, String>()
         fun count(): Int = input.readInt().also { require(it in 0..MAX_ITEMS && it <= input.available()) { "Invalid checkpoint collection size." } }
         fun string(): String {
             val size = input.readInt()
             require(size in 0..(32 * 1024 * 1024) && size <= input.available()) { "Invalid checkpoint string." }
-            val bytes = ByteArray(size); input.readFully(bytes); return bytes.toString(Charsets.UTF_8)
+            val bytes = ByteArray(size); input.readFully(bytes)
+            val value = bytes.toString(Charsets.UTF_8)
+            // The cached projection repeats long notes/originals as well as IDs.
+            // Share them with the authority instead of retaining two text copies.
+            return atoms.getOrPut(value) { value }
         }
         fun nullString(): String? = if (input.readBoolean()) string() else null
         fun <T> list(read: () -> T): List<T> = List(count()) { read() }
@@ -210,7 +260,7 @@ internal object StoreCheckpoint {
             val names = strings().also { require(it.size == 7) }
             val fields = list(::field); val text = strings().also { require(it.size == 5) }
             return ContactCard(names[0], names[1], names[2], names[3], names[4], names[5], names[6], fields,
-                text[0], text[1], text[2], text[3], text[4], input.readBoolean(), string(), string(), strings(), strings(), input.readBoolean(), string(), input.readBoolean())
+                text[0], text[1], text[2], text[3], text[4], input.readBoolean(), string(), string(), strings(), strings(), input.readBoolean(), string(), input.readBoolean(), if (version >= 8) string() else "")
         }
         fun person(): Person {
             val name = string(); val uid = string(); val aliases = strings(); val card = if (input.readBoolean()) card() else null
@@ -232,7 +282,8 @@ internal object StoreCheckpoint {
                 val operations = List(count) { GraphOperation(string(), string(), string(), element().jsonObject, strings()) }
                 GraphCommit(id, book, peer, at, v, parents, operations)
             }
-            val blobs = map(::string, ::string)
+            val external = version >= 8 && input.readBoolean()
+            val blobs = if (external) GraphBlobs.files(requireNotNull(blobDirectory) { "Graph blob directory is required." }, strings()) else map(::string, ::string)
             return GraphState(GraphBundle(collection, heads, commits, blobs), string(), map(::string, input::readInt), strings())
         }
         fun change() = ContactChange(string(), strings(), string(), element().jsonObject, map(::string) { list { element() } }, map(::string, ::strings), strings(), map(::string, ::strings))

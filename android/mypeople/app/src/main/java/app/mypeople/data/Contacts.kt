@@ -28,6 +28,7 @@ data class ContactCard(
     val user_edited: Boolean = false,
     val edit_id: String = "",
     val legacy_unverified: Boolean = false,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val photo_hash: String = "",
 )
 
 fun Person.contactCard(): ContactCard = card ?: ContactCard(name = name, legacy_unverified = true, fields = identifiers.filter { it.kind in setOf("phone", "email") }.map { ContactField(it.kind, it.value) })
@@ -44,7 +45,9 @@ fun mergeCards(a: ContactCard, b: ContactCard): ContactCard {
         phonetic = a.phonetic.ifBlank { b.phonetic }, birthday = a.birthday.ifBlank { b.birthday },
         organization = a.organization.ifBlank { b.organization }, title = a.title.ifBlank { b.title },
         notes = listOf(a.notes, b.notes).filter { it.isNotBlank() }.distinct().joinToString("\n\n"),
-        photo = a.photo.ifBlank { b.photo }, favorite = a.favorite || b.favorite,
+        photo = if (a.photo.isNotEmpty() || a.photo_hash.isNotEmpty()) a.photo else b.photo,
+        photo_hash = if (a.photo.isNotEmpty() || a.photo_hash.isNotEmpty()) a.photo_hash else b.photo_hash,
+        favorite = a.favorite || b.favorite,
         preferred_channel = a.preferred_channel.ifBlank { b.preferred_channel },
         fields = fields, originals = (a.originals + b.originals).distinct(), source_records = (a.source_records + b.source_records).distinct(),
         legacy_unverified = a.legacy_unverified || b.legacy_unverified,
@@ -67,6 +70,7 @@ fun ContactCard.validate() {
     require(region in regions) { "Use a supported country code, such as US, DE or GB." }
     require(fields.all { it.region.isEmpty() || it.region in regions }) { "Use a supported country code for each phone override, or leave it blank." }
     require(birthday.isEmpty() || normalizeDate(birthday).isNotEmpty()) { "Use YYYY-MM-DD or --MM-DD for birthdays." }
+    require(photo_hash.isEmpty() || Regex("[0-9a-f]{64}").matches(photo_hash)) { "Invalid photo reference." }
     if (photo.isNotEmpty()) {
         val bytes = Base64.getDecoder().decode(photo)
         require(bytes.size <= 2 * 1024 * 1024 && (bytes.take(3) == listOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte()) || bytes.take(4) == listOf(0x89.toByte(), 0x50.toByte(), 0x4e.toByte(), 0x47.toByte()))) { "Choose a JPEG/PNG photo under 2 MiB." }

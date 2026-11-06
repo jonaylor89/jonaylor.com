@@ -39,7 +39,11 @@ import java.io.File
 suspend fun shareContacts(context: Context, cards: List<ContactCard>) = withContext(Dispatchers.IO) {
     val directory = File(context.cacheDir, "transfers").apply { mkdirs() }
     val file = File(directory, "Contacts-${System.currentTimeMillis()}.vcf")
-    file.writeText(VCards.export(cards))
+    val resolved = cards.map { card ->
+        if (card.photo.isNotEmpty() || card.photo_hash.isEmpty()) card else card.copy(
+            photo = java.util.Base64.getEncoder().encodeToString(File(context.filesDir, "memory/graph-blobs/${card.photo_hash}").readBytes()), photo_hash = "")
+    }
+    file.writeText(VCards.export(resolved))
     val uri = FileProvider.getUriForFile(context, "${context.packageName}.transfers", file)
     withContext(Dispatchers.Main) { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/x-vcard").putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Share contact details")) }
 }
