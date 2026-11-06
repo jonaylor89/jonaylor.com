@@ -904,8 +904,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--remove", action="store_true", help="remove these nicknames instead")
     p.set_defaults(func=cmd_alias)
 
-    from . import contact_cli
+    from . import contact_cli, graph_cli
     contact_cli.parser(sub)
+    graph_cli.parser(sub)
 
     p = sub.add_parser("rename", help="give someone a name, e.g. an unknown number")
     p.add_argument("person")
