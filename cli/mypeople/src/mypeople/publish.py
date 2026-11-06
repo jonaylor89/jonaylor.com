@@ -1,8 +1,8 @@
-"""The phone-safe view of the database that a transfer carries to the phone.
+"""Derived UI/inference records accompanying the complete trusted-peer graph.
 
-People with their nicknames, numbers, emails and relationship stats; their facts and where
-each came from; public profiles; photos; recent moments; and duplicate groups to review.
-Message text stays on this Mac, apart from the short quotes facts carry as evidence.
+People, relationship stats, facts, profiles, photos, moments and duplicate review
+records. Raw conversations are absent from this small view, not from replication:
+the full graph/blob bundle carries their complete contents to every trusted peer.
 """
 
 from __future__ import annotations
@@ -70,12 +70,14 @@ def records(
     redirects: dict[int, list[str]] = {}
     for merged in conn.execute("SELECT id, contact_uid FROM people WHERE merged_into IS NOT NULL"):
         redirects.setdefault(identity.canonical(conn, merged["id"]), []).append(merged["contact_uid"])
-    from . import replica
+    from . import replica, graph_runtime
     history = replica.load(conn)
+    graph_mode = graph_runtime.enabled(conn)
     out: dict[tuple[str, str], dict] = {}
     files: dict[str, str] = {}
     for p in people_rows:
         pid = p["id"]
+        contact = history.contact(p["contact_uid"])
         rel = relationships.infer(conn, pid, today)
         used = channels.get(pid, [])
         photo = None
@@ -87,8 +89,8 @@ def records(
             "contact_aliases": redirects.get(pid, []),
             "card": json.loads(p["contact_data"]) if p["contact_data"] else None,
             "trashed": bool(p["trashed"]),
-            "can_undo_merge": (not history.contact(p["contact_uid"]) or len(history.contact(p["contact_uid"]).members) == 1) and contacts.merge_can_be_undone(conn, pid),
-            "contact_conflicts": history.contact(p["contact_uid"]).conflicts if history.contact(p["contact_uid"]) else {},
+            "can_undo_merge": bool(contact and len(contact.members) > 1) if graph_mode else contacts.merge_can_be_undone(conn, pid),
+            "contact_conflicts": contact.conflicts if contact else {},
             "aliases": [a["alias"] for a in aliases.get(pid, [])],
             "identifiers": [{"kind": i["kind"], "value": i["value"]} for i in identifiers.get(pid, [])],
             "photo": photo,
@@ -128,6 +130,8 @@ def records(
         if all(i in visible for i in group_ids):
             clues = dupes.shared_clues([dupes.card(conn, r) for r in group], conn)
             out[("dupes", "-".join(map(str, group_ids)))] = {"person_ids": group_ids, "clues": clues}
-    for change in history.changes:
-        out[("contact_change", change["id"])] = change
+    from . import graph_runtime
+    if not graph_runtime.enabled(conn):
+        for change in history.changes:
+            out[("contact_change", change["id"])] = change
     return out, files

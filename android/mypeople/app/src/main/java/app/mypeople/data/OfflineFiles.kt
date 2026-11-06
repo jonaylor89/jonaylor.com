@@ -45,9 +45,9 @@ class OfflineFiles(private val context: Context, private val store: Store, priva
         settings.transferPassword = password
     }
 
-    suspend fun bluetoothEdits(source: String, password: String, publisher: String? = null): ByteArray = withContext(Dispatchers.IO) {
+    suspend fun bluetoothEdits(source: String, password: String, publisher: String? = null, graphCollection: String? = null): ByteArray = withContext(Dispatchers.IO) {
         // Export is a read, not an acknowledgment: even sent edits stay durable.
-        Transfer.encrypt(Transfer.pack(withPhotos(store.bluetoothEdits(source, publisher))), password)
+        Transfer.encrypt(Transfer.pack(withPhotos(store.bluetoothEdits(source, publisher, graphCollection))), password)
     }
 
     suspend fun editsFile(): File = withContext(Dispatchers.IO) {

@@ -128,8 +128,11 @@ def test_a_surfaced_moment_does_not_block_undoing_a_merge_but_acting_on_one_does
     conn.execute(insert, (kept,))
     assert contacts.merge_can_be_undone(conn, kept)
     conn.execute("UPDATE moments SET status = 'done' WHERE key = 'm'")
-    assert not contacts.merge_can_be_undone(conn, kept)
-    with pytest.raises(ValueError, match="changed after merging"):
+    # Retractable identity links remain reversible after feedback; no records are destroyed.
+    assert contacts.merge_can_be_undone(conn, kept)
+    contacts.undo_merge(conn, kept)
+    assert conn.execute("SELECT status FROM moments WHERE key='m'").fetchone()[0] == "done"
+    with pytest.raises(ValueError, match="No merge to undo"):
         contacts.undo_merge(conn, kept)
 
 
@@ -164,7 +167,8 @@ def test_a_clone_gets_notes_and_facts_with_their_provenance(conn, tmp_path, key)
     clone = db.connect(tmp_path / "clone.db")
     transfer.merge_snapshot(clone, path, key)
     assert values(clone) == {("Allergic to peanuts", "manual"), ("Works at Example", "imessage")}
-    assert extract.pending_notes(clone) == []  # read on the Mac that has them, not again here
+    # Processing state is shared now: an unprocessed original stays unprocessed on a clone.
+    assert len(extract.pending_notes(clone)) == len(extract.pending_notes(conn)) == 1
 
     # Merging again changes nothing, and what this Mac forgot stays forgotten.
     row = clone.execute("SELECT id FROM events WHERE type = 'job'").fetchone()

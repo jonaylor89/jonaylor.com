@@ -55,6 +55,17 @@ struct ModelsTests {
         #expect(field["value"] == "https://a.test")
     }
 
+    @Test func editingContactPointValuesKeepsTheEnginesStableObjectIdentity() throws {
+        var card = try JSONDecoder().decode(ContactCard.self, from: Data(#"{"name":"Cameron","fields":[{"kind":"phone","value":"+14155550101","label":"Mobile","object_id":"55555555-5555-4555-8555-555555555551"}]}"#.utf8))
+        card.fields[0].value = "+14155550102"
+        card.fields[0].label = "Work"
+        let saved = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(card))
+        let field = try #require(saved["fields"]?.array?.first)
+        #expect(field["object_id"] == "55555555-5555-4555-8555-555555555551")
+        #expect(field["value"] == "+14155550102")
+        #expect(field["label"] == "Work")
+    }
+
     @Test func displayHintsAreNeverSavedBack() throws {
         let card = try JSONDecoder().decode(ContactCard.self, from: Data(#"{"name":"A","fields":[{"kind":"phone","value":"1","dial":"+1","dial_ext":"2"}]}"#.utf8))
         let saved = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(card))

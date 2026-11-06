@@ -37,7 +37,7 @@ from typing import Callable
 
 from . import appjobs, contacts, db, identity, llm, moments, ops, publish, replica
 
-PROTOCOL = 3
+PROTOCOL = 4
 POLL_SECONDS = 2.0
 MIN_REFRESH_SECONDS = 5.0
 REFRESH_BACKOFF = 5  # never spend more than a fifth of the time refreshing
@@ -225,6 +225,7 @@ class Engine:
         self.edits = 0  # how many scoped updates have landed; a full refresh that overlaps one is stale
         self.touched: set[int] = set()  # people the running serial handler changed
         self.view_error: str | None = None
+        self.initialization_error: Exception | None = None
         self.conn: sqlite3.Connection | None = None
 
     # --- sending ---
@@ -305,8 +306,11 @@ class Engine:
         failure = None
         try:
             self.conn = db.connect(self.db_path)
-        except sqlite3.Error as exc:
+        except Exception as exc:
+            # Graph upgrades can also refuse missing assets/invalid source data.
+            # Keep answering RPCs with an actionable error rather than losing the lane.
             failure = RpcError("database", f"Couldn't open {self.db_path}: {exc}")
+            self.initialization_error = failure
         finally:
             self.connected.set()  # others connect after this, so only one of us runs migrations
         while (frame := self.requests.get()) is not None:
@@ -317,10 +321,13 @@ class Engine:
 
     def _slow(self, frame: dict, handler: Callable) -> None:
         self.connected.wait()
+        if self.initialization_error:
+            self.send({"id": frame.get("id"), "error": _error(self.initialization_error)})
+            return
         conn = None
         try:
             conn = db.connect(self.db_path)
-        except sqlite3.Error as exc:
+        except Exception as exc:
             self.send({"id": frame.get("id"), "error": _error(RpcError("database", str(exc)))})
             return
         try:
@@ -335,9 +342,13 @@ class Engine:
 
     def _view_loop(self) -> None:
         self.connected.wait()
+        if self.initialization_error:
+            self.view_error = str(self.initialization_error)
+            self.view.ready.set()
+            return
         try:
             conn = db.connect(self.db_path)
-        except sqlite3.Error as exc:
+        except Exception as exc:
             self.view_error = f"Couldn't open {self.db_path}: {exc}"
             self.view.ready.set()
             return
@@ -515,6 +526,29 @@ def _contact(history: replica.History, uid: str) -> replica.Contact:
     return contact
 
 
+@method("contact.associations")
+def contact_associations(self: Engine, conn, p: dict) -> dict:
+    from . import graph_runtime
+    result = graph_runtime.associations(conn, _text(p, "uid"))
+    conn.commit()
+    return result
+
+
+@method("contact.split")
+def contact_split(self: Engine, conn, p: dict) -> dict:
+    from . import graph_runtime
+    uid = _text(p, "uid")
+    before = _uid_person(conn, uid)
+    try:
+        result = graph_runtime.split(conn, uid, _text(p, "name"), p.get("edges"), heads=p.get("heads"))
+    except ValueError as exc:
+        raise RpcError("conflict" if "reload associations" in str(exc) else "invalid", str(exc)) from None
+    conn.commit()
+    self.touched |= {before, result["person_id"]}
+    self.wake_refresh()
+    return result
+
+
 @method("contact.get")
 def contact_get(self: Engine, conn, p: dict) -> dict:
     contact = _contact(replica.capture(conn), _text(p, "uid"))
@@ -640,6 +674,13 @@ def _edit_scope(conn, kind: str, payload: dict) -> set[int]:
         return set()  # only changes duplicate groups, which a full refresh rebuilds
     person = ops._person(conn, payload)["id"]
     if kind == "merge_undo":
+        from . import graph_runtime
+        if graph_runtime.enabled(conn):
+            uid = conn.execute("SELECT contact_uid FROM people WHERE id=?", (person,)).fetchone()[0]
+            contact = replica.load(conn).contact(uid)
+            if contact:
+                marks = ','.join('?' for _ in contact.members)
+                return {r[0] for r in conn.execute(f"SELECT id FROM people WHERE contact_uid IN ({marks})", contact.members)}
         row = conn.execute("SELECT person_ids FROM contact_merge_undo WHERE keep_id = ? AND undone = 0 ORDER BY id DESC LIMIT 1", (person,)).fetchone()
         return {person, *json.loads(row[0])} if row else {person}
     return {person}
@@ -660,10 +701,7 @@ def edit_apply(self: Engine, conn, p: dict) -> dict:
 
 @method("people.merge")
 def people_merge(self: Engine, conn, p: dict) -> dict:
-    """The phone's merge: fold into the record with the most history, and keep the way back.
-
-    History learns of the link at the next capture, as it does when the phone's merge is applied.
-    Until then the merge can be undone; after that the records have moved on."""
+    """Join graph identity components without discarding original attribution."""
     from . import dupes
 
     ids = ops._people(conn, {"person_ids": _ints(p, "ids", 2)})

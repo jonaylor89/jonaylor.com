@@ -71,7 +71,7 @@ def run(_conn, args):
 
 
 def parser(sub):
-    p = sub.add_parser("graph", help="new versioned graph workbench (separate store; not yet the app backend)")
+    p = sub.add_parser("graph", help="advanced graph workbench for a separate standalone store")
     p.add_argument("--store", required=True, type=Path, help="separate graph SQLite file, never the live legacy DB")
     actions = p.add_subparsers(dest="action", required=True)
     for action in ("init", "status", "history"):

@@ -52,6 +52,7 @@ object BackupArchive {
         val b = requireNotNull(backup) { "Not a full MyPeople backup." }
         require(b.format == 1 && b.state.pending.size <= 10000 && b.state.records.people.size <= 100000) { "Unsupported backup." }
         b.state.records.people.values.forEach { it.card?.validate() }
+        b.state.graph?.let { GraphStore(it) }
         if (b.state.replica.enabled) ContactHistory(b.state.replica.changes)
         require(b.state.replica.localIds.values.all { it < 0 } && b.state.replica.localIds.values.distinct().size == b.state.replica.localIds.size) { "Invalid replica identity map." }
         b.state.pending.forEach { require(it.kind in opKinds); java.util.UUID.fromString(it.client_id) }

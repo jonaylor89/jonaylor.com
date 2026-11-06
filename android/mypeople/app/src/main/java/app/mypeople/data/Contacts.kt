@@ -11,7 +11,8 @@ import java.util.UUID
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class ContactField(val kind: String, val value: String, val label: String = "", val preferred: Boolean = false, val structured: String = "", val region: String = "",
-    @EncodeDefault(EncodeDefault.Mode.NEVER) val user_added: Boolean = false)
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val user_added: Boolean = false,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val object_id: String = "")
 
 @Serializable
 data class ContactCard(
@@ -59,6 +60,8 @@ fun newContactUid(): String = UUID.randomUUID().toString()
 fun ContactCard.validate() {
     require(name.isNotBlank()) { "Enter a name." }
     require(json.encodeToString(ContactCard.serializer(), this).toByteArray().size <= 4 * 1024 * 1024) { "This contact exceeds the sync size limit. Reduce its photo or notes; originals have not been discarded." }
+    require(fields.filter { it.object_id.isNotEmpty() }.map { it.object_id }.let { it.distinct().size == it.size }) { "A contact point cannot appear twice." }
+    fields.filter { it.object_id.isNotEmpty() }.forEach { require(UUID.fromString(it.object_id).toString() == it.object_id) { "Invalid contact point identity" } }
     require(fields.size <= 500 && originals.sumOf { it.length } <= 2 * 1024 * 1024) { "This contact is too large." }
     val regions = PhoneNumberUtil.getInstance().supportedRegions
     require(region in regions) { "Use a supported country code, such as US, DE or GB." }

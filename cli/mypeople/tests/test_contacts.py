@@ -81,6 +81,8 @@ def test_manual_contact_data_not_changed_by_facts(conn):
 
 def test_merge_and_safe_undo(conn):
     a = create(conn, card("Alex", "+442079460018")); b = create(conn, card("Alex W", "+4930123456"))
+    from mypeople import graph_runtime
+    graph_runtime.project(conn, graph_runtime.capture(conn))
     before = contacts.capture(conn, [a["id"], b["id"]])
     ops.apply(conn, "merge", {"person_ids": [a["id"], b["id"]]})
     keep = identity.canonical(conn, b["id"])
@@ -90,14 +92,14 @@ def test_merge_and_safe_undo(conn):
     assert contacts.capture(conn, [a["id"], b["id"]]) == before
 
 
-def test_merge_undo_refuses_newer_edits(conn):
+def test_merge_undo_preserves_newer_edits(conn):
     a = create(conn); b = create(conn, card("Other", "+4930123456"))
     ops.apply(conn, "merge", {"person_ids": [a["id"], b["id"]]})
     keep = identity.canonical(conn, b["id"])
     ops.apply(conn, "rename", {"person_id": keep, "name": "Newer edit"})
-    with pytest.raises(ops.OpError, match="changed after merging"):
-        ops.apply(conn, "merge_undo", {"person_id": keep})
+    ops.apply(conn, "merge_undo", {"person_id": keep})
     assert identity.lookup(conn, "Newer edit")["id"] == keep
+    assert conn.execute("SELECT count(*) FROM people WHERE merged_into IS NULL").fetchone()[0] == 2
 
 
 def test_edit_old_merged_uid_keeps_canonical_uid(conn):

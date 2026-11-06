@@ -1,195 +1,82 @@
-# Local-first contact history
+# Local-first graph replication
 
-Contacts now have a replicated causal history, shared by the Python CLI and Android.
-The Mac is no longer the authority that approves **contact-card edits, trash/restore,
-renames, or identity merges**. These finish durably on the device where you make them.
-A freshly installed phone can create and merge contacts before pairing with anything.
+MyPeople now replicates the **whole versioned object graph**, not just contact cards.
+See [the schema, implementation and upgrade procedure](versioned-graph.md).
 
-This is not Git embedded in the app. It is an immutable change DAG with domain-specific
-reconciliation and a materialized address book. Bluetooth, encrypted files, and the
-optional HTTPS relay transport the same contact changes.
+Every peer is trusted and receives all history, raw messages, notes, claims, decisions,
+evidence, original contact sources and full-size assets. The phone does not run import
+or model jobs, but it holds their data and authors domain edits locally. A contact card
+is a derived editing/export view; SQLite row IDs are never portable identities.
 
-## Upgrade safely
+## Upgrade together
 
-1. Export a vCard, make an encrypted phone backup, and back up the CLI database/photos.
-2. Update **both** the Python package and APK. Restart an already-running Bluetooth
-   listener/server-side CLI sync process so it loads the new protocol.
-3. Sync once. The CLI journals its existing contact cards and legacy redirect UUIDs.
-   The phone imports this history without discarding its pending edits. Terminal legacy
-   contact-save receipts still protect cards until publication; unresolved legacy
-   contact operations must finish before the existing address book switches modes.
-4. Settings explains when contact changes are local and complete rather than awaiting
-   Mac approval. Old snapshots cannot downgrade an already replicated address book.
+1. Keep a recoverable Mac database/photo backup, encrypted phone backup and vCard.
+2. Quit an old Mac app or Bluetooth listener before replacing the CLI and Mac app.
+3. Install the new APK in place. **Do not uninstall or clear phone app data.**
+4. Open the upgraded Mac app/CLI. Before graph cutover it creates an owner-only SQLite
+   backup beside the original database. Missing referenced assets refuse migration.
+5. Generate a fresh QR and sync. Android retains its pre-graph checkpoint/journal and
+   pending work before activation; queued legacy requests are reconciled or explicitly
+   retained for recovery, never silently discarded.
+6. Verify contacts and edits, then make a new encrypted full-phone backup off-device.
 
-Old `store.json` is migrated once to a typed, checksummed `store.bin`, retaining the old
-file unchanged. `contacts-mirror.json` remains the Provider baseline checkpoint. Do not
-downgrade to an APK that cannot read the binary checkpoint/journals. Length-framed
-`.journal` files hold fsynced transactions; periodic atomic checkpoints bound replay.
-A disposable `startup.idx` lets the contact list appear before full restoration; it is
-never edit/backup authority. See [startup storage and diagnostics](android-startup.md). An incomplete final append is recoverable;
-a damaged complete transaction or checkpoint is an error, never an empty address book.
-Do not copy only `store.json` as a backup: it no longer necessarily contains the latest
-state. Use **encrypted phone backup**, which includes the complete logical state.
+Original attribution destroyed by previous SQL merges cannot be reconstructed by an
+upgrade. Surviving associations are marked as legacy current ownership, not certainty.
 
-## Reconciliation rules
+## Editing and reconciliation
 
-- All contact identities and changes use UUIDs, independently of device-local integer IDs.
-- A change names its causal parents, changed scalar fields, observed scalar versions it
-  replaces, tagged list additions/removals, and any identity links.
-- Independent changes to different fields combine. Concurrent additions of different
-  phone/email/address fields are retained. Removing a field removes only the addition
-  tags actually observed, so a concurrent new addition is not silently deleted.
-- Defaults on a newly created identity are absence, not writes that can erase another
-  contact's information during a later merge. Lists are sets of complete field values,
-  including labels/preference/country; they are not ordered collaborative text.
-- Independent edits of the **same scalar** keep all causally maximal alternatives.
-  Every device displays the same deterministic UUID-selected provisional value, with
-  an explicit conflict indicator. Device clock skew cannot decide whose edit wins.
-- On Android, open the contact to choose a version under **Two versions, safely kept**.
-  Merely editing an unrelated field does not resolve a conflict. Provider export of a
-  conflicted contact pauses rather than writing an arbitrary choice to Android Contacts.
-- Trash is reversible. Concurrent edits of other fields remain in history while the
-  contact is trashed. Concurrent trash/restore choices preserve both scalar alternatives.
-- Identity links are transitive: independently merging A+B and B+C converges to one
-  identity. Edits addressed to an original member still contribute after merging.
-  The displayed identity UUID is the lexicographic minimum of the member UUIDs, not
-  the Mac's choice of integer ID or the device with the most message history.
-- Merging explicitly resolves known scalar differences using the selected contact cards;
-  truly concurrent unseen edits remain conflicts. Original changes and list tags remain.
-- Initially marked self-records are not seeded. Marking an already-shared person as you
-  hides that identity on peers; it does not erase previously shared historical data.
+- Every object, edge, operation and commit has a portable UUID.
+- Commit parents describe causality; concurrent branches join without a master clock.
+- Independent property edits combine. Same-property alternatives remain explicit until
+  resolved; an unrelated edit does not resolve them. Clocks never choose a winner.
+- Contact points have stable identities: concurrent label/number edits revise one phone.
+- Lifecycle changes are reversible; concurrent edits and previous values remain in history.
+- Identity links join displayed components without destroying the original owners of notes,
+  facts or conversation records. Distinct-person contradictions are surfaced.
+- Undo retracts merge assertions, not subsequent data. Splitting creates a new person and
+  moves exact selected associations; it never guesses which note belongs to which Cameron.
+- Raw messages are lossless bounded batches. Split rows explicitly state their count/thread;
+  selecting a row moves that whole described batch, not an inferred subset.
 
-## CLI
+## CLI and apps
 
 ```sh
-uv run mypeople contact create "Ada" --add email=ada@example.test
-uv run mypeople contact edit "Ada" --set organization="Example Co" --set notes="Met in Berlin"
-uv run mypeople contact edit "Ada" --add phone=+4930123456
-uv run mypeople contact edit "Ada" --remove email=ada@example.test
-uv run mypeople contact trash "Ada"
-uv run mypeople contact restore "Ada"
-uv run mypeople merge "Ada" "Ada duplicate"
-uv run mypeople contact history "Ada"
-uv run mypeople contact conflicts                # optional PERSON limits the list
-uv run mypeople contact resolve "Ada" notes CHANGE_UUID
+pnpm mypeople contact create 'Ada' --add email=ada@example.test
+pnpm mypeople contact edit 'Ada' --set organization='Example Co'
+pnpm mypeople contact history 'Ada'
+pnpm mypeople contact conflicts
+pnpm mypeople contact associations 'Cameron'
+pnpm mypeople contact split 'Cameron' --name 'Cameron B' --move ASSOCIATION_EDGE_UUID
 ```
 
-`contact edit --card PATH` accepts a complete contact-card JSON file for structured
-names, labelled fields, photos, and other rich data. `--set favorite=true` and other
-boolean fields take `true`/`false`. `rename` and interactive duplicate merges also
-record contact history. Existing importers/legacy SQL writes are captured as patches
-**before** remote history is received, so an offline CLI edit does not become a false
-post-sync overwrite of a phone edit.
+Repeat `--move` for each exact phone, note, fact, profile or message-batch edge.
+Both native apps offer a split selection/review screen, retain unselected ambiguous
+items, and reject stale reviews. Selecting a phone never implicitly selects messages.
 
-A second CLI can join the same address book without copying SQLite IDs or message data:
+A second CLI joins through encrypted export/merge, not by copying a live SQLite file:
 
 ```sh
-# First CLI: encrypted full memory/contact-history export.
-uv run mypeople transfer export /tmp/memory.sherloq --password-file /private/shared.key
-# Second CLI: must be empty, or already belong to this same collection.
-uv run mypeople --db /path/to/second.db transfer merge /tmp/memory.sherloq --password-file /private/shared.key
+pnpm mypeople transfer export /tmp/memory.sherloq --password-file /private/shared.key
+pnpm mypeople --db /path/to/empty-clone.db transfer merge /tmp/memory.sherloq --password-file /private/shared.key
 ```
 
-Both CLIs may then edit offline, export memory files, and `transfer merge` each other's
-files in either order. The shared key is private and must be provided independently;
-it is not inside an export. An existing unrelated database is refused, not silently
-joined. Clone this way rather than copying a live database and its publisher identity.
+Each clone has its own peer/publisher identity. Established foreign collections refuse
+implicit joins. Explicit first pairing of an unpublished standalone phone book archives
+its original history and retains a recovery copy before joining the advertised graph.
 
-## Bluetooth and relay sync
+## Transport and safety
 
-The QR still uses encrypted RFCOMM upload/response frames. With updated peers it adds:
+Bluetooth and encrypted files carry the same graph protocol. Known peers exchange
+missing commits/blobs by acknowledged frontier; files remain self-contained. Publisher
+revision counters apply only to disposable UI/inference snapshots. Receipts track legacy
+request delivery, not approval of local graph edits.
 
-- a collection UUID (which address book) **and a publisher UUID** (which peer's derived
-  snapshot). Each publisher has its own revision counter; there is no global master clock;
-- exchange of changes missing from the peer's last acknowledged causal frontier;
-- record-hash inventories, so the return view contains only changed records/deletions;
-- photo-hash inventories and cached 384px avatars, avoiding unchanged photo retransmission
-  and repeated image resizing. Originals remain unchanged;
-- an explicit base revision/publisher check for incremental views. A different publisher
-  sends a fresh derived view, while contact histories are joined, never replaced.
+An authenticated archive contains `manifest.json`, `graph.json`, and optional redundant UI
+avatars. Original graph assets are never omitted by `--no-photos`. Current limits and
+unimplemented features are explicit in [the architecture](versioned-graph.md#sync-backups-and-bounds).
+There is no permanent-erasure/garbage-collection protocol; trash/removal retains history.
 
-A new publisher gets full contact history on its first exchange. Portable edit-file
-fallbacks include full history, so they can reach any peer in the same collection.
-Repeated parent frontiers are interned losslessly on the wire (`contact_wire=1`, manifest
-format 2), retaining all UUIDs/causal edges and exact retry payloads. Plain format 1 stays
-readable; update both clients before exchanging format 2. Graph walks expand shared
-frontiers once instead of repeatedly traversing the same dense bootstrap edges.
-Large compacted histories exceeding the existing 8 MiB Bluetooth upload limit need the encrypted
-file fallback. Full-file exports remain self-contained rather than dependent on a delta.
-HTTPS publishes immutable `contact_change` records alongside the derived view; Android
-waits for a complete paged causal history before activating it.
-
-Receipts only track delivery. Losing a reply cannot roll back a completed local contact
-change. Backups retain history, unresolved alternatives, original UUIDs, and unsent work.
-Switching to a foreign collection never uploads the old collection's history.
-
-## Notes and facts
-
-A fact's identity is its contact, type, text and date. It also has a generation: odd means
-present and even means forgotten. Adding or forgetting moves it to the next generation, and
-devices keep the higher one. That makes the merge commutative and idempotent, so devices agree
-whatever order they sync in, with no clocks and nothing to resolve by hand.
-
-- **The same fact added on two devices is one fact.** Different facts both stay.
-- **Forgetting wins over what it saw.** A device that hasn't received the fact yet keeps the
-  forget and applies it when the fact arrives.
-- **Adding it again on purpose brings it back,** because that's a newer generation and marks it
-  `manual`. A model rediscovering it never does: `add_event` leaves a forgotten fact alone.
-- **If one device forgets a fact while another independently forgets and re-adds it,** the higher
-  generation wins, which is the re-add.
-- **Merging contacts keeps the higher generation** of a fact both records hold.
-- **Editing a fact is forgetting it and adding the new text.**
-
-Phones send these as `event_add`, `note` and `event_forget`, addressed by contact UUID and by what
-the fact says. Macs exchange them in memory files through `transfer merge`, whose `fact_state`
-carries generations and forgotten facts. Only the Mac that wrote a note reads it for facts.
-
-Contact conflicts are different, because two values of one field both matter: they stay until you
-choose. Android lists them under **Review → Versions** and reports them after a sync. The Mac lists
-them under **Review → Conflicts**, and the CLI under `mypeople contact conflicts`.
-
-## Deliberate boundaries
-
-- **This is contact replication, not replication of the whole SQLite database.** Imported
-  conversations, relationship inference/overrides, aliases, profile decisions, moments, and
-  model/enrichment requests retain their existing Mac workflow.
-- **Notes and facts reconcile by state, not through the causal history.** See below. Profile,
-  moment and "not the same person" decisions still name integer IDs from one CLI database, so
-  they finish with that CLI before a phone switches peers, and another Mac defers them.
-- **Splitting a replicated identity/undoing its merge is not implemented.** Android hides
-  that action and the backend refuses it. The compatibility SQL view still coalesces
-  existing message/event foreign keys; a safe split needs provenance for that data too.
-  Do not mistake retained contact history for a complete reversible VCS of all app data.
-- No Android-to-Android Bluetooth listener, automatic peer discovery, multi-user permissions,
-  remote revocation, permanent history erasure, or history garbage collection is provided.
-  Android can edit alone and reconcile with CLI peers through the existing transports.
-- Contact history is private identifying data, including prior values and imported originals.
-  Trash/removal is not permanent erasure. Share encrypted exports/keys only with trusted devices.
-- Current bounds: 100,000 unique changes, 8,000,000 parent edges, 32 MiB transfer manifest, 128 MiB encrypted file,
-  256 MiB expanded archive, 500 fields/contact. Exceeding bounds errors rather than truncates.
-
-## Verification
-
-The Python/JVM suites, Android debug/APK builds, and lint pass. Python/JVM tests cover independent branches, scalar conflicts/resolution, observed removals,
-transitive merges, edits to merged identities, UUID retries/collisions, missing parents/cycles,
-CLI clone/diverge/reconcile, publisher-local counters, delta records/deletions, foreign-source
-isolation, backups, legacy migration, torn appends, corrupt journals, and checkpoint replay.
-A shared Unicode/conflict/list fixture checks Python/Kotlin projection parity.
-
-A synthetic JVM regression with **3,000 contacts** measured a two-person local merge at
-**35–44 ms** across three runs, appending approximately **237 kB** instead of rewriting all contact cards. This is a
-host benchmark, not a claim about Bluetooth or latency on a physical phone. Provider work
-is now scoped to selected UUIDs, full reconciliations release their lock every eight contacts,
-callbacks are conflated, and unchanged baseline data is not reserialized on every change.
-
-On a fresh, isolated Android 35 ATD emulator, `ReplicatedContactsTest` passed local merging,
-remote conflicts, the explicit choice UI, real Android Provider reconciliation, and restart;
-the provider-backed two-contact merge measured **14 ms**. `DeviceContactsTest` also passed
-external-edit/conflict/trash/restore/picker/full-backup recovery, and `MergeInternationalTest`
-passed the legacy scoped-merge/international-dialing/confirmation regression. Run these
-only on a fresh disposable emulator with `myPeopleDisposable=true`; never on personal data.
-The updated protocol has also completed a real Mac↔Pixel 10 Bluetooth exchange with
-replication enabled, both confirmations received, and no remaining queued edits. See
-[Bluetooth](bluetooth.md) for native readiness, duplicate-callback, and import keepalive
-handling. A cold instrumented sync still took about one minute; host merge timings above
-are not physical-device sync latency.
+Shared Python/Kotlin/Swift fixtures and synthetic suites verify convergence, conflicts,
+full-data cloning, backups, migration, stable field identity, splitting, retained queues,
+foreign-source isolation, and native engine/UI behavior. Provider/load tests run only on
+a fresh, explicitly opted-in disposable emulator—not a personal installation.

@@ -3,7 +3,7 @@ import MyPeopleKit
 import SwiftUI
 
 private enum PersonSheet: String, Identifiable {
-    case edit, rename, nicknames, fact, note, relationship, history
+    case edit, rename, nicknames, fact, note, relationship, history, split
     var id: String { rawValue }
 }
 
@@ -86,6 +86,8 @@ struct PersonView: View {
                 Divider()
                 Button("Export vCard…") { exportVCards(model: model, people: [person]) }
                 Button("Contact History…") { sheet = .history }
+                Button("Split into Separate Contact…") { sheet = .split }
+                    .disabled(!model.isReady)
                 if person.canUndoMerge { Button("Undo Last Merge…") { confirmingUndo = true } }
                 Divider()
                 if person.trashed {
@@ -114,6 +116,9 @@ struct PersonView: View {
         case .note: AddNoteSheet(id: id, name: person.name)
         case .relationship: RelationshipSheet(id: id, person: person)
         case .history: HistorySheet(person: person)
+        case .split: ContactSplitSheet(uid: person.contactUid, originalName: person.name) { reply in
+            model.openSplitContact(reply)
+        }
         }
     }
 

@@ -30,6 +30,20 @@ The app looks for the CLI in the path chosen in Settings, `$MYPEOPLE_BIN`, `~/.l
 and your shell's `PATH`, then falls back to this repository through uv. Update the CLI when you
 update the app, because the app refuses a CLI whose protocol doesn't match and says how to fix it.
 
+## Separate conflated contacts
+
+On a person's page, open **More → Split into Separate Contact…**. Enter the new person's name,
+then select the exact phone/email, note, fact, profile and message associations that belong to them.
+Search and filter by kind; message rows show their channel, time and thread when available, and
+**Exact association** exposes stable edge/object IDs and original attribution. Selecting a phone
+number never implicitly selects its messages or facts.
+
+**Review Split…** lists everything moving and everything staying before you confirm. The engine
+checks that the loaded graph heads still match and moves only the selected edges atomically,
+keeping the original contact and history. If anything changed, reload and select again; the proposed
+name is kept. Failed/uncertain writes are never automatically retried. On success the app opens the
+new contact.
+
 ## Permissions
 
 - **Bluetooth** is requested when you first exchange data with your phone.

@@ -56,6 +56,7 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
     var evidenceKey by remember { mutableStateOf<String?>(null) }
     var forget by remember { mutableStateOf<String?>(null) }
     var merging by remember { mutableStateOf(false) }
+    var splitting by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val list = rememberLazyListState()
@@ -101,6 +102,7 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
                     FilledTonalButton(onClick = { dialog = "Add note" }) { Icon(Icons.Outlined.EditNote, null, Modifier.size(18.dp)); Spacer(Modifier.width(KinSpace.s2)); Text("Add a note") }
                     OutlinedButton(onClick = { dialog = "Add fact" }) { Icon(Icons.Outlined.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(KinSpace.s2)); Text("Add fact") }
                     OutlinedButton(onClick = { merging = true }) { Text("Merge with…") }
+                    if (state.replicatedContacts) OutlinedButton(onClick = { splitting = true }) { Text("Separate person…") }
                 }
             }
             item { ContactDetails(person, id, graph, edit = { editContact = true }) }
@@ -169,13 +171,14 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
                 if (evidenceKey != null) TextButton(onClick = { forget = evidenceKey; evidence = null }) { Text(if (event.isNote) "Forget note" else "Forget fact", color = MaterialTheme.colorScheme.error) }
             })
         }
+        if (splitting) SplitContactDialog(person, graph, close = { splitting = false }, opened = { uid -> rememberedUid = uid; splitting = false })
         if (merging) MergeWithDialog(id, records, graph, onClose = { merging = false }, onMerged = { merging = false; onBack() })
         forget?.let { eventId ->
             AlertDialog(onDismissRequest = { forget = null }, title = { Text("Forget this?") }, text = { Text("It stays forgotten on your other devices after you next sync. Adding it again brings it back.") },
                 confirmButton = { TextButton(onClick = { val fact = events.firstOrNull { it.key == eventId }?.value
                     if (fact != null) graph.edit("event_forget", buildJsonObject {
                         put("person_id", id); put("type", fact.type); put("value", fact.value); put("date", fact.date)
-                        eventId.toIntOrNull()?.takeIf { it > 0 }?.let { put("event_id", it) }  // for an older CLI
+                        put("event_id", eventId)
                     })
                     forget = null }) { Text("Forget", color = MaterialTheme.colorScheme.error) } },
                 dismissButton = { TextButton(onClick = { forget = null }) { Text("Cancel") } })

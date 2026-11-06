@@ -36,9 +36,9 @@ class StoreCheckpointTest {
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     @Test fun `model additions require an explicit checkpoint codec update`() {
         val shapes = listOf(
-            DiskState.serializer().descriptor to 12, Records.serializer().descriptor to 6,
+            DiskState.serializer().descriptor to 13, Records.serializer().descriptor to 6,
             Person.serializer().descriptor to 19, ContactCard.serializer().descriptor to 21,
-            ContactField.serializer().descriptor to 7, Identifier.serializer().descriptor to 2,
+            ContactField.serializer().descriptor to 8, Identifier.serializer().descriptor to 2,
             ChannelCount.serializer().descriptor to 2, Event.serializer().descriptor to 9,
             Profile.serializer().descriptor to 8, Moment.serializer().descriptor to 7,
             Dupes.serializer().descriptor to 2, ContactChange.serializer().descriptor to 8,
@@ -55,7 +55,7 @@ class StoreCheckpointTest {
         val bytes = StoreCheckpoint.encode(fullState())
         val bad = bytes.copyOf().also { it[30] = (it[30].toInt() xor 1).toByte() }
         val future = bytes.copyOf().also {
-            it[11] = 5
+            it[11] = 8
             val hash = MessageDigest.getInstance("SHA-256").digest(it.copyOf(it.size - 32))
             hash.copyInto(it, it.size - 32)
         }

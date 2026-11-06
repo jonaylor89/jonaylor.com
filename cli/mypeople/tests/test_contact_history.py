@@ -116,7 +116,12 @@ def test_sql_merge_is_uuid_based_and_importable_on_another_cli(conn):
     try:
         identity.create_person(other, "Unrelated")
         replica.receive(other, h.changes)
-        assert replica.load(other).contact(A).card == replica.load(conn).contact(A).card
+        left, right = replica.load(other).contact(A).card, replica.load(conn).contact(A).card
+        # Translating old card-only history independently assigns new field UUIDs;
+        # native graph clones (tested separately) retain exact entity identities.
+        def normalized(card):
+            return card | {"fields": sorted([{k:v for k,v in f.items() if k != "object_id"} for f in card["fields"]], key=lambda f:f["value"])}
+        assert normalized(left) == normalized(right)
         assert other.execute("SELECT id FROM people WHERE contact_uid=?", (A,)).fetchone()[0] != row["id"]
     finally:
         other.close()
@@ -127,10 +132,11 @@ def test_bluetooth_delta_exchanges_only_missing_changes_records_and_photos(conn,
     destination = tmp_path / "memory.sherloq"
     transfer.export_snapshot(conn, destination, PASSWORD, include_photos=False)
     first = transfer.unpack(transfer.decrypt(destination.read_bytes(), PASSWORD))
-    h = replica.History(first["contact_history"])
+    h = replica.load(conn)
     change = h.edit(A, values={"notes": "Phone note"})
     peer = {"format": 1, "type": "edits", "source": first["source"], "revision": first["revision"],
-            "publisher": first["publisher"], "contact_version": 1, "contact_history": [change], "contact_heads": [change["id"]],
+            "publisher": first["publisher"], "contact_version": 1, "contact_history": [], "contact_heads": [],
+            "graph": first["graph"] | {"commits": [change["graph_commit"]], "heads": [change["id"]], "blobs": {}},
             "record_hashes": first["record_hashes"], "ops": [{"client_id": change["id"], "kind": "contact_change", "payload": change}]}
     encrypted = transfer.encrypt(transfer.pack(peer), PASSWORD)
     assert transfer.apply_edits(conn, encrypted, PASSWORD)["applied"] == 1
@@ -138,7 +144,8 @@ def test_bluetooth_delta_exchanges_only_missing_changes_records_and_photos(conn,
     transfer.export_snapshot(conn, destination, PASSWORD, include_photos=False, peer=peer)
     second = transfer.unpack(transfer.decrypt(destination.read_bytes(), PASSWORD))
     assert second["base_revision"] == first["revision"]
-    assert second["contact_history"] == []  # phone already knows its own change
+    assert second["contact_history"] == []
+    assert second["graph"]["commits"] == []  # phone already knows its own change
     assert len(second["records"]) == 1
     assert second["records"][0]["data"]["card"]["notes"] == "Phone note"
     assert second["results"][0]["client_id"] == change["id"]
@@ -151,12 +158,13 @@ def test_bluetooth_delta_exchanges_only_missing_changes_records_and_photos(conn,
 def test_invalid_history_bundle_cannot_partially_apply(conn):
     contacts.save(conn, A, {"name": "Ada"}); conn.commit()
     source, _ = transfer._prepare(conn)
+    before = replica.load(conn).changes
     valid = history().changes[0]
     bad = valid | {"id": str(uuid.uuid4()), "parents": [str(uuid.uuid4())]}
     manifest = {"format": 1, "type": "edits", "source": source, "contact_version": 1, "contact_history": [valid, bad], "ops": []}
     with pytest.raises(transfer.TransferError):
         transfer.apply_edits(conn, transfer.encrypt(transfer.pack(manifest), PASSWORD), PASSWORD)
-    assert not replica.load(conn).changes
+    assert replica.load(conn).changes == before
     assert contacts.card_for(conn.execute("SELECT * FROM people").fetchone()) == {"name": "Ada"}
 
 
@@ -169,8 +177,9 @@ def test_scalar_information_survives_later_identity_creation_and_merge():
         result = merge(conn, [A, B], preferred=A)
         assert result.card["notes"] == "Retain this note"
         assert not result.conflicts
-        with pytest.raises(ValueError, match="Splitting replicated"):
-            contacts.undo_merge(conn, conn.execute("SELECT id FROM people WHERE contact_uid=?", (A,)).fetchone()[0])
+        contacts.undo_merge(conn, conn.execute("SELECT id FROM people WHERE contact_uid=?", (A,)).fetchone()[0])
+        assert conn.execute("SELECT count(*) FROM people WHERE merged_into IS NULL").fetchone()[0] == 2
+        assert replica.load(conn).contact(A).card["notes"] == "Retain this note"
     finally:
         conn.close()
 
@@ -241,15 +250,16 @@ def test_legacy_redirects_join_history_and_keep_original_uuid_addresses(conn):
     assert replica.capture(conn).changes == h.changes
 
 
-def test_marking_a_shared_contact_as_self_hides_it_without_journaling_future_private_edits(conn, tmp_path):
+def test_self_record_is_hidden_in_contact_view_but_retained_for_all_trusted_peers(conn, tmp_path):
     from mypeople import publish
     contacts.save(conn, A, {"name": "Public past", "notes": "Previously shared"})
     before = replica.capture(conn)
     conn.execute("UPDATE people SET is_me=1, name='Private self name', contact_data=?", (json.dumps({"name": "Private self name", "notes": "Never shared"}),))
     h = replica.capture(conn)
     assert h.contact(A).is_me
-    assert "Never shared" not in replica.encoded(h.changes)
-    assert "Private self name" not in replica.encoded(h.changes)
+    # All peers are trusted and receive everything, including self-record history.
+    assert "Never shared" in replica.encoded(h.changes)
+    assert "Private self name" in replica.encoded(h.changes)
     assert conn.execute("SELECT name FROM people WHERE contact_uid=?", (A,)).fetchone()[0] == "Private self name"
     records, _ = publish.records(conn)
     assert not [r for r in records if r[0] == "person"]
@@ -328,11 +338,13 @@ def test_cached_avatars_and_photo_inventory_avoid_reprocessing_and_resending(tmp
         def no_reprocessing(*args, **kwargs): raise AssertionError("Cached avatars must not be resized again")
         monkeypatch.setattr(image, "open", no_reprocessing)
         peer = {"type": "edits", "source": first["source"], "publisher": first["publisher"], "revision": first["revision"],
-                "contact_version": 1, "contact_heads": first["contact_heads"], "record_hashes": first["record_hashes"], "photo_hashes": [photo]}
+                "contact_version": 1, "contact_heads": first["contact_heads"], "record_hashes": first["record_hashes"], "photo_hashes": [photo],
+                "graph": first["graph"] | {"commits": [], "blobs": {}}}
         result = transfer.export_snapshot(c, memory, PASSWORD, compact_photos=True, peer=peer)
         assert result["photos"] == 0 and result["updated"] == 0 and result["changes"] == 0
         with zipfile.ZipFile(io.BytesIO(transfer.decrypt(memory.read_bytes(), PASSWORD))) as archive:
-            assert archive.namelist() == ["manifest.json"]
+            assert set(archive.namelist()) == {"manifest.json", "graph.json"}
+            assert json.loads(archive.read("graph.json"))["commits"] == []
         assert original.read_bytes() == before
     finally: c.close()
 

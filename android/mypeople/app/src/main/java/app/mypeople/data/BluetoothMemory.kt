@@ -29,11 +29,12 @@ data class BluetoothOffer(
     val name: String = "Your Mac",
     val publisher: String? = null,
     val wait_keepalive: Boolean = false,
+    val graph_collection: String? = null,
 ) {
     fun validate(now: Long = System.currentTimeMillis() / 1000) {
         require(type == "sherloq-bluetooth" && version in 1..3) { "That isn’t a supported MyPeople Bluetooth QR." }
         require(Regex("([0-9A-F]{2}:){5}[0-9A-F]{2}").matches(address) && address != "00:00:00:00:00:00") { "Invalid Bluetooth address in QR." }
-        UUID.fromString(service); UUID.fromString(source); publisher?.let { UUID.fromString(it) }
+        UUID.fromString(service); UUID.fromString(source); publisher?.let { UUID.fromString(it) }; graph_collection?.let { require(UUID.fromString(it).toString() == it) }
         require(passphrase.length in 12..128 && passphrase.all { it.code < 128 } && Regex("[A-Za-z0-9_-]{24,64}").matches(token)) { "Invalid pairing credentials in QR." }
         require(expires > now && expires <= now + 3600) { "This QR has expired. Generate another on your Mac." }
     }
@@ -59,7 +60,7 @@ class BluetoothMemory(private val context: Context, private val files: OfflineFi
         offer.validate()
         // Reject foreign queues before connecting. Reading the queue does not mark it sent.
         val prepareStart = System.nanoTime()
-        val edits = if (offer.version >= 2) files.bluetoothEdits(offer.source, offer.passphrase, offer.publisher) else null
+        val edits = if (offer.version >= 2) files.bluetoothEdits(offer.source, offer.passphrase, offer.publisher, offer.graph_collection) else null
         if (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0)
             android.util.Log.i("MyPeopleBluetooth", "prepare=${(System.nanoTime() - prepareStart) / 1_000_000}ms; kdf_provider=${javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").provider.name}")
         require(edits == null || edits.size <= BluetoothWire.MAX_UPLOAD) { "Queued edits are too large for one Bluetooth sync. Use the file export instead." }

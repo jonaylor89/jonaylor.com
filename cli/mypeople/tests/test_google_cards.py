@@ -208,8 +208,8 @@ def test_unresolved_causal_conflicts_pause_google_export(conn):
     pid = save(conn)
     history = replica.capture(conn)
     uid = identity.lookup(conn, str(pid))["contact_uid"]
-    left = replica.History(history.changes).edit(uid, values={"notes": "Left"})
-    right = replica.History(history.changes).edit(uid, values={"notes": "Right"})
+    left = history.edit(uid, values={"notes": "Left"})
+    right = history.edit(uid, values={"notes": "Right"})
     replica.receive(conn, [left, right])
     warnings = []
     assert google.plan(conn, [], create=True, person_ids={pid}, warnings=warnings) == []

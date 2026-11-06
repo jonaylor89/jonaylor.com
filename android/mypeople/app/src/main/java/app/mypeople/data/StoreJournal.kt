@@ -46,7 +46,7 @@ internal class StoreJournal(private val directory: File) {
                 val next = patch.getValue("journalSequence").jsonPrimitive.long
                 if (next > sequence) {
                     require(next == sequence + 1) { "Missing local transaction." }
-                    if (patch.keys.any { it in setOf("records", "pending", "replica") }) cachedRecords = null
+                    if (patch.keys.any { it in setOf("records", "pending", "replica", "graph", "graph_delta") }) cachedRecords = null
                     val meta = patch["replica"]?.jsonObject
                     var replica = state.replica
                     if (meta != null) {
@@ -67,6 +67,11 @@ internal class StoreJournal(private val directory: File) {
                         failedEdits = patch["failedEdits"]?.let { json.decodeFromJsonElement(it) } ?: state.failedEdits,
                         notices = patch["notices"]?.let { json.decodeFromJsonElement(it) } ?: state.notices,
                         replica = replica, journalSequence = next,
+                        graph = if ("graph_delta" in patch) {
+                            val delta = json.decodeFromJsonElement<GraphState>(patch.getValue("graph_delta"))
+                            val base = if (patch["graph_reset"]?.jsonPrimitive?.boolean == true) null else state.graph
+                            delta.copy(bundle = delta.bundle.copy(commits = base?.bundle?.commits.orEmpty() + delta.bundle.commits, blobs = base?.bundle?.blobs.orEmpty() + delta.bundle.blobs))
+                        } else if ("graph" in patch) patch["graph"]?.takeUnless { it == JsonNull }?.let { json.decodeFromJsonElement<GraphState>(it) } else state.graph,
                         cursor = patch["cursor"]?.jsonPrimitive?.long ?: state.cursor,
                         nextLocalId = patch["nextLocalId"]?.jsonPrimitive?.int ?: state.nextLocalId,
                         offlineRevision = patch["offlineRevision"]?.jsonPrimitive?.long ?: state.offlineRevision,
@@ -93,7 +98,7 @@ internal class StoreJournal(private val directory: File) {
         directory.mkdirs()
         val temp = File(directory, "store.bin.tmp")
         FileOutputStream(temp).use { stream ->
-            stream.write(StoreCheckpoint.encode(state.copy(journalSequence = sequence), view))
+            StoreCheckpoint.write(state.copy(journalSequence = sequence), java.io.BufferedOutputStream(stream, 65536), view)
             stream.fd.sync()
         }
         Files.move(temp.toPath(), binary.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
@@ -104,9 +109,38 @@ internal class StoreJournal(private val directory: File) {
         checkpointWritten = true
     }
 
+    fun preserveGraphJoin(collection: String) {
+        java.util.UUID.fromString(collection)
+        preserveRecovery("pre-graph-join-$collection")
+    }
+    private fun preservePreGraph() = preserveRecovery("pre-graph-backup")
+    private fun preserveRecovery(name: String) {
+        val sources = listOf(checkpoint, binary, journal).filter { it.exists() }
+        if (sources.isEmpty()) return
+        val backup = File(directory, name)
+        if (backup.exists()) {
+            require(File(backup, "complete").isFile) { "The pre-graph recovery copy is incomplete. Original files have not been replaced." }
+            return
+        }
+        val temporary = File(directory, ".pre-graph-${java.util.UUID.randomUUID()}")
+        require(temporary.mkdir()) { "Could not prepare pre-graph recovery copy." }
+        try {
+            sources.forEach { source ->
+                FileOutputStream(File(temporary, source.name)).use { output -> source.inputStream().use { it.copyTo(output) }; output.fd.sync() }
+            }
+            FileOutputStream(File(temporary, "complete")).use { output -> output.write("Pre-graph checkpoint and journal. Retained for recovery; never overwritten.\n".toByteArray()); output.fd.sync() }
+            Files.move(temporary.toPath(), backup.toPath(), StandardCopyOption.ATOMIC_MOVE)
+        } catch (error: Exception) {
+            // Leave originals untouched. Only our uncommitted temporary recovery copy is disposable.
+            temporary.deleteRecursively()
+            throw error
+        }
+    }
+
     fun save(previous: DiskState, next: DiskState) {
         checkpointWritten = false
         directory.mkdirs()
+        if (previous.graph == null && next.graph != null) preservePreGraph()
         // Dense legacy DAGs can have a megabyte-sized parent array shared by hundreds
         // of changes. Do not expand that into a giant JSON tree/string just to journal
         // an import: the typed checkpoint interns these arrays and commits atomically.
@@ -118,7 +152,9 @@ internal class StoreJournal(private val directory: File) {
         if (previous.records.contactChanges !== next.records.contactChanges) {
             newEdges += next.records.contactChanges.filterKeys { it !in previous.records.contactChanges }.values.sumOf { it.parents.size.toLong() }
         }
-        if (newEdges > 4096) {
+        val oldGraphIds = previous.graph?.bundle?.commits.orEmpty().map { it.id }.toSet()
+        val graphOperations = next.graph?.bundle?.commits.orEmpty().filterNot { it.id in oldGraphIds }.sumOf { it.operations.size.toLong() }
+        if (newEdges > 4096 || graphOperations > 4096) {
             val before = sequence
             sequence++
             try { checkpoint(next) } catch (error: Exception) { sequence = before; throw error }
@@ -128,6 +164,18 @@ internal class StoreJournal(private val directory: File) {
         val patch = buildJsonObject {
             put("journalSequence", sequence + 1)
             if (previous.records !== next.records) put("records", json.encodeToJsonElement(next.records))
+            if (previous.graph !== next.graph) {
+                val graph = next.graph
+                if (graph == null) put("graph", JsonNull)
+                else {
+                    val old = previous.graph
+                    val ids = old?.bundle?.commits.orEmpty().map { it.id }.toSet()
+                    val reset = old == null || old.bundle.collection != graph.bundle.collection || !graph.bundle.commits.map { it.id }.containsAll(ids)
+                    put("graph_reset", reset)
+                    put("graph_delta", json.encodeToJsonElement(if (reset) graph else graph.copy(bundle = graph.bundle.copy(
+                        commits = graph.bundle.commits.filterNot { it.id in ids }, blobs = graph.bundle.blobs.filterKeys { it !in old!!.bundle.blobs }))))
+                }
+            }
             if (previous.pending !== next.pending) put("pending", json.encodeToJsonElement(next.pending))
             if (previous.failedEdits !== next.failedEdits) put("failedEdits", json.encodeToJsonElement(next.failedEdits))
             if (previous.notices !== next.notices) put("notices", json.encodeToJsonElement(next.notices))

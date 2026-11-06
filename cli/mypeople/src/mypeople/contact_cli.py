@@ -8,6 +8,15 @@ from . import contacts, identity, replica
 
 
 def merge(conn, uids, preferred=None):
+    from . import graph_runtime
+    if graph_runtime.enabled(conn):
+        ids = []
+        for uid in dict.fromkeys(uids):
+            row = conn.execute("SELECT id FROM people WHERE contact_uid=?", (uid,)).fetchone()
+            if row is None: raise ValueError("Choose existing contacts")
+            ids.append(row[0])
+        keep = graph_runtime.merge(conn, ids)
+        return replica.load(conn).contact(conn.execute("SELECT contact_uid FROM people WHERE id=?", (keep,)).fetchone()[0])
     h = replica.capture(conn)
     people = [h.contact(uid) for uid in dict.fromkeys(uids)]
     if len({c.uid for c in people if c}) < 2 or any(c is None for c in people):
@@ -31,6 +40,18 @@ def merge(conn, uids, preferred=None):
 def run(conn, args):
     try:
         h = replica.capture(conn)
+        if args.action in ("associations", "split"):
+            from . import graph_runtime
+            if not args.person: raise ValueError("Supply a contact name, #id or UUID")
+            person = conn.execute("SELECT * FROM people WHERE contact_uid=?", (args.person,)).fetchone()
+            if person is None: person = identity.lookup(conn,args.person)
+            if args.action == "associations":
+                result = graph_runtime.associations(conn,person["contact_uid"])
+            else:
+                result = graph_runtime.split(conn,person["contact_uid"],args.name,args.move,heads=args.heads)
+            conn.commit()
+            print(json.dumps(result,ensure_ascii=False))
+            return
         if args.action == "create":
             if not args.person: raise ValueError("Supply a display name")
             uid, card = str(uuid.uuid4()), {"name": args.person}
@@ -103,10 +124,13 @@ def run(conn, args):
 def parser(sub):
     from pathlib import Path
     p = sub.add_parser("contact", help="edit replicated contacts and review causal history/conflicts")
-    p.add_argument("action", choices=("create", "edit", "trash", "restore", "history", "conflicts", "resolve"))
+    p.add_argument("action", choices=("create", "edit", "trash", "restore", "history", "conflicts", "resolve", "associations", "split"))
     p.add_argument("person", nargs="?", help="contact name/#id, or display name for create")
     p.add_argument("field", nargs="?", help="resolve: conflicted field")
     p.add_argument("change", nargs="?", help="resolve: chosen change UUID")
+    p.add_argument("--name", help="split: display name for the new person")
+    p.add_argument("--move", action="append", default=[], metavar="EDGE_UUID", help="split: exact attribution edge to move; repeat for each selection")
+    p.add_argument("--heads", action="append", default=None, metavar="COMMIT_UUID", help="split: expected association frontier; repeat for each head")
     p.add_argument("--card", type=Path, help="full contact card JSON")
     p.add_argument("--set", action="append", default=[], metavar="FIELD=VALUE")
     p.add_argument("--add", action="append", default=[], metavar="KIND=VALUE",

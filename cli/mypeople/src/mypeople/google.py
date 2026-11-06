@@ -321,8 +321,9 @@ def _matching(
                          else identity.normalize_email(f.get("value", "")) if kind == "email" else None)
                 if value:
                     index.setdefault((kind, value), set()).add(row["id"])
-        else:
-            # Legacy identifiers remain usable for matching, never for export.
+        if card is None or (card.get("legacy_unverified") and not card.get("user_edited")):
+            # A graph always has a derived card, including legacy-only people.
+            # Historical identifiers remain matching hints, never export authority.
             for ident in conn.execute("SELECT kind, value FROM identifiers WHERE person_id=?", (row["id"],)):
                 kind, value = ident
                 value = contact_cards.phone(value)[0] if kind == "phone" else identity.normalize_email(value) if kind == "email" else None

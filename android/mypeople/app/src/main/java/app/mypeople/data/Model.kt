@@ -5,7 +5,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
-// What the Mac publishes (see src/mypeople/publish.py). Ids are the Mac's database ids.
+// Shared UI projection contract (see publish.py). Row IDs are local indexes;
+// graph entity/operation UUIDs, not these screen IDs, are replication identities.
 
 val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 

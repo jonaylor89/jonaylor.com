@@ -2,10 +2,10 @@ import Foundation
 
 // The wire format of `mypeople app-server`: see cli/mypeople/src/mypeople/appserver.py.
 
-public let engineProtocolVersion = 3
+public let engineProtocolVersion = 4
 
 public enum EngineError: Error, Equatable, LocalizedError {
-    /// A refusal from the engine. `code` is conflict, invalid, not_found, busy, database, model or internal.
+    /// A refusal from the engine. Codes include stale, conflict, invalid, not_found, busy, database, model and internal.
     case rpc(code: String, message: String)
     case stopped
     case malformed(String)
@@ -13,7 +13,7 @@ public enum EngineError: Error, Equatable, LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .rpc(_, let message): message
-        case .stopped: "MyPeople's engine isn't running. Nothing was changed."
+        case .stopped: "MyPeople's engine isn't running. Reconnect before continuing."
         case .malformed(let detail): "Unexpected reply from the engine: \(detail)"
         }
     }

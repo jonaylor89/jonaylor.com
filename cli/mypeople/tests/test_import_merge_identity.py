@@ -64,9 +64,10 @@ def test_pre_fix_merge_recovers_overwritten_root_name_from_history(conn, tmp_pat
     short = contacts.save(conn, "00000000-0000-4000-8000-000000000001", {"name": "Liz", "fields": [{"kind": "phone", "value": NUMBER}]})
     full = contacts.save(conn, "ffffffff-ffff-4fff-8fff-ffffffffffff", {"name": "Elizabeth Wood", "fields": [{"kind": "phone", "value": NUMBER}]})
     keep = merge(conn, full, short, True)
-    assert keep == short  # lexicographically smallest UUID, now named Elizabeth
-    conn.execute("DELETE FROM aliases")  # simulate the old materializer
-    assert not conn.execute("SELECT 1 FROM people WHERE name='Liz'").fetchone()
+    assert keep == full  # SQL representative is a local UI choice, not graph identity.
+    assert replica.load(conn).contact("ffffffff-ffff-4fff-8fff-ffffffffffff").uid == "00000000-0000-4000-8000-000000000001"
+    conn.execute("DELETE FROM aliases")  # name provenance survives without nickname rows
+    assert conn.execute("SELECT 1 FROM people WHERE name='Liz'").fetchone()
     assert identity.matches_known_name(conn, keep, "Liz")
     assert import_variant(conn, tmp_path, source, "Liz") == keep
     assert conn.execute("SELECT COUNT(*) FROM people").fetchone()[0] == 2

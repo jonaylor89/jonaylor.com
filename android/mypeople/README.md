@@ -39,8 +39,9 @@ import finishes; then the phone works fully offline, including photos. The in-ap
 scanner requests Camera permission explicitly and bundles its QR detector for offline use.
 
 See [`../../docs/mypeople/bluetooth.md`](../../docs/mypeople/bluetooth.md) for encrypted file fallback, returning
-queued edits, credential safety, transfer limits, and protocol details. The QR transfers
-only the published phone-safe view, never the raw database or message history.
+queued edits, credential safety, transfer limits, and protocol details. The QR transfers the complete encrypted graph, including raw message records, full-size
+assets, source originals and history. Every paired peer is trusted. See the
+[graph schema and coordinated upgrade procedure](../../docs/mypeople/versioned-graph.md).
 
 ## Design system
 
@@ -60,16 +61,24 @@ The visual direction is a **living address book**: warm paper, botanical green, 
 - `data/Logic.kt`: pure record reduction, optimistic overlays, current profile, search, date formatting, feed, moments, upcoming selection, and cursor paging.
 - `data/Store.kt`, `StoreJournal.kt`, `StoreCheckpoint.kt`: cached `StateFlow` backed by checksummed, fsynced transactions and typed `files/memory/store.bin` checkpoints. Legacy `store.json` is migrated once and retained unchanged. A versioned computed view avoids replaying old queued merges on every cold start. A corrupt checkpoint or complete journal frame is never replaced with an empty cache.
 - `data/StartupIndex.kt`: a small, source-bound, disposable contact-list index publishes real browsing rows before the full memory is restored. The navigation graph exists immediately; details and editing wait for authoritative loading. No modal “Opening memory” screen. See [startup diagnostics and storage](../../docs/mypeople/android-startup.md).
-- `data/ContactHistory.kt`: causal contact DAG, observed-remove fields, multi-value scalar conflicts, UUID identity links, and local projections. Contact changes are authoritative locally; receipts acknowledge delivery, not approval. New contacts can merge before their first sync. `ContactMirror.kt` journals the Android Provider baseline per changed contact.
-- Contact history persists independently of pending delivery receipts. Non-contact requests retain the legacy optimistic outbox behavior, including failure recovery. All queued operations have UUIDs and are durable before becoming visible. Lost replies can safely be retried.
+- `data/VersionedGraph.kt` / `GraphStore.kt`: authoritative immutable object/edge history, causal property alternatives, local projections, stable contact-point identity, and explicit splitting/retractable merges. All domain edits finish locally. `ContactHistory.kt` remains an upgrade adapter for retained legacy data, not the new authority.
+- `StoreCheckpoint.kt` version 7 streams typed graph checkpoints without duplicating the graph into JSON trees. Commit/blob journal deltas, automatic pre-graph recovery copies and full encrypted backups retain history and unsent work. Old queued requests remain until reconciled or explicitly recovered.
 - Data moves only when you scan a Mac's QR or choose an encrypted file. Nothing syncs in the background.
 - Photos come only from local files received with a memory. The APK has no `INTERNET` permission, so it can't reach the network. ML Kit's dependency on Google's `datatransport` telemetry is stripped in the manifest: its permissions and its upload backend are removed, so events are dropped before they're stored. QR scanning runs on the device. `ScanWithoutNetworkTest` checks both, and any ML Kit update should be rechecked with `aapt2 dump permissions`.
-- Local files and preferences are app-private; cloud backup and device transfer are disabled. Notes, facts, renames and other edits name their contact by UUID, so they can sync with any Mac in the collection. Profile and review decisions name a row on one Mac, so switching Macs waits until they finish there.
+- Local files and preferences are app-private; cloud backup and device transfer are disabled. Graph notes, facts, profiles, review decisions, preferences and contact edits use UUIDs and can reconcile with any peer in the same collection. Unresolved old row-ID requests remain publisher-bound until recovered.
 - Relationship overrides cleared to “Automatic” can only be fully re-inferred on the Mac. The phone shows the last known value until that sync returns.
+
+## Separate conflated contacts
+
+On a person's More menu choose **Split into separate contact**, enter the new name,
+and select exact associations. Review before moving them. Phone selection never implies
+message/note ownership; message batches show the complete count/thread scope being moved.
+Unselected ambiguous data stays with the original person. A stale snapshot requires reopening
+and reviewing again. Original objects, evidence and previous attribution remain in history.
 
 ## Verification
 
-`assembleDebug`, `testDebugUnitTest`, and `lintDebug` pass. The new dedicated-address-book tests and disposable-device verification are described in [Contacts](../../docs/mypeople/contacts.md). The offline transfer tests include Python↔JVM encryption compatibility, protected queues/receipts, stale/foreign snapshots, and QR validation. The full Python suite passes (471 tests, 4 skipped), including the existing sync suite. Tests cover overlays, rollback, persistence/restart, UUID retries, deletion, current profile, dates/leap years, feed, upcoming, search, origin validation, and mixed record/operation paging.
+`assembleDebug`, `testDebugUnitTest`, and `lintDebug` pass. The new dedicated-address-book tests and disposable-device verification are described in [Contacts](../../docs/mypeople/contacts.md). The offline transfer tests include Python↔JVM encryption compatibility, protected queues/receipts, stale/foreign snapshots, and QR validation. The Python, Kotlin and Swift suites include complete-graph cloning, conflicts, source isolation, migration/recovery, typed checkpoints, stable field identity and native split behavior. Tests cover overlays, rollback, persistence/restart, UUID retries, deletion, current profile, dates/leap years, feed, upcoming, search, origin validation, and mixed record/operation paging.
 
 Physical Pixel 10 verification: Camera permission, in-app QR scanning, OS Bluetooth pairing,
 encrypted memory/photos, and persistent offline state. Two-way sync has been exercised;

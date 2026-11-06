@@ -582,15 +582,17 @@ def test_a_merge_can_be_undone_from_the_view_until_the_records_move_on(home, see
     assert view[("person", str(keep))]["can_undo_merge"] is False
     assert e.view()[("person", str(gone))] == view[("person", str(gone))]
 
-    # Merged again, then edited: undoing would overwrite that edit, so it's no longer offered.
+    # Merge again, then edit: retracting identity links preserves newer attributed data.
     keep = e.call("people.merge", ids=[seeded["Ada Lovelace"], seeded["Ada"]])["person_id"]
     uid = e.view()[("person", str(keep))]["contact_uid"]
     e.call("contact.patch", uid=uid, values={"favorite": True})
     # Saving can move the merged contact's root to the other record, whichever way its UUIDs fall.
     # Either way there's one Ada, with no leftover copy of the record that lost.
     ada = [d for (kind, _), d in e.view().items() if kind == "person" and d["name"].startswith("Ada")]
-    assert len(ada) == 1 and ada[0]["can_undo_merge"] is False
-    assert e.error("edit.apply", kind="merge_undo", payload={"person_id": keep})["code"] == "invalid"
+    assert len(ada) == 1 and ada[0]["can_undo_merge"] is True  # graph attribution remains reversible
+    assert e.call("edit.apply", kind="merge_undo", payload={"person_id": keep})["message"] == "Merge undone."
+    restored = [d for (kind, _), d in e.view().items() if kind == "person" and d["name"].startswith("Ada")]
+    assert len(restored) == 2 and any(d["card"]["favorite"] for d in restored)
     e.close()
 
 

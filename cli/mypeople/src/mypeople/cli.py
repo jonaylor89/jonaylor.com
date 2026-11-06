@@ -760,13 +760,14 @@ def cmd_transfer(conn, args) -> None:
                             reply = args.path or Path(temp) / "memory.sherloq"
                             published = transfer.export_snapshot(worker, reply, password, include_photos=not args.no_photos, compact_photos=True,
                                                                  peer=transfer.unpack(transfer.decrypt(encrypted, password)))
-                            print(f"Fresh memory: {published['updated']} changed view records, {published['changes']} contact changes, {published['photos']} new photos.", flush=True)
+                            print(f"Fresh memory: {published['updated']} changed view records, {published['changes']} graph commits, {published['photos']} new UI avatars.", flush=True)
                             return reply.read_bytes()
                     finally:
                         worker.close()
                 print("The private QR syncs phone edits first, then returns fresh memory. Don’t share it.")
                 bluetooth.serve(path, password, source, minutes=args.minutes, show=not args.no_open, exchange=exchange,
-                                publisher=conn.execute("SELECT publisher FROM transfer_state WHERE slot=1").fetchone()[0])
+                                publisher=conn.execute("SELECT publisher FROM transfer_state WHERE slot=1").fetchone()[0],
+                                graph_collection=conn.execute("SELECT value FROM graph_meta WHERE key='collection'").fetchone()[0])
             else:
                 stats = transfer.export_snapshot(conn, path, password, include_photos=not args.no_photos)
                 print(f"Exported {stats['records']} records and {stats['photos']} photos to {path}.")
@@ -990,7 +991,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("action", choices=("qr", "export", "import", "merge"))
     p.add_argument("path", nargs="?", type=Path, help="memory output or phone edits input (.sherloq)")
     p.add_argument("--password-file", type=Path, help="private file containing the shared transfer passphrase")
-    p.add_argument("--no-photos", action="store_true", help="make a smaller memory file without photos")
+    p.add_argument("--no-photos", action="store_true", help="omit redundant UI avatars; complete graph assets and originals still travel")
     p.add_argument("--no-enrich", action="store_true", help="leave model-backed requests queued for later")
     p.add_argument("--send", action="store_true", help="open Bluetooth File Exchange after exporting (macOS)")
     p.add_argument("--minutes", type=int, default=10, help="QR pairing lifetime (default 10 minutes)")

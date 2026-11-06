@@ -17,7 +17,7 @@ struct EngineIntegrationTests {
         let client: EngineClient
         let sink = Sink()
 
-        init() async throws {
+        init(seed: String? = nil) async throws {
             home = FileManager.default.temporaryDirectory.appendingPathComponent("mypeople-engine-\(UUID().uuidString)")
             try FileManager.default.createDirectory(at: home.appendingPathComponent(".mypeople"), withIntermediateDirectories: true)
             let shell = await EngineLocator.loginShellPath()
@@ -37,6 +37,19 @@ struct EngineIntegrationTests {
             env["UV_PROJECT_ENVIRONMENT"] = home.appendingPathComponent("venv").path
             // The core is what's under test; --all-extras would pull in browser and OSINT packages.
             let arguments = command.arguments.filter { $0 != "--all-extras" }
+            if let seed {
+                let process = Process()
+                process.executableURL = command.executable
+                process.arguments = Array(arguments.dropLast(2)) + ["python", "-c", seed]
+                process.environment = env
+                process.standardOutput = FileHandle.nullDevice
+                let errors = Pipe()
+                process.standardError = errors
+                try process.run()
+                let diagnostics = errors.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+                try #require(process.terminationStatus == 0, "Synthetic seed failed: \(String(decoding: diagnostics, as: UTF8.self))")
+            }
             transport = try ProcessTransport(executable: command.executable, arguments: arguments, environment: env)
             let sink = self.sink
             client = EngineClient(transport: transport) { await sink.add($0) }
@@ -179,6 +192,95 @@ struct EngineIntegrationTests {
             #expect(try String(contentsOf: vcf, encoding: .utf8).contains("BEGIN:VCARD"))
         } catch {
             Issue.record("engine conversation failed: \(error)\n\(h.transport.diagnostics())")
+        }
+        await h.finish()
+    }
+
+    @Test func splittingExactSyntheticAttributionAndRejectingStaleReview() async throws {
+        // Python owns even fixture mutations. This subprocess and the engine share only this test's
+        // throwaway HOME/DB; credentials and model authentication are explicitly disabled above.
+        let h = try await Harness(seed: #"""
+from mypeople import db, contacts
+conn = db.connect()
+person = contacts.save(conn, '11111111-1111-4111-8111-111111111111', {
+    'name': 'Cameron Example', 'region': 'US', 'fields': [
+        {'kind': 'phone', 'value': '+14155550101', 'label': 'Cameron A'},
+        {'kind': 'phone', 'value': '+14155550102', 'label': 'Cameron B'}]})
+for value, kind in [('Cameron A note', 'note'), ('Cameron B note', 'note'), ('Cameron B builds bridges', 'job')]:
+    conn.execute('INSERT INTO events (person_id,type,value,confidence,source,evidence) VALUES (?,?,?,1,?,?)',
+                 (person, kind, value, 'manual', 'Synthetic evidence: ' + value))
+for suffix in ['a', 'b']:
+    conn.execute('INSERT INTO interactions (person_id,at,channel,direction,text,thread,source_ref) VALUES (?,?,?,?,?,?,?)',
+                 (person, '2026-01-02T12:00:00', 'whatsapp', 'in', 'See you at the café', 'thread-' + suffix, 'synthetic:' + suffix))
+conn.execute('INSERT INTO profiles (person_id,site,url,confidence,status) VALUES (?,?,?,1,?)',
+             (person, 'Example', 'https://example.invalid/cameron-b', 'confirmed'))
+conn.commit()
+conn.close()
+"""#)
+        let client = h.client
+        do {
+            let hello: Hello = try await client.call("app.hello")
+            #expect(URL(fileURLWithPath: hello.db).resolvingSymlinksInPath().path.hasPrefix(h.home.resolvingSymlinksInPath().path + "/"))
+            let uid = "11111111-1111-4111-8111-111111111111"
+            let before = try await client.contactAssociations(uid: uid)
+            try before.validateSnapshot()
+            #expect(Set(before.associations.map(\.kind)).isSuperset(of: ["phone", "note", "fact", "message", "profile"]))
+            #expect(before.associations.filter { $0.kind == "message" }.count == 2)
+
+            let _: NoReply = try await client.call("contact.patch", ["uid": .string(uid), "values": ["name": "Cameron Example Updated"]])
+            let stale = ContactSplitRequest(uid: before.uid, name: "Cameron B", edges: [before.associations[0].id], heads: before.heads)
+            do {
+                _ = try await client.splitContact(stale)
+                Issue.record("A review with stale heads must never mutate the graph")
+            } catch let error as EngineError {
+                #expect(error.isStaleAssociationSelection, "Expected stale refusal, got \(error)")
+            }
+            let unchanged: ViewSnapshot = try await client.call("view.snapshot")
+            #expect(Records(snapshot: unchanged.records).people.count == 1)
+
+            let loaded = try await client.contactAssociations(uid: uid)
+            try loaded.validateSnapshot()
+            let chosen = loaded.associations.filter {
+                ($0.kind == "phone" && $0.label.contains("0102")) ||
+                ($0.kind == "note" && $0.label == "Cameron B note") ||
+                ($0.kind == "fact" && $0.label == "Cameron B builds bridges") ||
+                ($0.kind == "message" && $0.thread == "thread-b") ||
+                ($0.kind == "profile" && $0.label == "https://example.invalid/cameron-b")
+            }
+            #expect(chosen.count == 5)
+            let reply = try await client.splitContact(ContactSplitRequest(uid: loaded.uid, name: "Cameron B", edges: chosen.map(\.id), heads: loaded.heads))
+            #expect(reply.contactUid != uid)
+            #expect(reply.personId > 0)
+
+            // Navigation can use the reply immediately: the mutation's view delta preceded it.
+            var records = Records()
+            for event in await h.sink.events {
+                if case .viewDelta(let delta) = event { records.apply(delta) }
+            }
+            #expect(records.people[reply.personId]?.name == "Cameron B")
+            #expect(records.people[reply.personId]?.contactUid == reply.contactUid)
+
+            let remaining = try await client.contactAssociations(uid: uid)
+            let moved = try await client.contactAssociations(uid: reply.contactUid)
+            let chosenEdges = Set(chosen.map(\.id))
+            let chosenObjects = Set(chosen.map(\.objectId))
+            let originalObjects = Set(loaded.associations.map(\.objectId))
+            #expect(Set(remaining.associations.map(\.id)) == Set(loaded.associations.map(\.id)).subtracting(chosenEdges))
+            #expect(Set(moved.associations.map(\.objectId)).intersection(originalObjects) == chosenObjects)
+            #expect(Set(reply.review) == Set(remaining.associations.map(\.id)))
+            #expect(remaining.associations.contains { $0.kind == "message" && $0.thread == "thread-a" })
+            #expect(!remaining.associations.contains { $0.kind == "message" && $0.thread == "thread-b" })
+            #expect(remaining.name == "Cameron Example Updated")
+
+            // All engine-supplied kinds are selectable, including a previous primary name.
+            // Python must keep the explicitly requested new name as the new card's display name.
+            let oldName = try #require(remaining.associations.first { $0.kind == "name" })
+            let named = try await client.splitContact(ContactSplitRequest(uid: remaining.uid, name: "Explicit New Display Name", edges: [oldName.id], heads: remaining.heads))
+            let namedAssociations = try await client.contactAssociations(uid: named.contactUid)
+            #expect(namedAssociations.name == "Explicit New Display Name")
+            #expect(namedAssociations.associations.contains { $0.objectId == oldName.objectId })
+        } catch {
+            Issue.record("split conversation failed: \(error)\n\(h.transport.diagnostics())")
         }
         await h.finish()
     }

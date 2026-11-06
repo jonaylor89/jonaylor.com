@@ -1,7 +1,7 @@
 """Versioned object graph, wire v1. No SQL IDs, clock winners, or destructive merges.
 
-This is the new engine foundation, not yet the authority for the legacy application.
-Commit parents describe causality; domain edges are ordinary versioned entities.
+Authoritative history for CLI, Mac and Android. SQL and native records are derived
+projections. Commit parents describe causality; domain edges are versioned entities.
 All peers retain all commits and blobs. Projections are disposable.
 """
 from __future__ import annotations
@@ -19,10 +19,10 @@ from contextlib import contextmanager
 
 VERSION = 1
 MAX_COMMITS = 100_000
-MAX_OPERATIONS = 1_000_000
+MAX_OPERATIONS = 20_000_000
 OBJECT_TYPES = frozenset((
     "Person", "Name", "ContactPoint", "Note", "Claim", "SourceRecord", "Evidence",
-    "Interaction", "Conversation", "Asset", "Relationship", "RelationshipPreferences",
+    "Interaction", "InteractionBatch", "Conversation", "Asset", "Relationship", "RelationshipPreferences",
     "Decision", "ProcessingRun", "Moment",
 ))
 # Endpoints are checked as part of the replicated contract, not just in the UI.
@@ -35,7 +35,7 @@ EDGE_TYPES = {
     "has_preferences": ({"Person"}, {"RelationshipPreferences"}),
     "same_person": ({"Person"}, {"Person"}),
     "distinct_person": ({"Person"}, {"Person"}),
-    "participant": ({"Interaction", "Relationship"}, {"Person"}),
+    "participant": ({"Interaction", "InteractionBatch", "Relationship"}, {"Person"}),
     "in_conversation": ({"Interaction"}, {"Conversation"}),
     "drawn_from": ({"Evidence"}, {"SourceRecord", "Interaction", "Note"}),
     "supported_by": ({"Claim"}, {"Evidence"}),
@@ -98,10 +98,10 @@ def create_edge(kind: str, source: str, target: str, properties: dict | None = N
 class Graph:
     """Pure deterministic reducer. Input order and wall clocks cannot affect the result."""
 
-    def __init__(self, commits=()):
+    def __init__(self, commits=(), *, copy_commits=True):
         self.commits = {}
         for original in commits:
-            c = copy.deepcopy(original)
+            c = copy.deepcopy(original) if copy_commits else original
             if not isinstance(c, dict) or set(c) != {"id", "collection", "peer", "recorded_at", "version", "parents", "operations"}:
                 raise GraphError("Invalid commit shape")
             for key in ("id", "collection", "peer"):
@@ -162,9 +162,31 @@ class Graph:
         self.operations = {}
         self.origins = {}
         self.creation = {}
+        self._observed_cache = {}
         for key in self.order:
             for op in self.commits[key]["operations"]:
                 self._apply(key, op)
+
+    def _append_local(self, commit):
+        """Incrementally reduce a locally generated commit at the current frontier.
+
+        Internal batch writer only: callers discard this reducer if validation
+        fails, and SQLite persistence is guarded by the enclosing savepoint.
+        Remote/untrusted histories still go through the full DAG validator.
+        """
+        if commit["parents"] != self.heads or commit["id"] in self.commits:
+            raise GraphError("Local commit does not extend the current frontier")
+        if self.collection and commit["collection"] != self.collection:
+            raise GraphError("Cannot join different collections")
+        if len(self.commits) >= MAX_COMMITS or len(self.operations) + len(commit["operations"]) > MAX_OPERATIONS:
+            raise GraphError("Graph exceeds supported history size")
+        self.commits[commit["id"]] = commit
+        self.collection = commit["collection"]
+        for operation in commit["operations"]:
+            self._apply(commit["id"],operation)
+        self.order.append(commit["id"])
+        self.heads = [commit["id"]]
+        return self
 
     def past(self, heads):
         seen, todo = set(), list(heads)
@@ -180,10 +202,15 @@ class Graph:
     def observed(self, origin, commit):
         if origin == commit:
             return True  # only already-applied operations in this commit can be referenced
+        pair = (origin,commit)
+        if pair in self._observed_cache:
+            return self._observed_cache[pair]
         todo, seen = list(self.commits[commit]["parents"]), set()
         while todo:
             key = todo.pop()
             if key == origin:
+                if len(self._observed_cache) < 100_000:
+                    self._observed_cache[pair] = True
                 return True
             if key not in seen:
                 seen.add(key)
@@ -358,7 +385,12 @@ class Graph:
         associated = {key: edge for key, edge in self.edges.items() if edge["type"] in ATTRIBUTIONS and self.active(key) and (edge["to"] == person if edge["type"] == "participant" else edge["from"] == person)}
         if any(key not in associated for key in attributions):
             raise GraphError("Selection is not an active attribution of this person")
-        new_person, new_name = create_object("Person"), create_object("Name", {"display": name.strip()})
+        unverified = any(associated[key]["type"] == "has_contact_point" and self.value(associated[key]["to"], "kind") == "phone" and (
+            (self.value(person, "card_metadata", {}) or {}).get("legacy_unverified")
+            or self.value(associated[key]["to"], "compat_table") == "identifiers"
+            or self.value(associated[key]["to"], "matching_hint", False)) for key in attributions)
+        new_person = create_object("Person", {"card_metadata": {"legacy_unverified": True}} if unverified else {})
+        new_name = create_object("Name", {"display": name.strip()})
         new_id = new_person["target"]
         operations = [new_person, new_name, create_edge("has_name", new_id, new_name["target"]), create_edge("distinct_person", person, new_id)]
         for key in attributions:
@@ -387,6 +419,11 @@ def transaction(conn):
 class Store:
     def __init__(self, conn: sqlite3.Connection):
         self.conn = conn
+        if conn.execute("SELECT 1 FROM sqlite_master WHERE name='graph_meta'").fetchone():
+            meta = dict(conn.execute("SELECT key,value FROM graph_meta WHERE key IN ('peer','collection')"))
+            if 'peer' in meta and 'collection' in meta:
+                self.peer = meta['peer']
+                return  # Opening a projection reader must not take a writer lock.
         with transaction(conn):
             for sql in (
                 "CREATE TABLE IF NOT EXISTS graph_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
@@ -404,7 +441,7 @@ class Store:
         return self.conn.execute("SELECT value FROM graph_meta WHERE key='collection'").fetchone()[0]
 
     def load(self):
-        return Graph(json.loads(row[0]) for row in self.conn.execute("SELECT data FROM graph_commits"))
+        return Graph((json.loads(row[0]) for row in self.conn.execute("SELECT data FROM graph_commits")), copy_commits=False)
 
     def put_blob(self, content: bytes):
         digest = hashlib.sha256(content).hexdigest()
@@ -413,7 +450,7 @@ class Store:
             raise GraphError("Stored blob is damaged")
         return digest
 
-    def verify_references(self, graph):
+    def verify_references(self, graph, *, commits=None, available_blobs=()):
         # Blob references have one canonical representation anywhere in properties.
         checked = set()
         def check(value):
@@ -423,7 +460,7 @@ class Store:
                     if not isinstance(digest, str):
                         raise GraphError("Invalid blob reference")
                     if digest not in checked:
-                        if not self.conn.execute("SELECT 1 FROM graph_blobs WHERE hash=?", (digest,)).fetchone():
+                        if digest not in available_blobs and not self.conn.execute("SELECT 1 FROM graph_blobs WHERE hash=?", (digest,)).fetchone():
                             raise GraphError("Missing referenced blob")
                         checked.add(digest)
                 for child in value.values():
@@ -431,7 +468,7 @@ class Store:
             elif isinstance(value, list):
                 for child in value:
                     check(child)
-        for c in graph.commits.values():
+        for c in graph.commits.values() if commits is None else commits:
             check(c["operations"])
 
     def receive(self, commits, blobs=None, *, adopt=False):

@@ -1,0 +1,397 @@
+{
+  "graph": {
+    "collection": "53366e04-50ff-4fc4-bce2-99e962074af4",
+    "heads": [
+      "d97a7a32-37da-4742-b271-1b4f7c5de25c"
+    ],
+    "commits": [
+      {
+        "collection": "53366e04-50ff-4fc4-bce2-99e962074af4",
+        "id": "d97a7a32-37da-4742-b271-1b4f7c5de25c",
+        "operations": [
+          {
+            "id": "690cc250-b65b-4b8b-a177-2ab302bbfe71",
+            "kind": "create_object",
+            "payload": {
+              "properties": {
+                "attribution_quality": "asserted",
+                "card_metadata": {},
+                "created_at": "2026-11-06 05:58:46",
+                "is_me": false
+              },
+              "type": "Person"
+            },
+            "replaces": [],
+            "target": "bb2a4139-9ab4-487b-9434-3a9120a3a288"
+          },
+          {
+            "id": "1fed8fd6-a81a-438e-91fb-27050caa11cd",
+            "kind": "create_object",
+            "payload": {
+              "properties": {
+                "display": "Cameron"
+              },
+              "type": "Name"
+            },
+            "replaces": [],
+            "target": "246d991d-0497-4d75-a717-f061cd5a884b"
+          },
+          {
+            "id": "4b4958ac-8651-47ec-9402-97ba897f8073",
+            "kind": "create_edge",
+            "payload": {
+              "from": "bb2a4139-9ab4-487b-9434-3a9120a3a288",
+              "properties": {
+                "card_order": 0,
+                "origin": "contact_card",
+                "preferred": true
+              },
+              "to": "246d991d-0497-4d75-a717-f061cd5a884b",
+              "type": "has_name"
+            },
+            "replaces": [],
+            "target": "b9e59538-dad6-4aaf-ae69-6aa05f784b6e"
+          },
+          {
+            "id": "569ac3f4-e592-4fb4-b1a9-4b8fd24cee94",
+            "kind": "create_object",
+            "payload": {
+              "properties": {
+                "kind": "phone",
+                "label": "mobile",
+                "preferred": false,
+                "region": "",
+                "structured": "",
+                "value": "+12025550101"
+              },
+              "type": "ContactPoint"
+            },
+            "replaces": [],
+            "target": "e6429fda-9fb5-43a6-8e32-02e976a6a83c"
+          },
+          {
+            "id": "bb0c14e0-5f49-4c90-b2b6-cc0ac0ce2164",
+            "kind": "create_edge",
+            "payload": {
+              "from": "bb2a4139-9ab4-487b-9434-3a9120a3a288",
+              "properties": {
+                "card_order": 1,
+                "origin": "contact_card",
+                "preferred": false
+              },
+              "to": "e6429fda-9fb5-43a6-8e32-02e976a6a83c",
+              "type": "has_contact_point"
+            },
+            "replaces": [],
+            "target": "f2e660e8-793c-41fe-8142-27f770c073d9"
+          },
+          {
+            "id": "567b19fc-802d-49bc-bc4e-c1480d08c876",
+            "kind": "create_object",
+            "payload": {
+              "properties": {
+                "kind": "phone",
+                "label": "mobile",
+                "preferred": false,
+                "region": "",
+                "structured": "",
+                "value": "+12025550102"
+              },
+              "type": "ContactPoint"
+            },
+            "replaces": [],
+            "target": "b53abb68-3e19-45ef-9168-7cec634eaa1b"
+          },
+          {
+            "id": "9ddf2d08-d625-4673-ae5c-e2c58c6b9d0a",
+            "kind": "create_edge",
+            "payload": {
+              "from": "bb2a4139-9ab4-487b-9434-3a9120a3a288",
+              "properties": {
+                "card_order": 2,
+                "origin": "contact_card",
+                "preferred": false
+              },
+              "to": "b53abb68-3e19-45ef-9168-7cec634eaa1b",
+              "type": "has_contact_point"
+            },
+            "replaces": [],
+            "target": "628f6b16-49c7-492d-bb92-b7b5a38784dc"
+          },
+          {
+            "id": "ff2f5bfb-10b9-4de6-9327-e420a0ad8607",
+            "kind": "create_object",
+            "payload": {
+              "properties": {
+                "body": "Which Cameron? Review this note.",
+                "origin": "contact_card_notes"
+              },
+              "type": "Note"
+            },
+            "replaces": [],
+            "target": "3ffb0141-b887-4f89-a52e-d9b998089ffc"
+          },
+          {
+            "id": "a2e9a38d-3360-4d2d-a7a1-379685d3e1fe",
+            "kind": "create_edge",
+            "payload": {
+              "from": "bb2a4139-9ab4-487b-9434-3a9120a3a288",
+              "properties": {
+                "card_order": 3,
+                "origin": "contact_card",
+                "preferred": false
+              },
+              "to": "3ffb0141-b887-4f89-a52e-d9b998089ffc",
+              "type": "has_note"
+            },
+            "replaces": [],
+            "target": "2ad94106-0b1b-441f-add5-1ee03c17008c"
+          },
+          {
+            "id": "8620498e-6c4c-4933-a262-d6f98f0be4fa",
+            "kind": "create_object",
+            "payload": {
+              "properties": {
+                "asserted_by": "contact_card",
+                "predicate": "birthday",
+                "value": ""
+              },
+              "type": "Claim"
+            },
+            "replaces": [],
+            "target": "ee6910f4-d189-416c-a6ef-c40ae43e37e1"
+          },
+          {
+            "id": "6fe8dfd7-c508-4725-9355-99b1dc3ca4af",
+            "kind": "create_edge",
+            "payload": {
+              "from": "bb2a4139-9ab4-487b-9434-3a9120a3a288",
+              "properties": {
+                "card_order": 4,
+                "origin": "contact_card",
+                "preferred": false
+              },
+              "to": "ee6910f4-d189-416c-a6ef-c40ae43e37e1",
+              "type": "subject_of"
+            },
+            "replaces": [],
+            "target": "3fc84bd1-bce0-44a1-8f98-ce80c255bf7e"
+          },
+          {
+            "id": "9fff55d4-e2b3-441b-bdc2-de9e9bf7e95e",
+            "kind": "create_object",
+            "payload": {
+              "properties": {
+                "asserted_by": "contact_card",
+                "predicate": "organization",
+                "value": ""
+              },
+              "type": "Claim"
+            },
+            "replaces": [],
+            "target": "81179a3e-ae00-419c-855f-77e65802eac1"
+          },
+          {
+            "id": "6b97b9a6-d87d-426e-82f1-e745317f5159",
+            "kind": "create_edge",
+            "payload": {
+              "from": "bb2a4139-9ab4-487b-9434-3a9120a3a288",
+              "properties": {
+                "card_order": 5,
+                "origin": "contact_card",
+                "preferred": false
+              },
+              "to": "81179a3e-ae00-419c-855f-77e65802eac1",
+              "type": "subject_of"
+            },
+            "replaces": [],
+            "target": "996073d0-ce31-45f2-bbe9-d552e999e2f1"
+          },
+          {
+            "id": "071b12c5-b24b-4925-8f83-fb9350cc91a5",
+            "kind": "create_object",
+            "payload": {
+              "properties": {
+                "asserted_by": "contact_card",
+                "predicate": "title",
+                "value": ""
+              },
+              "type": "Claim"
+            },
+            "replaces": [],
+            "target": "90d191ef-ad17-4ebf-bdb8-199c5d689e49"
+          },
+          {
+            "id": "0cf8c3bf-7472-4e29-aa2d-e4e652de2fd1",
+            "kind": "create_edge",
+            "payload": {
+              "from": "bb2a4139-9ab4-487b-9434-3a9120a3a288",
+              "properties": {
+                "card_order": 6,
+                "origin": "contact_card",
+                "preferred": false
+              },
+              "to": "90d191ef-ad17-4ebf-bdb8-199c5d689e49",
+              "type": "subject_of"
+            },
+            "replaces": [],
+            "target": "92a11a72-55d4-43db-9869-6cc37157e772"
+          },
+          {
+            "id": "4bb274c6-2b08-4398-9d6c-f8c38d75e26d",
+            "kind": "create_object",
+            "payload": {
+              "properties": {
+                "favorite": false,
+                "origin": "contact_card",
+                "preferred_channel": "",
+                "region": "US"
+              },
+              "type": "RelationshipPreferences"
+            },
+            "replaces": [],
+            "target": "787c2608-e677-4e20-b682-40be19d81e02"
+          },
+          {
+            "id": "cd6b5fc4-028a-4d36-9035-93a5a225f2de",
+            "kind": "create_edge",
+            "payload": {
+              "from": "bb2a4139-9ab4-487b-9434-3a9120a3a288",
+              "properties": {
+                "card_order": 7,
+                "origin": "contact_card",
+                "preferred": false
+              },
+              "to": "787c2608-e677-4e20-b682-40be19d81e02",
+              "type": "has_preferences"
+            },
+            "replaces": [],
+            "target": "6f5fad07-8918-494a-98c1-058a50080f19"
+          },
+          {
+            "id": "6018dd7f-14c7-4fbc-91cd-6d5c99dc0ac7",
+            "kind": "create_object",
+            "payload": {
+              "properties": {
+                "compat_table": "events",
+                "confidence": 0.5,
+                "created_at": "2026-11-06 00:58:46",
+                "date": "",
+                "evidence": null,
+                "generation": 2,
+                "predicate": "job",
+                "said_at": null,
+                "source": "synthetic",
+                "source_ref": null,
+                "status": "rejected",
+                "type": "job",
+                "value": "Rejected synthetic claim"
+              },
+              "type": "Claim"
+            },
+            "replaces": [],
+            "target": "272e9d5c-98be-4d0f-89a4-8d51a53cbb3f"
+          },
+          {
+            "id": "6c5b76ee-e422-49ea-8a96-367234f2aff4",
+            "kind": "create_edge",
+            "payload": {
+              "from": "bb2a4139-9ab4-487b-9434-3a9120a3a288",
+              "properties": {
+                "attribution_quality": "asserted"
+              },
+              "to": "272e9d5c-98be-4d0f-89a4-8d51a53cbb3f",
+              "type": "subject_of"
+            },
+            "replaces": [],
+            "target": "9ce68584-2e3c-4dd4-8022-45833beedf38"
+          },
+          {
+            "id": "a3b6e247-4bf3-4826-8c59-1f7ce03fd250",
+            "kind": "create_object",
+            "payload": {
+              "properties": {
+                "cadence_days": 30.0,
+                "category": "friend",
+                "closeness": null,
+                "compat_table": "relationship_overrides",
+                "muted": 1
+              },
+              "type": "RelationshipPreferences"
+            },
+            "replaces": [],
+            "target": "f86a1a71-7e1e-41f6-8634-01d06beca7d2"
+          },
+          {
+            "id": "b870378c-5406-446b-8241-e2d9444c859a",
+            "kind": "create_edge",
+            "payload": {
+              "from": "bb2a4139-9ab4-487b-9434-3a9120a3a288",
+              "properties": {
+                "attribution_quality": "asserted"
+              },
+              "to": "f86a1a71-7e1e-41f6-8634-01d06beca7d2",
+              "type": "has_preferences"
+            },
+            "replaces": [],
+            "target": "e16f265d-e8aa-4f89-b52f-7af51fe6bcaa"
+          },
+          {
+            "id": "7b049d0a-5e27-491c-b172-f6b19e0e6874",
+            "kind": "create_object",
+            "payload": {
+              "properties": {
+                "attribution_quality": "asserted",
+                "channel": "sms",
+                "content": {
+                  "blob_hash": "a38bafc46eda4492ca3028aad3c16e41c6a048caffb5859796ed83fbc908b671"
+                },
+                "count": 1,
+                "encoding": "gzip-json",
+                "first_at": "2026-01-01T12:00:00+00:00",
+                "last_at": "2026-01-01T12:00:00+00:00",
+                "original_owner": "bb2a4139-9ab4-487b-9434-3a9120a3a288",
+                "thread": "phone-b"
+              },
+              "type": "InteractionBatch"
+            },
+            "replaces": [],
+            "target": "a8ef24a7-b371-464a-8d94-a9cc26754a1a"
+          },
+          {
+            "id": "5324c9b3-e5ab-4f13-88e2-9d321fb2b894",
+            "kind": "create_edge",
+            "payload": {
+              "from": "a8ef24a7-b371-464a-8d94-a9cc26754a1a",
+              "properties": {
+                "attribution_quality": "asserted"
+              },
+              "to": "bb2a4139-9ab4-487b-9434-3a9120a3a288",
+              "type": "participant"
+            },
+            "replaces": [],
+            "target": "a63f8ac9-e749-4a60-a582-d10c5f1ae07c"
+          }
+        ],
+        "parents": [],
+        "peer": "dc894119-5774-47f2-925d-9bbdc0aea6c6",
+        "recorded_at": "2026-11-06T05:58:46.909196+00:00",
+        "version": 1
+      }
+    ],
+    "blobs": {
+      "a38bafc46eda4492ca3028aad3c16e41c6a048caffb5859796ed83fbc908b671": "H4sIAAAAAAAC/zWMwQrCMBBEfyXs1RbSHjzk6C/oTUSSdGwC7UaSFRTx390KwrCwM/Pm/CYv5Gi04763g+o0jM5a1e53qaOYPDMWbbW16T/liii5sDqZ1cBTqo+CiZztqJVHjbhW3DbixZIgObroV9TCfXCDIqKMxsd/bFa05meYgKXwnHk2Usxha6YKr8t0T4XRB/pcvlr7M421AAAA"
+    }
+  },
+  "expected": {
+    "uid": "bb2a4139-9ab4-487b-9434-3a9120a3a288",
+    "name": "Cameron",
+    "phones": [
+      "+12025550101",
+      "+12025550102"
+    ],
+    "raw_message": "Synthetic message belonging to B",
+    "rejected_fact": "Rejected synthetic claim",
+    "muted": true
+  }
+}

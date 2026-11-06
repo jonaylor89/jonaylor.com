@@ -4,11 +4,13 @@ No HTTP endpoint, Tailscale setup, or cloud service is needed. Your Mac temporar
 opens one temporary classic Bluetooth RFCOMM session. MyPeople on Android scans the
 private QR, sends queued edits, and receives a freshly published snapshot plus edit
 receipts through the same connection. No files to select or manual import command.
-The raw SQLite database and conversation messages are **never transferred**.
+The raw SQLite file is not copied. The **complete versioned graph is transferred**, including
+raw conversation records, full-size assets, source originals and history. Every peer is trusted.
 
 Contact edits/merges now reconcile [local-first causal history](contact-replication.md)
-rather than waiting for Mac approval. Updated peers exchange missing changes, changed
-view records, and uncached photos. Upgrade both clients and restart the Mac listener.
+rather than waiting for Mac approval. The [whole object graph](versioned-graph.md), not only
+contact cards, is now authoritative. Updated peers exchange missing commits/blobs and derived
+UI/inference records. Upgrade both clients and restart the Mac listener.
 
 ## Mac
 
@@ -101,7 +103,7 @@ QR transfers resize photos to at most 384 pixels and strip unnecessary metadata,
 Bluetooth sends avatar-sized images instead of large originals. The Mac caches these
 avatars beside the database under `transfer-avatars/`; the phone advertises hashes it
 already has, avoiding unchanged retransmission. Originals on the Mac are unchanged.
-`--no-photos` creates a smaller snapshot if desired.
+`--no-photos` omits only redundant UI avatars; complete graph assets and originals still travel.
 
 ## Safety and format
 
@@ -113,14 +115,14 @@ already has, avoiding unchanged retransmission. Originals on the Mac are unchang
   phone transaction.
 - Encrypted files use `SHERLOQ1`, 16-byte salt, 12-byte nonce, PBKDF2-HMAC-SHA256
   (200,000 iterations), and AES-256-GCM with the magic as authenticated associated data.
-  Authenticated plaintext is a bounded ZIP containing `manifest.json` and content-addressed
-  photos. Wrong passphrases, tampering, invalid record types, unsafe archive paths, and
+  Authenticated plaintext is a bounded ZIP containing `manifest.json`, a separate `graph.json`
+  bundle, and optional content-addressed UI photos. Wrong passphrases, tampering, invalid record types, unsafe archive paths, and
   oversized files are rejected before canonical memory is replaced.
 - The QR creates a random RFCOMM service UUID and a separate 192-bit capability. The phone
   authenticates before receiving an encrypted file; a bounded length and SHA-256 frame
   checksum protect the transport, followed by AES-GCM verification and source validation.
   Protocol v3 starts with `SHRD0003`, then authenticates with `SHERLOQ3 TOKEN` and uses
-  the existing bounded `SHUP0002` encrypted upload (maximum 8 MiB), `SHBT0001` return,
+  the bounded `SHUP0002` encrypted upload (maximum 128 MiB), `SHBT0001` return,
   matching-digest acknowledgment, and `SHOK0002` finish. Authenticated `WAIT` lines keep
   the radio alive during durable import; they never acknowledge or clear edits. Callback
   coalescing is bounded by session size, not an assumed 64 KiB native packet size.

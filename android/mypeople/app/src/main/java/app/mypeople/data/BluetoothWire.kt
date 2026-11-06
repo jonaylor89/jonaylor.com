@@ -8,7 +8,7 @@ import java.security.MessageDigest
 
 /** Byte protocol shared with Python. Kept independent of Android for interop tests. */
 object BluetoothWire {
-    const val MAX_UPLOAD = 8 * 1024 * 1024
+    const val MAX_UPLOAD = Transfer.MAX_FILE
     private val uploadMagic = "SHUP0002".toByteArray(Charsets.US_ASCII)
     private val snapshotMagic = "SHBT0001".toByteArray(Charsets.US_ASCII)
     private val finished = "SHOK0002".toByteArray(Charsets.US_ASCII)

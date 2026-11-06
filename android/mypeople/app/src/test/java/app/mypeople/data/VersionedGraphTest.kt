@@ -80,6 +80,21 @@ class VersionedGraphTest {
         assertEquals(VersionedGraph(input).commits, VersionedGraph(input + input).commits)
     }
 
+    @Test fun incrementalLocalAppendMatchesReplayAndDoesNotMutateItsBase() {
+        val input = commits()
+        val base = VersionedGraph(input)
+        val phone = fixture().getValue("expect").jsonObject.getValue("phone").jsonPrimitive.content
+        val before = base.alternatives(phone, "label")
+        val c = base.commit(id(), listOf(base.edit(phone, "label", JsonPrimitive("Resolved"))))
+        val appended = base.appended(c)
+        val replayed = VersionedGraph(input + c)
+        assertEquals(replayed.alternatives(phone, "label"), appended.alternatives(phone, "label"))
+        assertEquals(before, base.alternatives(phone, "label"))
+        val bad = base.commit(id(), listOf(base.edit(phone, "label", JsonPrimitive("Must rollback")), VersionedGraph.createEdge("same_person", id(), id())))
+        assertThrows(IllegalArgumentException::class.java) { base.appended(bad) }
+        assertEquals(before, base.alternatives(phone, "label"))
+    }
+
     @Test fun identityLinksCanBeRetractedWithoutDeletingObjects() {
         val a = VersionedGraph.createObject("Person")
         val b = VersionedGraph.createObject("Person")

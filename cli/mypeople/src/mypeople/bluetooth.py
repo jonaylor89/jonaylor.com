@@ -20,12 +20,19 @@ FRAME_MAGIC = b"SHBT0001"
 UPLOAD_MAGIC = b"SHUP0002"
 FINISHED = b"SHOK0002"
 READY = b"SHRD0003"
-MAX_UPLOAD = 8 * 1024 * 1024
+# Trusted peers now send the complete graph, not just a small operation outbox.
+MAX_UPLOAD = MAX_FILE
 HEADER_SIZE = 48
 
 
-def offer(address: str, service: str, password: str, source: str, token: str, expires: int, *, version: int = 1, publisher: str | None = None, wait_keepalive: bool = False) -> dict:
-    return ({"wait_keepalive": True} if wait_keepalive and version >= 2 else {}) | {"publisher": publisher, "type": "sherloq-bluetooth", "version": version, "address": address.replace("-", ":").upper(),
+def offer(address: str, service: str, password: str, source: str, token: str, expires: int, *, version: int = 1, publisher: str | None = None, wait_keepalive: bool = False, graph_collection: str | None = None) -> dict:
+    if graph_collection is not None:
+        try:
+            if str(uuid.UUID(graph_collection)) != graph_collection:
+                raise ValueError
+        except (ValueError, AttributeError):
+            raise TransferError("Invalid graph collection") from None
+    return ({"graph_collection": graph_collection} if graph_collection is not None else {}) | ({"wait_keepalive": True} if wait_keepalive and version >= 2 else {}) | {"publisher": publisher, "type": "sherloq-bluetooth", "version": version, "address": address.replace("-", ":").upper(),
             "service": service, "passphrase": password, "source": source, "token": token,
             "expires": expires, "name": "MyPeople on your Mac"}
 
@@ -208,7 +215,8 @@ def _listen(listener, expires: int, version: int, pump, refresh):
 
 
 def serve(path: Path, password: str, source: str, *, minutes: int = 10, show: bool = True,
-          directory: Path | None = None, exchange: Callable[[bytes], bytes] | None = None, publisher: str | None = None) -> None:
+          directory: Path | None = None, exchange: Callable[[bytes], bytes] | None = None, publisher: str | None = None,
+          graph_collection: str | None = None) -> None:
     """Run on the main thread. exchange applies edits and builds a fresh encrypted snapshot.
 
     The callback runs on the transfer worker, so it must open its own SQLite connection.
@@ -238,7 +246,8 @@ def serve(path: Path, password: str, source: str, *, minutes: int = 10, show: bo
     service_id = str(uuid.uuid4())
     token = secrets.token_urlsafe(24)
     expires = int(time.time()) + minutes * 60
-    payload = offer(address, service_id, password, source, token, expires, version=version, publisher=publisher, wait_keepalive=version >= 2)
+    payload = offer(address, service_id, password, source, token, expires, version=version, publisher=publisher, wait_keepalive=version >= 2,
+                    graph_collection=graph_collection)
     record, channel_id = _publish_service(BT, service_id)
 
     class ChannelReceiver(NSObject):

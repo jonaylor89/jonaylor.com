@@ -5,6 +5,8 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
+import java.io.OutputStream
+import java.security.DigestOutputStream
 import java.security.MessageDigest
 
 /** Local-only, versioned typed checkpoint. Avoids JSON lexing/reflection/object trees at startup.
@@ -18,12 +20,21 @@ internal object StoreCheckpoint {
     private fun hash(bytes: ByteArray, size: Int = bytes.size) = MessageDigest.getInstance("SHA-256").run { update(bytes, 0, size); digest() }
 
     data class Snapshot(val state: DiskState, val view: Records?)
-    private const val PROJECTION_VERSION = 1
+    private const val PROJECTION_VERSION = 2
 
-    fun encode(state: DiskState, view: Records? = null, formatVersion: Int = 4): ByteArray {
-        require(formatVersion in 1..4 && (formatVersion != 1 || view == null))
+    fun encode(state: DiskState, view: Records? = null, formatVersion: Int = 7): ByteArray {
         val bytes = ByteArrayOutputStream()
-        val w = Writer(DataOutputStream(bytes), formatVersion)
+        write(state, bytes, view, formatVersion)
+        return bytes.toByteArray()
+    }
+
+    /** Checkpoints stream directly to the fsynced temp file; no full-size buffer copies. */
+    fun write(state: DiskState, output: OutputStream, view: Records? = null, formatVersion: Int = 7) {
+        require(formatVersion in 1..7 && (formatVersion != 1 || view == null))
+        require(formatVersion >= 5 || state.graph == null) { "Graph state requires checkpoint version 5." }
+        val digest = MessageDigest.getInstance("SHA-256")
+        val stream = DigestOutputStream(output, digest)
+        val w = Writer(DataOutputStream(stream), formatVersion)
         w.out.write(magic); w.out.writeInt(formatVersion)
         w.records(state.records)
         w.out.writeLong(state.cursor); w.out.writeInt(state.nextLocalId)
@@ -34,13 +45,17 @@ internal object StoreCheckpoint {
         val r = state.replica
         w.out.writeBoolean(r.enabled); w.list(r.changes, w::change); w.strings(r.remoteHeads)
         w.map(r.localIds, w::string, w.out::writeInt); w.map(r.recordHashes, w::string, w::string); w.nullString(r.publisher)
+        if (formatVersion >= 7) w.graph(state.graph)
+        else if (formatVersion >= 5) w.element(json.encodeToJsonElement(state.graph))
         if (formatVersion >= 2) {
             w.out.writeBoolean(view != null)
             if (view != null) { w.out.writeInt(PROJECTION_VERSION); w.records(view) }
         }
-        val data = bytes.toByteArray()
-        require(data.size <= MAX_BYTES - 32) { "Local checkpoint exceeds supported size." }
-        return data + hash(data)
+        w.out.flush()
+        require(w.out.size() <= MAX_BYTES - 32) { "Local checkpoint exceeds supported size." }
+        stream.on(false)
+        output.write(digest.digest())
+        output.flush()
     }
 
     fun decode(bytes: ByteArray): DiskState = snapshot(bytes).state
@@ -52,7 +67,7 @@ internal object StoreCheckpoint {
         val actual = ByteArray(magic.size); input.readFully(actual)
         require(actual.contentEquals(magic)) { "Unsupported local checkpoint." }
         val version = input.readInt()
-        require(version in 1..4) { "Unsupported local checkpoint version." }
+        require(version in 1..7) { "Unsupported local checkpoint version." }
         val r = Reader(input, version)
         val records = r.records()
         val cursor = input.readLong(); val nextLocalId = input.readInt()
@@ -61,12 +76,13 @@ internal object StoreCheckpoint {
         val notices = r.list { Notice(r.string(), r.string()) }
         val source = r.nullString(); val revision = input.readLong(); val sequence = input.readLong()
         val replica = ReplicaState(input.readBoolean(), r.list(r::change), r.strings(), r.map(r::string, input::readInt), r.map(r::string, r::string), r.nullString())
+        val graph = if (version >= 7) r.graph() else if (version >= 5) r.element().let { if (it == JsonNull) null else json.decodeFromJsonElement<GraphState>(it) } else null
         val view = if (version >= 2 && input.readBoolean()) {
             val projectionVersion = input.readInt()
             r.records().takeIf { projectionVersion == PROJECTION_VERSION }
         } else null
         require(input.available() == 0) { "Unexpected data in local checkpoint." }
-        return Snapshot(DiskState(records, cursor, nextLocalId, pending, failed, lastSync, lastError, notices, source, revision, sequence, replica), view)
+        return Snapshot(DiskState(records, cursor, nextLocalId, pending, failed, lastSync, lastError, notices, source, revision, sequence, replica, graph), view)
     }
 
     private class Writer(val out: DataOutputStream, val version: Int) {
@@ -100,10 +116,27 @@ internal object StoreCheckpoint {
                 is JsonObject -> { out.writeByte(6); map(value, ::string, ::element) }
             }
         }
+        fun graph(state: GraphState?) {
+            out.writeBoolean(state != null)
+            if (state == null) return
+            val b = state.bundle
+            string(b.collection); strings(b.heads)
+            list(b.commits) { c ->
+                string(c.id); string(c.collection); string(c.peer); string(c.recorded_at)
+                out.writeInt(c.version); strings(c.parents)
+                require(c.operations.size <= 1_000_000)
+                out.writeInt(c.operations.size)
+                c.operations.forEach { op -> string(op.id); string(op.kind); string(op.target); element(op.payload); strings(op.replaces) }
+            }
+            map(b.blobs, ::string, ::string)
+            string(state.peer); map(state.localIds, ::string, out::writeInt); strings(state.remoteHeads)
+        }
         fun field(f: ContactField) {
             require(version >= 4 || !f.user_added) { "Manual link provenance requires checkpoint version 4." }
+            require(version >= 6 || f.object_id.isEmpty()) { "Stable contact point identity requires checkpoint version 6." }
             string(f.kind); string(f.value); string(f.label); out.writeBoolean(f.preferred); string(f.structured); string(f.region)
             if (version >= 4) out.writeBoolean(f.user_added)
+            if (version >= 6) string(f.object_id)
         }
         fun card(c: ContactCard) {
             strings(listOf(c.name, c.given, c.family, c.middle, c.prefix, c.suffix, c.phonetic))
@@ -172,7 +205,7 @@ internal object StoreCheckpoint {
                 else -> throw IllegalArgumentException("Unknown checkpoint JSON type.")
             }
         }
-        fun field() = ContactField(string(), string(), string(), input.readBoolean(), string(), string(), if (version >= 4) input.readBoolean() else false)
+        fun field() = ContactField(string(), string(), string(), input.readBoolean(), string(), string(), if (version >= 4) input.readBoolean() else false, if (version >= 6) string() else "")
         fun card(): ContactCard {
             val names = strings().also { require(it.size == 7) }
             val fields = list(::field); val text = strings().also { require(it.size == 5) }
@@ -188,6 +221,20 @@ internal object StoreCheckpoint {
         fun event() = Event(input.readInt(), string(), string(), string(), input.readDouble(), string(), nullString(), nullString(), string())
         fun profile() = Profile(input.readInt(), string(), string(), string(), string(), string(), string(), input.readDouble())
         fun moment() = Moment(input.readInt(), string(), string(), nullString(), input.readDouble(), string(), string())
+        fun graph(): GraphState? {
+            if (!input.readBoolean()) return null
+            val collection = string(); val heads = strings()
+            val commits = list {
+                val id = string(); val book = string(); val peer = string(); val at = string()
+                val v = input.readInt(); val parents = strings()
+                val count = input.readInt()
+                require(count in 0..1_000_000) { "Invalid graph operation count" }
+                val operations = List(count) { GraphOperation(string(), string(), string(), element().jsonObject, strings()) }
+                GraphCommit(id, book, peer, at, v, parents, operations)
+            }
+            val blobs = map(::string, ::string)
+            return GraphState(GraphBundle(collection, heads, commits, blobs), string(), map(::string, input::readInt), strings())
+        }
         fun change() = ContactChange(string(), strings(), string(), element().jsonObject, map(::string) { list { element() } }, map(::string, ::strings), strings(), map(::string, ::strings))
         fun op() = PendingOp(string(), string(), element().jsonObject, input.readBoolean(), string(), input.readBoolean())
         fun records() = Records(map(input::readInt, ::person), map(::string, ::event), map(::string, ::profile), map(::string, ::moment), map(::string) { Dupes(list(input::readInt), strings()) }, map(::string, ::change))

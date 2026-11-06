@@ -413,3 +413,150 @@ def change(conn, uid, card=None, **kwargs):
     history = capture(conn)
     c = history.edit(uid, card, **kwargs)
     return receive(conn, [c]), c
+
+
+# The graph is now the domain authority. Keep the small contact-history API used
+# by existing UI code, but never write/materialize legacy contact_changes in a
+# graph-backed application database.
+_legacy_load, _legacy_capture, _legacy_receive, _legacy_change = load, capture, receive, change
+
+
+class GraphHistory:
+    def __init__(self, conn, graph):
+        from . import graph_runtime
+        from .graph import Store
+        self.conn, self.graph = conn, graph
+        self.heads = graph.heads
+        self.by_id = graph.commits
+        self.contacts = {}
+        for root, c in graph_runtime.cards(graph, conn).items():
+            contact = Contact(root, c["members"], card=DEFAULTS | c["card"], trashed=c["trashed"], conflicts=c["conflicts"], is_me=c["is_me"])
+            contact.registers = {k:{} for k in contact.card}
+            self.contacts[root] = contact
+        self.by_member = {member:c for c in self.contacts.values() for member in c.members}
+        self.store = Store(conn)
+        # Native commits are exposed in the existing history UI as summaries, not
+        # exported as the obsolete contact-change replication protocol.
+        owner = {}
+        for eid,e in graph.edges.items():
+            if e["type"] in ("has_name","has_contact_point","has_note","subject_of","has_asset","has_preferences"):
+                owner[e["to"]] = e["from"]
+            elif e["type"] == "participant":
+                owner[e["from"]] = e["to"]
+        self.changes = []
+        for cid in graph.order:
+            commit = graph.commits[cid]
+            affected = set()
+            values = {}
+            for op in commit["operations"]:
+                target = op["target"]
+                if target in self.by_member: affected.add(target)
+                if target in owner: affected.add(owner[target])
+                edge = graph.edges.get(target)
+                if edge:
+                    affected.update(p for p in (edge["from"],edge["to"]) if p in self.by_member)
+                if op["kind"] == "set_property":
+                    field = op["payload"]["property"]
+                    value = op["payload"]["value"]
+                    if field == "card_metadata":
+                        values.update({k:v for k,v in (value or {}).items() if k not in LISTS})
+                    elif field == "body": values["notes"] = value
+                    elif field == "content": values["photo"] = "<photo>"
+                    elif field == "value":
+                        predicate = graph.value(target,"predicate")
+                        if predicate in ("birthday","organization","title"): values[predicate] = value
+                    else: values["name" if field == "display" else field] = value
+                elif op["kind"] == "create_object":
+                    p = op["payload"]["properties"]
+                    kind = op["payload"]["type"]
+                    if kind == "Name" and p.get("label") != "alias": values["name"] = p.get("display", "")
+                    elif kind == "Note" and p.get("origin") == "contact_card_notes": values["notes"] = p.get("body", "")
+                    elif kind == "Claim" and p.get("asserted_by") == "contact_card": values[p["predicate"]] = p.get("value", "")
+                    elif kind == "Asset" and p.get("role") == "contact_photo": values["photo"] = "<photo>"
+            if affected:
+                self.changes.append({"id":cid,"contact_uid":min(affected),"parents":commit["parents"],"values":values,"adds":{},"removes":{},"links":sorted(affected),"operations":commit["operations"],"graph_commit":commit})
+
+    def contact(self, uid):
+        return self.by_member.get(uid)
+
+    def past(self, heads):
+        return self.graph.past(heads)
+
+    def missing(self, heads):
+        known = self.graph.past(heads)
+        return [self.graph.commits[c] for c in self.graph.order if c not in known]
+
+    def merge_values(self, uids, card):
+        return card_values(card)
+
+    def edit(self, uid, card=None, **kwargs):
+        from .graph_runtime import plan_edit
+        commit = plan_edit(self.graph,uid,card,store=self.store,peer=self.store.peer,collection=self.store.collection,**kwargs)
+        if commit is None: return None
+        return {"id":commit["id"],"contact_uid":uid,"parents":commit["parents"],"values":card_values(card) if card else kwargs.get("values",{}),"adds":{"fields":(card or {}).get("fields",[])},"removes":{},"links":list(kwargs.get("links",())),"graph_commit":commit}
+
+
+def load(conn):
+    from . import graph_runtime
+    from .graph import Store
+    if not graph_runtime.enabled(conn): return _legacy_load(conn)
+    return GraphHistory(conn,Store(conn).load())
+
+
+def capture(conn):
+    from . import graph_runtime
+    if not graph_runtime.enabled(conn): return _legacy_capture(conn)
+    return GraphHistory(conn,graph_runtime.capture(conn))
+
+
+def receive(conn, changes):
+    from . import graph_runtime
+    from .graph import Store, transaction
+    if not graph_runtime.enabled(conn): return _legacy_receive(conn,changes)
+    if not isinstance(changes,list): raise ValueError("Invalid contact history list")
+    with transaction(conn):
+        graph_runtime.capture(conn)
+        store = Store(conn)
+        for change in changes:
+            if change is None: continue
+            if "graph_commit" in change:
+                store.receive([change["graph_commit"]],adopt=not store.load().commits)
+            elif "operations" in change and "collection" in change:
+                store.receive([change],adopt=not store.load().commits)
+            else:
+                # Queued old contact edits are translated once to native changes.
+                # A durable receipt prevents re-applying additions on retry.
+                prepare(conn)
+                if conn.execute("SELECT 1 FROM contact_changes WHERE id=?",(change.get("id"),)).fetchone(): continue
+                ordered([dict(change,parents=[])])
+                h = load(conn)
+                old = h.contact(change["contact_uid"])
+                card = dict(old.card) if old else {"name":change.get("values",{}).get("name","Unnamed person")}
+                card.update({k:v for k,v in change.get("values",{}).items() if not k.startswith("_")})
+                for key, additions in change.get("adds",{}).items():
+                    card[key] = list({encoded(v):v for v in card.get(key,[]) + additions}.values())
+                # Legacy list removals reference tagged additions in contact_changes.
+                # Reconstruct only that old history to resolve the exact removed value.
+                removal_values = {}
+                if change.get("removes"):
+                    legacy = History([json.loads(r[0]) for r in conn.execute("SELECT data FROM contact_changes")])
+                    for key,tags in change["removes"].items():
+                        c = legacy.contact(change["contact_uid"])
+                        if c:
+                            removal_values[key] = {encoded(c.tags.get(key,{}).get(tag)) for tag in tags}
+                    for key,gone in removal_values.items():
+                        card[key] = [v for v in card.get(key,[]) if encoded(v) not in gone]
+                commit = h.edit(change["contact_uid"],card,values=change.get("values",{}),trashed=change.get("values",{}).get("_trashed"),links=change.get("links",[]))
+                if commit: store.receive([commit["graph_commit"]])
+                conn.execute("INSERT INTO contact_changes VALUES (?,?)",(change["id"],encoded(change)))
+        graph = store.load()
+        graph_runtime.project(conn,graph)
+        return GraphHistory(conn,graph)
+
+
+def change(conn, uid, card=None, **kwargs):
+    from . import graph_runtime
+    if not graph_runtime.enabled(conn): return _legacy_change(conn,uid,card,**kwargs)
+    history = capture(conn)
+    commit = history.edit(uid,card,**kwargs)
+    return (receive(conn,[commit]) if commit else history), commit

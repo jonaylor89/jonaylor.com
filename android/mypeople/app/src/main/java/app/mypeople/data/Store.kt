@@ -30,6 +30,7 @@ data class DiskState(
     val offlineRevision: Long = 0,
     val journalSequence: Long = 0,
     val replica: ReplicaState = ReplicaState(),
+    val graph: GraphState? = null,
 )
 
 data class StoreState(
@@ -76,7 +77,7 @@ fun DiskState.receive(page: Changes): DiskState {
     )
 }
 
-/** One atomic JSON transaction contains the Mac's view, cursor AND outbox. No partial-page saves. */
+/** Durable local graph plus retained upgrade outbox; atomic typed checkpoints and journal deltas. */
 class Store(private val directory: File, private val startupTiming: (String, Long) -> Unit = { _, _ -> }) {
     private val mutex = Mutex()
     private val journal = StoreJournal(directory)
@@ -86,6 +87,7 @@ class Store(private val directory: File, private val startupTiming: (String, Lon
     private var viewRecords: Records? = null
     private var viewPending: List<PendingOp>? = null
     private var viewReplica: ReplicaState? = null
+    private var viewGraph: GraphState? = null
     private var view = Records()
     private var disk = DiskState()
     private var loaded = false
@@ -100,10 +102,24 @@ class Store(private val directory: File, private val startupTiming: (String, Lon
         return history
     }
     private fun current(): Records {
-        if (viewRecords !== disk.records || viewPending !== disk.pending || viewReplica !== disk.replica) {
+        if (viewRecords !== disk.records || viewPending !== disk.pending || viewReplica !== disk.replica || viewGraph !== disk.graph) {
             val base = optimistic(disk.records, disk.pending)
-            view = if (disk.replica.enabled) contactHistory().project(base, disk.replica.localIds) else base
-            viewRecords = disk.records; viewPending = disk.pending; viewReplica = disk.replica
+            view = disk.graph?.let { next ->
+                val gs = GraphStore(next)
+                val previous = viewGraph
+                val oldIds = previous?.bundle?.commits.orEmpty().map { it.id }.toSet()
+                val replaced = !next.bundle.commits.map { it.id }.toSet().containsAll(oldIds)
+                val changed = previous == null || replaced || previous.bundle.collection != next.bundle.collection || next.bundle.commits.filterNot { it.id in oldIds }.any { commit ->
+                    commit.operations.any { op ->
+                        val kind = gs.graph.objects[op.target]?.type ?: gs.graph.edges[op.target]?.type
+                        val bookkeeping = kind == "Person" && op.kind == "set_property" && op.payload.text("property") in setOf("card_metadata", "originals", "source_records")
+                        !bookkeeping && kind in setOf("Person", "Name", "ContactPoint", "same_person", "distinct_person")
+                    }
+                }
+                val projected = gs.project(computeDuplicates = changed, derived = base)
+                if (changed) projected else projected.copy(dupes = view.dupes)
+            } ?: if (disk.replica.enabled) contactHistory().project(base, disk.replica.localIds) else base
+            viewRecords = disk.records; viewPending = disk.pending; viewReplica = disk.replica; viewGraph = disk.graph
         }
         return view
     }
@@ -137,7 +153,7 @@ class Store(private val directory: File, private val startupTiming: (String, Lon
         else -> false
     }
     private fun publish() {
-        mutable.value = StoreState(records = shown(), pending = disk.pending, failedEdits = disk.failedEdits, lastSync = disk.lastSync, lastError = disk.lastError, notices = disk.notices, ready = loaded, offlineSource = disk.offlineSource, offlineRevision = disk.offlineRevision, replicatedContacts = disk.replica.enabled)
+        mutable.value = StoreState(records = shown(), pending = disk.pending, failedEdits = disk.failedEdits, lastSync = disk.lastSync, lastError = disk.lastError, notices = disk.notices, ready = loaded, offlineSource = disk.offlineSource, offlineRevision = disk.offlineRevision, replicatedContacts = disk.graph != null || disk.replica.enabled)
     }
     private fun load() {
         if (loaded) return
@@ -148,7 +164,7 @@ class Store(private val directory: File, private val startupTiming: (String, Lon
         disk = journal.load()
         startupTiming("disk", (System.nanoTime() - start) / 1_000_000)
         journal.cachedRecords?.let {
-            view = it; viewRecords = disk.records; viewPending = disk.pending; viewReplica = disk.replica
+            view = it; viewRecords = disk.records; viewPending = disk.pending; viewReplica = disk.replica; viewGraph = disk.graph
         }
         loaded = true
         val projectStart = System.nanoTime()
@@ -176,6 +192,10 @@ class Store(private val directory: File, private val startupTiming: (String, Lon
             if (!sameContactVersion(current, expectedPerson)) throw EditRejected("Contact changed during Android reconciliation. Neither version was overwritten.")
         }
         require(kind in opKinds) { "Unsupported operation" }
+        if (disk.graph != null) {
+            saveGraph(GraphStore(disk.graph!!).mutate(kind, payload))
+            return@locked
+        }
         if (disk.replica.enabled && kind in setOf("merge", "rename", "contact_trash", "contact_restore")) {
             val h = contactHistory()
             val person = current().people[payload.int("person_id")]
@@ -212,8 +232,13 @@ class Store(private val directory: File, private val startupTiming: (String, Lon
         require(target == null || target < 0 || person?.contact_uid?.isNotEmpty() == true) { "Sync with the updated Mac once to upgrade this contact before editing." }
         val localId = target ?: minOf(disk.nextLocalId, (current.people.keys.minOrNull() ?: 0).coerceAtMost(0) - 1)
         val uid = person?.contact_uid?.takeIf { it.isNotEmpty() } ?: newContactUid()
-        val standalone = disk.offlineSource == null && disk.cursor == 0L && disk.records.people.isEmpty() && disk.pending.isEmpty()
-        if (disk.replica.enabled || standalone) {
+        val standalone = disk.offlineSource == null && disk.cursor == 0L && disk.records.people.isEmpty() && disk.pending.isEmpty() && !disk.replica.enabled
+        if (disk.graph != null || standalone) {
+            val gs = GraphStore(disk.graph ?: GraphStore.empty())
+            saveGraph(gs.saveCard(uid, card.copy(user_edited = true), restore))
+            return@locked current().people.entries.first { uid == it.value.contact_uid || uid in it.value.contact_aliases }.key
+        }
+        if (disk.replica.enabled) {
             val c = contactHistory().edit(uid, card.copy(user_edited = true), trashed = if (restore) false else null)
             saveChange(c)
             return@locked current().people.entries.first { uid == it.value.contact_uid || uid in it.value.contact_aliases }.key
@@ -228,6 +253,27 @@ class Store(private val directory: File, private val startupTiming: (String, Lon
         val restoration = if (restore && person?.trashed == true) listOf(PendingOp(UUID.randomUUID().toString(), "contact_restore", buildJsonObject { put("person_id", localId); put("contact_uid", uid) }, created_at = op.created_at)) else emptyList()
         save(disk.copy(pending = disk.pending + restoration + op, nextLocalId = minOf(disk.nextLocalId, localId - 1)))
         localId
+    }
+    private fun saveGraph(next: GraphState) {
+        val indexed = GraphStore(next).indexed()
+        save(disk.copy(graph = indexed, nextLocalId = minOf(disk.nextLocalId, (indexed.localIds.values.minOrNull() ?: 0) - 1)))
+    }
+    suspend fun associations(uid: String): GraphSelection = locked {
+        GraphStore(requireNotNull(disk.graph) { "Sync with the graph-enabled CLI first." }).selection(uid)
+    }
+    suspend fun split(selection: GraphSelection, name: String, edges: List<String>): Int = locked {
+        val gs = GraphStore(requireNotNull(disk.graph))
+        require(selection.heads == gs.graph.heads) { "This contact changed. Reopen split and review the associations again." }
+        val split = gs.graph.split(selection.uid, name, edges)
+        saveGraph(gs.commit(split.operations))
+        disk.graph!!.localIds.getValue(split.person)
+    }
+    suspend fun resolveGraph(target: String, property: String, operation: String) = locked {
+        val gs = GraphStore(requireNotNull(disk.graph))
+        val choice = gs.graph.alternatives(target, property).firstOrNull { it.operation == operation }?.value
+            ?: if (property == "_lifecycle") gs.graph.deletionConflicts(target).firstOrNull { it.operation == operation }?.let { JsonPrimitive("active") } else null
+            ?: throw EditRejected("This conflict changed. Reopen it.")
+        saveGraph(gs.commit(listOf(gs.graph.edit(target, property, requireNotNull(choice) { "This conflict changed. Reopen it." }))))
     }
     private fun replicaState(h: ContactHistory, state: ReplicaState = disk.replica): ReplicaState {
         var next = disk.nextLocalId
@@ -244,6 +290,14 @@ class Store(private val directory: File, private val startupTiming: (String, Lon
         save(disk.copy(replica = replica, pending = disk.pending + op, nextLocalId = minOf(disk.nextLocalId, (replica.localIds.values.minOrNull() ?: 0) - 1)))
     }
     suspend fun resolveContact(uid: String, field: String, changeId: String) = locked {
+        if (disk.graph != null) {
+            val gs = GraphStore(disk.graph!!)
+            val conflict = gs.project().people.values.firstOrNull { it.contact_uid == uid }?.contact_conflicts?.get(field)?.firstOrNull { it.change == changeId }
+                ?: throw EditRejected("This conflict changed. Reopen it.")
+            val target = field.substringBefore('/'); val property = field.substringAfter('/')
+            saveGraph(gs.commit(listOf(gs.graph.edit(target, property, conflict.value))))
+            return@locked
+        }
         require(disk.replica.enabled) { "Pair with an updated CLI first." }
         val choice = contactHistory().contact(uid)?.conflicts?.get(field)?.firstOrNull { it.change == changeId }
             ?: throw EditRejected("This conflict has changed. Reopen the contact.")
@@ -252,15 +306,21 @@ class Store(private val directory: File, private val startupTiming: (String, Lon
     suspend fun retryFailed(clientId: String) = locked {
         val failed = requireNotNull(disk.failedEdits.firstOrNull { it.client_id == clientId }) { "This edit has already been recovered." }
         require(failed.kind == "relationship") { "Review this failed edit before recovering it." }
-        val retry = failed.copy(client_id = UUID.randomUUID().toString(), sent = false, completed = false, created_at = Instant.now().toString())
-        save(disk.copy(pending = disk.pending + retry, failedEdits = disk.failedEdits.filterNot { it.client_id == clientId }))
+        if (disk.graph != null) {
+            val next = GraphStore(GraphStore(disk.graph!!).mutate(failed.kind, failed.payload)).indexed()
+            save(disk.copy(graph = next, failedEdits = disk.failedEdits.filterNot { it.client_id == clientId }))
+        } else {
+            val retry = failed.copy(client_id = UUID.randomUUID().toString(), sent = false, completed = false, created_at = Instant.now().toString())
+            save(disk.copy(pending = disk.pending + retry, failedEdits = disk.failedEdits.filterNot { it.client_id == clientId }))
+        }
     }
     suspend fun dismissFailed(clientId: String) = locked { save(disk.copy(failedEdits = disk.failedEdits.filterNot { it.client_id == clientId })) }
     suspend fun snapshot(): DiskState = locked { disk }
     suspend fun restoreBackup(next: DiskState) = locked {
-        require(disk.pending.isEmpty()) { "Back up and sync this phone's pending edits before restoring." }
+        require(disk.pending.isEmpty() && disk.graph == null) { "Back up this phone's graph and sync its edits before restoring. Reset only after saving that backup." }
         // A new device must retry acknowledgments, not assume the old device delivered them.
-        save(next.copy(pending = next.pending.map { it.copy(sent = it.completed) }, lastError = null))
+        next.graph?.let { GraphStore(it) }
+        save(next.copy(graph = next.graph?.copy(peer = UUID.randomUUID().toString(), remoteHeads = emptyList()), pending = next.pending.map { it.copy(sent = it.completed) }, lastError = null))
     }
     suspend fun sent(ids: Set<String>) = locked {
         save(disk.copy(pending = disk.pending.map { if (it.client_id in ids) it.copy(sent = true) else it }))
@@ -298,6 +358,11 @@ class Store(private val directory: File, private val startupTiming: (String, Lon
     }
     suspend fun installOffline(snapshot: TransferManifest) = locked {
         Transfer.validate(snapshot)
+        if (snapshot.graph != null) {
+            installGraph(snapshot)
+            return@locked
+        }
+        require(disk.graph == null) { "This memory lacks graph history. Update the CLI; local graph edits have been retained." }
         require(snapshot.type == "snapshot") { "Choose a memory file from your Mac, not an edits file." }
         val sameSource = disk.offlineSource == snapshot.source
         require(sameSource || disk.pending.isEmpty() || standaloneQueue()) { "Export and acknowledge pending edits before switching databases or sync methods." }
@@ -328,18 +393,133 @@ class Store(private val directory: File, private val startupTiming: (String, Lon
             lastSync = Instant.now().toString(), lastError = null,
         ))
     }
+    /** Validate/merge/project/convert the legacy outbox before the single durable commit point. */
+    private fun installGraph(snapshot: TransferManifest) {
+        require(snapshot.type == "snapshot") { "Choose a memory snapshot, not edits." }
+        val incoming = requireNotNull(snapshot.graph)
+        val sameSource = disk.offlineSource == snapshot.source
+        require(snapshot.publisher == disk.replica.publisher || disk.replica.publisher == null || disk.pending.all { it.portable }) { "Finish queued legacy review requests with their original publisher before switching. All edits have been retained." }
+        require(sameSource || disk.offlineSource == null) { "This memory belongs to another database. Existing graph and queued edits have been retained." }
+        require(!sameSource || snapshot.publisher != disk.replica.publisher || snapshot.revision >= disk.offlineRevision) { "This memory file is older than this device's view." }
+        val oldView = current()
+        // Keep only rebuildable relationship inference, not a second copy of cards/facts.
+        val received = (if (snapshot.base_revision != null) disk.records else Records()).applyChanges(snapshot.records)
+        val derived = Records(people = received.people.mapValues { (_, p) -> Person("", contact_uid = p.contact_uid,
+            contact_aliases = p.contact_aliases, category = p.category, closeness = p.closeness,
+            cadence_days = p.cadence_days, trend = p.trend, days_365 = p.days_365, muted = p.muted) })
+        var local = disk.graph ?: GraphState(GraphBundle(incoming.collection))
+        if (local.bundle.collection != incoming.collection) {
+            require(disk.offlineSource == null) { "Cannot join different graph collections." }
+            // File import is an explicit first join, just like confirmed QR pairing.
+            journal.preserveGraphJoin(local.bundle.collection)
+            local = GraphStore(local).rehome(incoming.collection)
+        }
+        var merged = GraphStore(local).receive(incoming)
+        var gs = GraphStore(merged)
+        val idMap = merged.localIds.toMutableMap()
+        val used = idMap.values.toMutableSet()
+        gs.graph.objects.filterValues { it.type == "Person" }.keys.sorted().forEach { uid ->
+            val old = oldView.people.entries.firstOrNull { (_, p) -> p.contact_uid == uid || p.contact_uid == gs.text(uid, "legacy_contact_uid") }
+            val remoteId = gs.text(uid, "legacy_id").toIntOrNull()
+            val preferred = old?.key ?: remoteId
+            if (uid !in idMap && preferred != null && preferred !in used) { idMap[uid] = preferred; used += preferred }
+        }
+        merged = GraphStore(merged.copy(localIds = idMap)).indexed()
+        gs = GraphStore(merged)
+        val newView = gs.project()
+        fun resolve(oldUid: String, oldId: Int?): String? {
+            val old = oldView.people[oldId] ?: oldView.people.values.firstOrNull { it.contact_uid == oldUid || oldUid in it.contact_aliases }
+            return newView.people.values.firstOrNull { it.contact_uid == oldUid || oldUid in it.contact_aliases }?.contact_uid
+                ?: gs.graph.objects.filterValues { it.type == "Person" }.keys.firstOrNull { id ->
+                    (oldUid.isNotEmpty() && gs.text(id, "legacy_contact_uid") == oldUid) || (old != null && gs.text(id, "legacy_id").toIntOrNull() == oldId)
+                }?.let { found -> newView.people.values.firstOrNull { it.contact_uid == found || found in it.contact_aliases }?.contact_uid }
+        }
+        val results = snapshot.results.associateBy { it.client_id }
+        val retained = mutableListOf<PendingOp>(); val failed = disk.failedEdits.toMutableList(); val notices = disk.notices.toMutableList()
+        var migrated = 0
+        disk.pending.forEach { op ->
+            val receipt = results[op.client_id]
+            if (receipt?.status == "done") return@forEach
+            if (receipt?.status == "failed") { failed += op; notices += Notice(message = receipt.message ?: "A legacy edit needs review; its full payload was retained."); return@forEach }
+            val p = op.payload.toMutableMap()
+            val rowId = op.payload.int("person_id") ?: op.payload.int("local_id") ?: when (op.kind) {
+                "profile_status" -> oldView.profiles[op.payload.text("profile_id")]?.person_id
+                "moment_status" -> oldView.moments[op.payload.text("key")]?.person_id
+                "event_forget" -> oldView.events[op.payload.text("event_id")]?.person_id
+                else -> null
+            }
+            val uid = resolve(op.payload.text("contact_uid").ifBlank { oldView.people[rowId]?.contact_uid.orEmpty() }, rowId)
+            if (op.kind == "event_forget") oldView.events[op.payload.text("event_id")]?.let { old ->
+                p["type"] = JsonPrimitive(old.type); p["value"] = JsonPrimitive(old.value); p["date"] = JsonPrimitive(old.date)
+            }
+            if (uid != null) p["contact_uid"] = JsonPrimitive(uid)
+            if (op.kind in setOf("merge", "distinct")) {
+                val uids = op.payload.ids().mapNotNull { resolve(oldView.people[it]?.contact_uid.orEmpty(), it) }
+                val ids = uids.mapNotNull { target -> GraphStore(merged).project().people.entries.firstOrNull { it.value.contact_uid == target || target in it.value.contact_aliases }?.key }
+                if (ids.size == op.payload.ids().size) p["person_ids"] = JsonArray(ids.map(::JsonPrimitive))
+                else { retained += op; return@forEach }
+            }
+            // Stable graph ids replace SQL ids for review items. Match the original displayed item exactly.
+            if (op.kind == "profile_status") {
+                val profile = oldView.profiles[op.payload.text("profile_id")]
+                val target = GraphStore(merged).project().profiles.entries.firstOrNull { it.value.url == profile?.url && GraphStore(merged).project().people[it.value.person_id]?.contact_uid == uid }?.key
+                if (target != null) p["profile_id"] = JsonPrimitive(target)
+            }
+            if (op.kind == "moment_status") {
+                val moment = oldView.moments[op.payload.text("key")]
+                val target = GraphStore(merged).project().moments.entries.firstOrNull { it.value.kind == moment?.kind && it.value.surfaced_on == moment.surfaced_on && it.value.reason == moment.reason }?.key
+                if (target != null) p["key"] = JsonPrimitive(target)
+            }
+            val converted = runCatching {
+                if (op.kind == "contact_change") {
+                    val changed = oldView.people.values.firstOrNull { it.contact_uid == op.payload.text("contact_uid") || op.payload.text("contact_uid") in it.contact_aliases }
+                        ?: throw EditRejected("Legacy contact history needs sync")
+                    val target = uid ?: throw EditRejected("Legacy contact attribution needs sync")
+                    var next = GraphStore(merged).saveCard(target, changed.contactCard(), !changed.trashed)
+                    if (changed.trashed) next = GraphStore(next).mutate("contact_trash", buildJsonObject { put("contact_uid", target) })
+                    val links = (op.payload["links"] as? JsonArray).orEmpty().map { it.jsonPrimitive.content }
+                    val linked = links.map { resolve(it, null) ?: throw EditRejected("Legacy merge attribution needs sync") }.distinct()
+                    if (linked.size > 1) next = GraphStore(next).commit(linked.drop(1).map { VersionedGraph.createEdge("same_person", linked.first(), it) })
+                    next
+                } else GraphStore(merged).mutate(op.kind, JsonObject(p))
+            }
+            converted.onSuccess { merged = it; migrated++ }.onFailure { retained += op.copy(sent = false) }
+        }
+        merged = GraphStore(merged).indexed()
+        if (migrated > 0) notices += Notice(message = "$migrated queued legacy edits were committed into local graph history.")
+        if (retained.isNotEmpty()) notices += Notice(message = "${retained.size} legacy requests remain queued for the Mac; nothing was discarded.")
+        save(disk.copy(graph = merged, pending = retained, failedEdits = failed, notices = notices, records = derived,
+            offlineSource = snapshot.source, offlineRevision = snapshot.revision, cursor = 0,
+            replica = disk.replica.copy(publisher = snapshot.publisher), lastSync = Instant.now().toString(), lastError = null))
+    }
     suspend fun exportOffline(): TransferManifest = locked {
         val source = requireNotNull(disk.offlineSource) { "Import a memory file from your Mac first." }
         editsManifest(source, disk.offlineRevision, disk.pending, null, true).copy(publisher = disk.replica.publisher)
     }
-    suspend fun bluetoothEdits(source: String, publisher: String? = null): TransferManifest = locked {
+    suspend fun bluetoothEdits(source: String, publisher: String? = null, graphCollection: String? = null): TransferManifest = locked {
         UUID.fromString(source)
+        graphCollection?.let { target ->
+            require(UUID.fromString(target).toString() == target)
+            disk.graph?.let { existing ->
+                if (existing.bundle.collection != target) {
+                    require(disk.offlineSource == null && existing.remoteHeads.isEmpty()) { "This phone already belongs to another graph collection. Its history has been retained." }
+                    journal.preserveGraphJoin(existing.bundle.collection)
+                    val joined = GraphStore(GraphStore(existing).rehome(target)).indexed()
+                    save(disk.copy(graph = joined, offlineSource = source, offlineRevision = 0, replica = disk.replica.copy(publisher = publisher)))
+                }
+            }
+        }
         val sameSource = disk.offlineSource == source
         require(publisher == null || disk.replica.publisher == null || publisher == disk.replica.publisher || disk.pending.all { it.portable }) { "Finish the queued profile and review decisions with the Mac they came from, then sync here." }
         require(sameSource || disk.pending.isEmpty() || standaloneQueue()) { "These queued edits belong to another database or sync method. Acknowledge them there before switching." }
         editsManifest(source, if (sameSource) disk.offlineRevision else 0, if (sameSource || standaloneQueue()) disk.pending else emptyList(), publisher, sameSource || standaloneQueue())
     }
     private fun editsManifest(source: String, revision: Long, ops: List<PendingOp>, publisher: String?, includeHistory: Boolean): TransferManifest {
+        disk.graph?.let { gs ->
+            require(includeHistory) { "Sync this collection before switching databases; graph edits have been retained." }
+            return TransferManifest(type = "edits", source = source, revision = revision, publisher = publisher, created_at = Instant.now().toString(), ops = ops,
+                graph = if (publisher != null && publisher == disk.replica.publisher) GraphStore(gs).outbound() else gs.bundle)
+        }
         val h = contactHistory()
         val enabled = disk.replica.enabled && includeHistory
         val samePeer = publisher != null && publisher == disk.replica.publisher && includeHistory
@@ -349,6 +529,7 @@ class Store(private val directory: File, private val startupTiming: (String, Lon
             record_hashes = if (samePeer) disk.replica.recordHashes else emptyMap())
     }
     suspend fun reset() = locked {
+        require(disk.graph == null) { "Graph history is durable. Export a backup before switching; reset cannot discard local commits." }
         require(disk.pending.isEmpty() || standaloneQueue()) { "Wait for pending edits before switching devices." }
         save(DiskState(pending = if (standaloneQueue()) disk.pending else emptyList(), replica = if (standaloneQueue()) disk.replica else ReplicaState(), nextLocalId = disk.nextLocalId, failedEdits = disk.failedEdits))
     }

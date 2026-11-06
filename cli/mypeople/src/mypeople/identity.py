@@ -188,6 +188,10 @@ def merge(conn: sqlite3.Connection, keep_id: int, drop_id: int) -> None:
     """Fold drop_id into keep_id. The dropped row stays as a redirect."""
     if keep_id == drop_id:
         return
+    from . import graph_runtime
+    if graph_runtime.enabled(conn):
+        graph_runtime.merge(conn, [keep_id, drop_id], preferred=keep_id)
+        return
     from .db import normalize_profiles, sync_legacy_extraction
 
     # Pin down what's already been read for both before their histories combine.

@@ -35,6 +35,7 @@ data class TransferManifest(
     val record_hashes: Map<String, String> = emptyMap(),
     val photo_hashes: List<String> = emptyList(),
     val contact_wire: Int = 1,
+    val graph: GraphBundle? = null,
 )
 
 /** Portable format shared with Python transfer.py. No credentials in filenames or Intents. */
@@ -84,6 +85,7 @@ object Transfer {
 
     fun unpack(plain: ByteArray, photo: (String, ByteArray) -> Unit = { _, _ -> }): TransferManifest {
         var manifest: TransferManifest? = null
+        var graph: GraphBundle? = null
         var total = 0L
         val names = mutableSetOf<String>()
         ZipInputStream(ByteArrayInputStream(plain)).use { zip ->
@@ -91,11 +93,12 @@ object Transfer {
                 val entry = zip.nextEntry ?: break
                 require(names.add(entry.name) && names.size <= 10_000 && !entry.isDirectory) { "Invalid transfer archive." }
                 val match = photoName.matchEntire(entry.name)
-                require(entry.name == "manifest.json" || match != null) { "Unexpected file in transfer archive." }
-                val bytes = readLimited(zip, if (match != null) 10 * 1024 * 1024 else 32 * 1024 * 1024)
+                require(entry.name in setOf("manifest.json", "graph.json") || match != null) { "Unexpected file in transfer archive." }
+                val bytes = readLimited(zip, if (entry.name == "graph.json") MAX_EXPANDED else if (match != null) 10 * 1024 * 1024 else 32 * 1024 * 1024)
                 total += bytes.size
                 require(total <= MAX_EXPANDED) { "Transfer exceeds the safe size limit." }
-                if (match == null) manifest = ContactWire.decode(json.parseToJsonElement(bytes.toString(Charsets.UTF_8)).jsonObject)
+                if (entry.name == "graph.json") graph = VersionedGraph.wire.decodeFromString<GraphBundle>(bytes.toString(Charsets.UTF_8))
+                else if (match == null) manifest = ContactWire.decode(json.parseToJsonElement(bytes.toString(Charsets.UTF_8)).jsonObject)
                 else {
                     val hash = match.groupValues[1]
                     val actual = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
@@ -104,12 +107,21 @@ object Transfer {
                 }
             }
         }
-        return requireNotNull(manifest) { "No memory manifest in this file." }.also { validate(it) }
+        val result = requireNotNull(manifest) { "No memory manifest in this file." }
+        require(result.graph == null) { "Graph must be stored in graph.json" }
+        return result.copy(graph = graph).also { validate(it) }
     }
 
     fun validate(manifest: TransferManifest) {
         require(manifest.format == 1 && manifest.type in setOf("snapshot", "edits")) { "Unsupported transfer format." }
         UUID.fromString(manifest.source)
+        manifest.graph?.let { bundle ->
+            UUID.fromString(bundle.collection)
+            require(bundle.heads.distinct().size == bundle.heads.size)
+            bundle.heads.forEach { UUID.fromString(it) }
+            // Delta ancestry is validated atomically with the durable local graph on receive.
+            require(bundle.commits.all { it.collection == bundle.collection })
+        }
         manifest.publisher?.let { UUID.fromString(it) }
         require(manifest.records.size <= 100_000 && manifest.ops.size <= 10_000 && manifest.results.size <= 100_000) { "Transfer contains too many records." }
         require(manifest.records.map { it.kind to it.id }.toSet().size == manifest.records.size) { "Duplicate records in transfer." }
@@ -127,10 +139,16 @@ object Transfer {
         val out = ByteArrayOutputStream()
         ZipOutputStream(out).use { zip ->
             zip.putNextEntry(ZipEntry("manifest.json"))
-            val bytes = ContactWire.encode(manifest).toString().toByteArray(Charsets.UTF_8)
+            val bytes = ContactWire.encode(manifest.copy(graph = null)).toString().toByteArray(Charsets.UTF_8)
             require(bytes.size <= 32 * 1024 * 1024) { "Transfer manifest exceeds 32 MiB. Contact history has not been truncated." }
             zip.write(bytes)
             zip.closeEntry()
+            manifest.graph?.let { graph ->
+                zip.putNextEntry(ZipEntry("graph.json"))
+                val graphBytes = VersionedGraph.wire.encodeToString(GraphBundle.serializer(), graph).toByteArray(Charsets.UTF_8)
+                require(graphBytes.size.toLong() + bytes.size <= MAX_EXPANDED) { "Graph transfer too large; nothing has been truncated." }
+                zip.write(graphBytes); zip.closeEntry()
+            }
         }
         return out.toByteArray()
     }

@@ -352,6 +352,16 @@ final class AppModel {
         return try await client.call(method, encoding: params)
     }
 
+    func contactAssociations(uid: String) async throws -> ContactAssociations {
+        guard isReady, let client else { throw EngineError.stopped }
+        return try await client.contactAssociations(uid: uid)
+    }
+
+    func splitContact(_ request: ContactSplitRequest) async throws -> ContactSplitReply {
+        guard isReady, let client else { throw EngineError.stopped }
+        return try await client.splitContact(request)
+    }
+
     /// Runs an action whose failure belongs in a notice rather than on a particular form.
     func perform(_ action: @escaping @MainActor () async throws -> Void) {
         Task {
@@ -439,6 +449,16 @@ final class AppModel {
     func open(_ id: Int) {
         guard let person = records.people[id] else { return }
         paths[screen, default: []].append(PersonRoute(id: id, uid: person.contactUid))
+    }
+
+    /// Split replies carry the new identity; do not depend on a list selection or name lookup.
+    func openSplitContact(_ reply: ContactSplitReply) {
+        if screen == .people {
+            selectedPeople = [reply.personId]
+        } else {
+            paths[screen, default: []].append(PersonRoute(id: reply.personId, uid: reply.contactUid))
+        }
+        show("Created a separate contact. Only the selected associations were moved.")
     }
 
     func setBackend(_ backend: String) {

@@ -1,372 +1,375 @@
 {
- "protocol": 3,
- "records": [
-  {
-   "data": {
-    "clues": [
-     "Only the first name matches; check the details"
-    ],
-    "person_ids": [
-     1,
-     2
-    ]
-   },
-   "id": "1-2",
-   "kind": "dupes"
-  },
-  {
-   "data": {
-    "confidence": 1.0,
-    "created_at": "2026-11-05 14:45:55",
-    "date": "1843",
-    "evidence": null,
-    "person_id": 1,
-    "said_at": "2026-11-05 14:45:55",
-    "source": "manual",
-    "type": "job",
-    "value": "Analyst"
-   },
-   "id": "1",
-   "kind": "event"
-  },
-  {
-   "data": {
-    "confidence": 0.9,
-    "created_at": "2026-11-05 14:45:55",
-    "date": "2026-11-08",
-    "evidence": "a quote",
-    "person_id": 2,
-    "said_at": "2026-11-05 14:45:55",
-    "source": "imessage",
-    "type": "plan",
-    "value": "Visit the engine"
-   },
-   "id": "2",
-   "kind": "event"
-  },
-  {
-   "data": {
-    "confidence": 1.0,
-    "created_at": "2026-11-05 14:45:55",
-    "date": "1906-11-05",
-    "evidence": null,
-    "person_id": 3,
-    "said_at": "2026-11-05 14:45:55",
-    "source": "vcard",
-    "type": "birthday",
-    "value": "Birthday"
-   },
-   "id": "3",
-   "kind": "event"
-  },
-  {
-   "data": {
-    "confidence": 1.0,
-    "created_at": "2026-11-05 14:45:55",
-    "date": "--12-25",
-    "evidence": null,
-    "person_id": 2,
-    "said_at": "2026-11-05 14:45:55",
-    "source": "manual",
-    "type": "birthday",
-    "value": "Birthday"
-   },
-   "id": "4",
-   "kind": "event"
-  },
-  {
-   "data": {
-    "context": "You haven't talked in any connected source.",
-    "kind": "birthday",
-    "person_id": 3,
-    "reason": "Grace Hopper's birthday is today.",
-    "score": 0.21,
-    "status": "new",
-    "surfaced_on": "2026-11-05"
-   },
-   "id": "birthday:3:2026",
-   "kind": "moment"
-  },
-  {
-   "data": {
-    "context": "Context",
-    "kind": "upcoming",
-    "person_id": 2,
-    "reason": "A reason",
-    "score": 0.9,
-    "status": "new",
-    "surfaced_on": "2026-11-05"
-   },
-   "id": "m:1",
-   "kind": "moment"
-  },
-  {
-   "data": {
-    "context": "Last talked 9 days ago.",
-    "kind": "upcoming",
-    "person_id": 2,
-    "reason": "Ada: Visit the engine, on Sunday.",
-    "score": 0.2853462857142857,
-    "status": "new",
-    "surfaced_on": "2026-11-05"
-   },
-   "id": "upcoming:2",
-   "kind": "moment"
-  },
-  {
-   "data": {
-    "aliases": [],
-    "avatar_path": null,
-    "cadence_days": null,
-    "can_undo_merge": false,
-    "card": {
-     "birthday": "",
-     "family": "",
-     "favorite": false,
-     "fields": [
-      {
-       "kind": "email",
-       "label": "Home",
-       "preferred": false,
-       "region": "",
-       "structured": "",
-       "value": "ada@example.test"
-      }
-     ],
-     "given": "",
-     "legacy_unverified": false,
-     "middle": "",
-     "name": "Ada Lovelace",
-     "notes": "",
-     "organization": "",
-     "phonetic": "",
-     "preferred_channel": "",
-     "prefix": "",
-     "region": "GB",
-     "suffix": "",
-     "title": "",
-     "user_edited": false
-    },
-    "category": "unknown",
-    "channels": [
-     {
-      "channel": "imessage",
-      "count": 1
-     }
-    ],
-    "closeness": 0.3,
-    "contact_aliases": [],
-    "contact_conflicts": {},
-    "contact_uid": "2cdfd8e7-3c57-4a25-9c71-423f9f280834",
-    "days_365": 1,
-    "first_contact": "2026-11-05 09:00:00",
-    "identifiers": [],
-    "last_contact": "2026-11-05 09:00:00",
-    "muted": false,
-    "name": "Ada Lovelace",
-    "photo": null,
-    "trashed": false,
-    "trend": "new"
-   },
-   "id": "1",
-   "kind": "person"
-  },
-  {
-   "data": {
-    "aliases": [],
-    "avatar_path": null,
-    "cadence_days": null,
-    "can_undo_merge": false,
-    "card": {
-     "birthday": "",
-     "family": "",
-     "favorite": false,
-     "fields": [
-      {
-       "dial": "+442079460000",
-       "dial_ext": "",
-       "kind": "phone",
-       "label": "Mobile",
-       "preferred": false,
-       "region": "",
-       "structured": "",
-       "value": "+442079460000"
-      }
-     ],
-     "given": "",
-     "legacy_unverified": false,
-     "middle": "",
-     "name": "Ada",
-     "notes": "from the phone",
-     "organization": "",
-     "phonetic": "",
-     "preferred_channel": "",
-     "prefix": "",
-     "region": "GB",
-     "suffix": "",
-     "title": "",
-     "user_edited": false
-    },
-    "category": "unknown",
-    "channels": [
-     {
-      "channel": "whatsapp",
-      "count": 1
-     }
-    ],
-    "closeness": 0.29,
-    "contact_aliases": [],
-    "contact_conflicts": {
-     "notes": [
-      {
-       "change": "2ce823e7-d231-475f-bea9-995a58be58c0",
-       "value": "from the Mac"
+  "protocol": 4,
+  "records": [
+    {
+      "data": {
+        "clues": [
+          "Only the first name matches; check the details"
+        ],
+        "person_ids": [
+          1,
+          2
+        ]
       },
-      {
-       "change": "74515cb7-f2ee-48d2-bd7f-de6cb4b06d70",
-       "value": "from the phone"
-      }
-     ]
+      "id": "1-2",
+      "kind": "dupes"
     },
-    "contact_uid": "1015b209-0a34-430b-ae77-28db88af362d",
-    "days_365": 1,
-    "first_contact": "2026-10-27 09:00:00",
-    "identifiers": [],
-    "last_contact": "2026-10-27 09:00:00",
-    "muted": false,
-    "name": "Ada",
-    "photo": null,
-    "trashed": false,
-    "trend": "new"
-   },
-   "id": "2",
-   "kind": "person"
-  },
-  {
-   "data": {
-    "aliases": [],
-    "avatar_path": null,
-    "cadence_days": null,
-    "can_undo_merge": false,
-    "card": {
-     "birthday": "",
-     "family": "",
-     "favorite": false,
-     "fields": [
-      {
-       "kind": "website",
-       "label": "",
-       "preferred": false,
-       "region": "",
-       "structured": "",
-       "value": "https://example.test/grace"
-      }
-     ],
-     "given": "",
-     "legacy_unverified": false,
-     "middle": "",
-     "name": "Grace Hopper",
-     "notes": "",
-     "organization": "",
-     "phonetic": "",
-     "preferred_channel": "",
-     "prefix": "",
-     "region": "GB",
-     "suffix": "",
-     "title": "",
-     "user_edited": false
+    {
+      "data": {
+        "confidence": 1,
+        "created_at": "2026-11-05 14:45:55",
+        "date": "1843",
+        "evidence": null,
+        "person_id": 1,
+        "said_at": "2026-11-05 14:45:55",
+        "source": "manual",
+        "type": "job",
+        "value": "Analyst"
+      },
+      "id": "1",
+      "kind": "event"
     },
-    "category": "unknown",
-    "channels": [],
-    "closeness": 0.0,
-    "contact_aliases": [],
-    "contact_conflicts": {},
-    "contact_uid": "00fa7e21-0b53-472d-80ca-4d8372d0ae2a",
-    "days_365": 0,
-    "first_contact": null,
-    "identifiers": [],
-    "last_contact": null,
-    "muted": false,
-    "name": "Grace Hopper",
-    "photo": null,
-    "trashed": false,
-    "trend": "none"
-   },
-   "id": "3",
-   "kind": "person"
-  },
-  {
-   "data": {
-    "aliases": [],
-    "avatar_path": "/Users/example/.mypeople/alan.jpg",
-    "cadence_days": null,
-    "can_undo_merge": false,
-    "card": {
-     "birthday": "",
-     "family": "",
-     "favorite": false,
-     "fields": [],
-     "given": "",
-     "legacy_unverified": false,
-     "middle": "",
-     "name": "Alan Turing",
-     "notes": "",
-     "organization": "",
-     "phonetic": "",
-     "preferred_channel": "",
-     "prefix": "",
-     "region": "GB",
-     "suffix": "",
-     "title": "",
-     "user_edited": false
+    {
+      "data": {
+        "confidence": 0.9,
+        "created_at": "2026-11-05 14:45:55",
+        "date": "2026-11-08",
+        "evidence": "a quote",
+        "person_id": 2,
+        "said_at": "2026-11-05 14:45:55",
+        "source": "imessage",
+        "type": "plan",
+        "value": "Visit the engine"
+      },
+      "id": "2",
+      "kind": "event"
     },
-    "category": "unknown",
-    "channels": [],
-    "closeness": 0.0,
-    "contact_aliases": [],
-    "contact_conflicts": {},
-    "contact_uid": "98ec2cb7-d400-488c-b626-024c7ae277d4",
-    "days_365": 0,
-    "first_contact": null,
-    "identifiers": [],
-    "last_contact": null,
-    "muted": false,
-    "name": "Alan Turing",
-    "photo": "27e7b6bfddf68c3cb65174b43a0aa41555aeed1d95b10d82cc49845850b0613d",
-    "trashed": false,
-    "trend": "none"
-   },
-   "id": "4",
-   "kind": "person"
-  },
-  {
-   "data": {
-    "assessment": "supported",
-    "confidence": 0.8,
-    "person_id": 1,
-    "reason": "Matches",
-    "site": "github",
-    "status": "suggested",
-    "title": "Ada",
-    "url": "https://github.com/ada"
-   },
-   "id": "1",
-   "kind": "profile"
-  },
-  {
-   "data": {
-    "assessment": "supported",
-    "confidence": 1.0,
-    "person_id": 3,
-    "reason": "Yours",
-    "site": "github",
-    "status": "confirmed",
-    "title": "Grace",
-    "url": "https://github.com/grace"
-   },
-   "id": "2",
-   "kind": "profile"
-  }
- ],
- "version": 1
+    {
+      "data": {
+        "confidence": 1,
+        "created_at": "2026-11-05 14:45:55",
+        "date": "1906-11-05",
+        "evidence": null,
+        "person_id": 3,
+        "said_at": "2026-11-05 14:45:55",
+        "source": "vcard",
+        "type": "birthday",
+        "value": "Birthday"
+      },
+      "id": "3",
+      "kind": "event"
+    },
+    {
+      "data": {
+        "confidence": 1,
+        "created_at": "2026-11-05 14:45:55",
+        "date": "--12-25",
+        "evidence": null,
+        "person_id": 2,
+        "said_at": "2026-11-05 14:45:55",
+        "source": "manual",
+        "type": "birthday",
+        "value": "Birthday"
+      },
+      "id": "4",
+      "kind": "event"
+    },
+    {
+      "data": {
+        "context": "You haven't talked in any connected source.",
+        "kind": "birthday",
+        "person_id": 3,
+        "reason": "Grace Hopper's birthday is today.",
+        "score": 0.21,
+        "status": "new",
+        "surfaced_on": "2026-11-05"
+      },
+      "id": "birthday:3:2026",
+      "kind": "moment"
+    },
+    {
+      "data": {
+        "context": "Context",
+        "kind": "upcoming",
+        "person_id": 2,
+        "reason": "A reason",
+        "score": 0.9,
+        "status": "new",
+        "surfaced_on": "2026-11-05"
+      },
+      "id": "m:1",
+      "kind": "moment"
+    },
+    {
+      "data": {
+        "context": "Last talked 9 days ago.",
+        "kind": "upcoming",
+        "person_id": 2,
+        "reason": "Ada: Visit the engine, on Sunday.",
+        "score": 0.2853462857142857,
+        "status": "new",
+        "surfaced_on": "2026-11-05"
+      },
+      "id": "upcoming:2",
+      "kind": "moment"
+    },
+    {
+      "data": {
+        "aliases": [],
+        "avatar_path": null,
+        "cadence_days": null,
+        "can_undo_merge": false,
+        "card": {
+          "birthday": "",
+          "family": "",
+          "favorite": false,
+          "fields": [
+            {
+              "kind": "email",
+              "label": "Home",
+              "preferred": false,
+              "region": "",
+              "structured": "",
+              "value": "ada@example.test",
+              "object_id": "00000000-0000-4000-8000-000000000001"
+            }
+          ],
+          "given": "",
+          "legacy_unverified": false,
+          "middle": "",
+          "name": "Ada Lovelace",
+          "notes": "",
+          "organization": "",
+          "phonetic": "",
+          "preferred_channel": "",
+          "prefix": "",
+          "region": "GB",
+          "suffix": "",
+          "title": "",
+          "user_edited": false
+        },
+        "category": "unknown",
+        "channels": [
+          {
+            "channel": "imessage",
+            "count": 1
+          }
+        ],
+        "closeness": 0.3,
+        "contact_aliases": [],
+        "contact_conflicts": {},
+        "contact_uid": "2cdfd8e7-3c57-4a25-9c71-423f9f280834",
+        "days_365": 1,
+        "first_contact": "2026-11-05 09:00:00",
+        "identifiers": [],
+        "last_contact": "2026-11-05 09:00:00",
+        "muted": false,
+        "name": "Ada Lovelace",
+        "photo": null,
+        "trashed": false,
+        "trend": "new"
+      },
+      "id": "1",
+      "kind": "person"
+    },
+    {
+      "data": {
+        "aliases": [],
+        "avatar_path": null,
+        "cadence_days": null,
+        "can_undo_merge": false,
+        "card": {
+          "birthday": "",
+          "family": "",
+          "favorite": false,
+          "fields": [
+            {
+              "dial": "+442079460000",
+              "dial_ext": "",
+              "kind": "phone",
+              "label": "Mobile",
+              "preferred": false,
+              "region": "",
+              "structured": "",
+              "value": "+442079460000",
+              "object_id": "00000000-0000-4000-8000-000000000002"
+            }
+          ],
+          "given": "",
+          "legacy_unverified": false,
+          "middle": "",
+          "name": "Ada",
+          "notes": "from the phone",
+          "organization": "",
+          "phonetic": "",
+          "preferred_channel": "",
+          "prefix": "",
+          "region": "GB",
+          "suffix": "",
+          "title": "",
+          "user_edited": false
+        },
+        "category": "unknown",
+        "channels": [
+          {
+            "channel": "whatsapp",
+            "count": 1
+          }
+        ],
+        "closeness": 0.29,
+        "contact_aliases": [],
+        "contact_conflicts": {
+          "notes": [
+            {
+              "change": "2ce823e7-d231-475f-bea9-995a58be58c0",
+              "value": "from the Mac"
+            },
+            {
+              "change": "74515cb7-f2ee-48d2-bd7f-de6cb4b06d70",
+              "value": "from the phone"
+            }
+          ]
+        },
+        "contact_uid": "1015b209-0a34-430b-ae77-28db88af362d",
+        "days_365": 1,
+        "first_contact": "2026-10-27 09:00:00",
+        "identifiers": [],
+        "last_contact": "2026-10-27 09:00:00",
+        "muted": false,
+        "name": "Ada",
+        "photo": null,
+        "trashed": false,
+        "trend": "new"
+      },
+      "id": "2",
+      "kind": "person"
+    },
+    {
+      "data": {
+        "aliases": [],
+        "avatar_path": null,
+        "cadence_days": null,
+        "can_undo_merge": false,
+        "card": {
+          "birthday": "",
+          "family": "",
+          "favorite": false,
+          "fields": [
+            {
+              "kind": "website",
+              "label": "",
+              "preferred": false,
+              "region": "",
+              "structured": "",
+              "value": "https://example.test/grace",
+              "object_id": "00000000-0000-4000-8000-000000000003"
+            }
+          ],
+          "given": "",
+          "legacy_unverified": false,
+          "middle": "",
+          "name": "Grace Hopper",
+          "notes": "",
+          "organization": "",
+          "phonetic": "",
+          "preferred_channel": "",
+          "prefix": "",
+          "region": "GB",
+          "suffix": "",
+          "title": "",
+          "user_edited": false
+        },
+        "category": "unknown",
+        "channels": [],
+        "closeness": 0,
+        "contact_aliases": [],
+        "contact_conflicts": {},
+        "contact_uid": "00fa7e21-0b53-472d-80ca-4d8372d0ae2a",
+        "days_365": 0,
+        "first_contact": null,
+        "identifiers": [],
+        "last_contact": null,
+        "muted": false,
+        "name": "Grace Hopper",
+        "photo": null,
+        "trashed": false,
+        "trend": "none"
+      },
+      "id": "3",
+      "kind": "person"
+    },
+    {
+      "data": {
+        "aliases": [],
+        "avatar_path": "/Users/example/.mypeople/alan.jpg",
+        "cadence_days": null,
+        "can_undo_merge": false,
+        "card": {
+          "birthday": "",
+          "family": "",
+          "favorite": false,
+          "fields": [],
+          "given": "",
+          "legacy_unverified": false,
+          "middle": "",
+          "name": "Alan Turing",
+          "notes": "",
+          "organization": "",
+          "phonetic": "",
+          "preferred_channel": "",
+          "prefix": "",
+          "region": "GB",
+          "suffix": "",
+          "title": "",
+          "user_edited": false
+        },
+        "category": "unknown",
+        "channels": [],
+        "closeness": 0,
+        "contact_aliases": [],
+        "contact_conflicts": {},
+        "contact_uid": "98ec2cb7-d400-488c-b626-024c7ae277d4",
+        "days_365": 0,
+        "first_contact": null,
+        "identifiers": [],
+        "last_contact": null,
+        "muted": false,
+        "name": "Alan Turing",
+        "photo": "27e7b6bfddf68c3cb65174b43a0aa41555aeed1d95b10d82cc49845850b0613d",
+        "trashed": false,
+        "trend": "none"
+      },
+      "id": "4",
+      "kind": "person"
+    },
+    {
+      "data": {
+        "assessment": "supported",
+        "confidence": 0.8,
+        "person_id": 1,
+        "reason": "Matches",
+        "site": "github",
+        "status": "suggested",
+        "title": "Ada",
+        "url": "https://github.com/ada"
+      },
+      "id": "1",
+      "kind": "profile"
+    },
+    {
+      "data": {
+        "assessment": "supported",
+        "confidence": 1,
+        "person_id": 3,
+        "reason": "Yours",
+        "site": "github",
+        "status": "confirmed",
+        "title": "Grace",
+        "url": "https://github.com/grace"
+      },
+      "id": "2",
+      "kind": "profile"
+    }
+  ],
+  "version": 1
 }

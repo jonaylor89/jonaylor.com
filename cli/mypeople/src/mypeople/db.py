@@ -172,15 +172,74 @@ def default_path() -> Path:
     return Path(os.environ.get("MYPEOPLE_DB", Path.home() / ".mypeople" / "mypeople.db"))
 
 
+class GraphConnection(sqlite3.Connection):
+    """Capture compatibility mutations in the very same SQLite transaction."""
+
+    def commit(self):
+        from . import graph_runtime
+        if graph_runtime.enabled(self) and self.execute("SELECT 1 FROM graph_dirty LIMIT 1").fetchone():
+            graph_runtime.capture(self)
+        super().commit()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if exc_type is None:
+            try:
+                self.commit()
+            except BaseException:
+                self.rollback()
+                raise
+        else:
+            self.rollback()
+        return False
+
+
+def _backup_before_graph(conn, path):
+    """Owner-only, no-overwrite SQLite snapshot before modifying a legacy DB."""
+    if str(path) == ":memory:" or not conn.execute("SELECT 1 FROM sqlite_master WHERE name='people'").fetchone():
+        return None
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE name='graph_runtime'").fetchone():
+        return None
+    import datetime
+    import uuid
+    stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+    target = path.with_name(path.name + '.pre-graph-' + stamp + '-' + uuid.uuid4().hex[:8] + '.sqlite3')
+    fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    os.close(fd)
+    backup = None
+    try:
+        backup = sqlite3.connect(target)
+        conn.backup(backup)
+        backup.close()
+        return target
+    except BaseException:
+        if backup is not None: backup.close()
+        target.unlink(missing_ok=True)
+        raise
+
+
 def connect(path: Path | str | None = None) -> sqlite3.Connection:
     path = Path(path) if path else default_path()
     if str(path) != ":memory:":
         path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path, timeout=60)  # two extract runs can share the database
+    conn = sqlite3.connect(path, timeout=60, factory=GraphConnection)  # shared CLI jobs
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA recursive_triggers = ON")
+    backup = _backup_before_graph(conn, path)
+    if str(path) != ':memory:':
+        conn.execute("PRAGMA journal_mode = WAL")
     conn.executescript(SCHEMA)
     _migrate(conn)
+    from . import graph_runtime
+    try:
+        graph_runtime.initialize(conn)
+        if backup:
+            conn.execute("INSERT OR REPLACE INTO graph_meta VALUES ('pre_graph_backup',?)", (str(backup),))
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        conn.close()
+        raise
     return conn
 
 

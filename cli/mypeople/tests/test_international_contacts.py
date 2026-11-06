@@ -78,8 +78,8 @@ def test_merge_preserves_three_country_contexts_and_original_numbers(conn):
     ops.apply(conn, "merge", {"person_ids": [a, b]})
     pid = identity.canonical(conn, b)
     merged = json.loads(conn.execute("SELECT contact_data FROM people WHERE id=?", (pid,)).fetchone()[0])
-    assert [f["value"] for f in merged["fields"]] == ["020 7946 0018", "03-1234-5678", "030 123456"]
-    assert [contacts.phone(f["value"], f.get("region") or merged["region"])[0] for f in merged["fields"]] == ["+442079460018", "+81312345678", "+4930123456"]
+    assert {f["value"]: contacts.phone(f["value"], f.get("region") or merged["region"])[0] for f in merged["fields"]} == {
+        "020 7946 0018": "+442079460018", "03-1234-5678": "+81312345678", "030 123456": "+4930123456"}
 
 
 def test_legacy_keys_do_not_get_an_invented_us_country_even_with_an_old_index(conn):

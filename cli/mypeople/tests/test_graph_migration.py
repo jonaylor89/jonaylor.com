@@ -53,7 +53,9 @@ def test_readonly_migration_preserves_all_data_and_supports_split(tmp_path):
 
 def test_missing_photo_rolls_back_entire_migration(tmp_path):
     path = legacy(tmp_path)
-    c = db.connect(path)
+    # Build a corrupt PRE-cutover source without invoking the new write bridge.
+    c = sqlite3.connect(path)
+    c.execute("UPDATE graph_runtime SET projecting=1")
     c.execute("INSERT INTO photos(person_id,source,path) SELECT id,'test',? FROM people", (str(tmp_path / "missing.png"),))
     c.commit()
     c.close()

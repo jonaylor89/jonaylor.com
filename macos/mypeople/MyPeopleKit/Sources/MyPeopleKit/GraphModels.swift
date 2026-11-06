@@ -1,8 +1,7 @@
 import Foundation
 
-/// Wire models for the new graph engine. Swift deliberately does not reduce history or
-/// implement identity/split rules. The existing app still uses the legacy engine view
-/// until the graph projection and RPC cutover is complete.
+/// Wire models for the graph engine. Swift deliberately does not reduce history or
+/// implement identity/split rules. Screens use Python's published projections and typed RPCs.
 public struct GraphOperation: Codable, Sendable, Equatable {
     public let id: String
     public let kind: String

@@ -1,6 +1,6 @@
 [project]
 name = "mypeople"
-version = "0.1.0"
+version = "0.2.0"
 description = "A memory for the people in your life"
 readme = "README.md"
 authors = [

@@ -32,14 +32,14 @@ publish / ops / replica / contacts      mypeople import | ask | google | transfe
 
 The reasoning comes down to who owns the rules:
 
-- **The replicated contact history already has two implementations** (Python and Kotlin),
+- **The replicated object graph already has two implementations** (Python and Kotlin),
   kept in step by shared fixtures. It is a causal DAG with field-level registers. A third
   implementation would be the riskiest code in the project and would add nothing.
 - **The app needs code that already exists in Python:** publishing the view, merging, vCards,
   and the Bluetooth listener.
-- **The Mac is where the data already lives.** Android needs an outbox, optimistic overlays,
-  and a transport because it is remote from the Mac. This app is next to the database, so an
-  edit is a synchronous call and none of that machinery exists here.
+- **The Mac is next to the Python engine.** Android owns its local graph and transport;
+  this shell makes synchronous engine calls instead of implementing another reducer.
+  All trusted peers receive the complete graph, not only a phone-safe memory subset.
 
 ### Alternatives rejected
 
@@ -56,9 +56,9 @@ The reasoning comes down to who owns the rules:
 The app reuses the two contracts the phone already speaks, so every screen means the same
 thing on both platforms:
 
-1. **Read: the published view.** `publish.records()` is what the phone sees: `person`,
-   `event`, `profile`, `moment`, and `dupes` records. Swift's models match `Model.kt`
-   one-to-one, and `Derivations.swift` ports `Logic.kt`.
+1. **Read: the published view.** Python projects graph-backed SQL into `person`, `event`,
+   `profile`, `moment`, and `dupes` records. Android projects its local graph into the same
+   screen models. Swift's models match `Model.kt`; `Derivations.swift` ports `Logic.kt`.
 2. **Write: operations.** `ops.apply()` covers aliases, notes, facts, relationship overrides,
    profile decisions, moment feedback, and "not the same person". Contact edits take the
    same path as `mypeople contact …` (`replica.change`) rather than the older
@@ -94,9 +94,13 @@ a scoped update. Deltas carry a version; if Swift ever sees a gap it asks for a 
 
 ## Notes and facts belong to the contact
 
-Notes and facts are all rows in `events`, attached to a person, and shown together on the contact.
-`events.source` says where each came from, which is how both apps tell what you wrote from what was
-derived: `manual` is you, and anything else was read from messages or a note, or imported.
+The [versioned graph](versioned-graph.md) is authoritative. Native splitting loads exact
+associations, reviews selected/remaining scope, and submits the original causal frontier to
+`contact.split`; stale reviews refuse the mutation. Swift never infers message ownership.
+
+Notes and claims are graph objects with explicit person-attribution edges. The compatibility
+`events` projection shows memory notes/facts on the contact; card notes remain a separate derived
+card field. `events.source` preserves what you wrote versus imported/derived assertions.
 
 - **A note keeps your words.** It is `type = 'note'`, `source = 'manual'`, saved as a plain edit with
   no model involved. `note` isn't in `EVENT_TYPES`, so the model can't produce one.
@@ -105,8 +109,8 @@ derived: `manual` is you, and anything else was read from messages or a note, or
   failure leaves the note saved and unread.
 - **Merges carry them** with the rest of a person's records.
 - **Phones get them in the memory snapshot,** and send new ones back as queued operations.
-- **Another Mac reconciles them through `transfer merge`,** including what was forgotten: see
-  [contact replication](contact-replication.md#notes-and-facts).
+- **Every peer reconciles them through the graph,** including decisions, retractions and raw
+  source material: see [graph replication](versioned-graph.md).
 
 ## Long-running work runs as CLI processes
 

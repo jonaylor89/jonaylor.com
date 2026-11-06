@@ -13,6 +13,10 @@ class ContactsTest {
     @get:Rule val temp = TemporaryFolder()
     private val card = ContactCard("Alice Anders", given = "Alice", family = "Anders", notes = "A note\nSecond line", region = "DE", fields = listOf(ContactField("phone", "+49 30 123456 ext 5", "Personal", true), ContactField("email", "alice@example.com", "Work"), ContactField("address", "12 Main Street\nBerlin", "Home")))
 
+    private suspend fun legacyStore(dir: java.io.File = temp.newFolder()): Store = Store(dir).also {
+        it.installOffline(TransferManifest(type = "snapshot", source = UUID.randomUUID().toString(), revision = 1))
+    }
+
     @Test fun `editor confirms only newly entered website values not imported or relabelled links`() {
         val imported = ContactCard("Alice", fields = listOf(ContactField("website", "https://linkedin.com/in/alice")))
         val changed = imported.copy(notes = "Manual note", fields = imported.fields.map { it.copy(label = "Work") } +
@@ -31,10 +35,10 @@ class ContactsTest {
         val id = store.saveContact(card)
         val restarted = Store(dir); restarted.initialize()
         assertTrue(restarted.state.value.records.people.getValue(id).contactCard().fields.single().user_added)
-        val change = json.decodeFromJsonElement<ContactChange>(restarted.unsent().single().payload)
-        val history = ContactHistory(listOf(change))
-        assertTrue(history.contacts.values.single().card.fields.single().user_added)
-        assertTrue(change.adds.getValue("fields").single().jsonObject.getValue("user_added").jsonPrimitive.boolean)
+        assertTrue(restarted.unsent().isEmpty())
+        val bundle = restarted.snapshot().graph!!.bundle
+        val decoded = Transfer.unpack(Transfer.pack(TransferManifest(type = "edits", source = UUID.randomUUID().toString(), graph = bundle))).graph!!
+        assertTrue(GraphStore(GraphState(decoded)).project().people.values.single().contactCard().fields.single().user_added)
         // Default false is omitted even by fullJson, preserving existing field dots and fixtures.
         val imported = ContactHistory.cardObject(card.copy(fields = listOf(ContactField("website", "https://instagram.com/alice"))))
         assertFalse("user_added" in imported.getValue("fields").jsonArray.single().jsonObject)
@@ -66,7 +70,7 @@ class ContactsTest {
         assertTrue(c.originals.single().contains("ADR;TYPE=HOME"))
     }
     @Test fun `new contact and subsequent offline edits survive restart and canonical id adoption`() = runBlocking {
-        val dir = temp.newFolder(); val store = Store(dir)
+        val dir = temp.newFolder(); val store = legacyStore(dir)
         val id = store.saveContact(card)
         assertTrue(id < 0); assertEquals(card.name, store.state.value.records.people[id]?.name)
         store.saveContact(card.copy(name = "Alice W"), id)
@@ -81,16 +85,16 @@ class ContactsTest {
         assertEquals(setOf(37), again.state.value.records.people.keys)
     }
     @Test fun `terminal receipt before publication does not make a new contact disappear`() = runBlocking {
-        val store = Store(temp.newFolder()); val id = store.saveContact(card); val op = store.unsent().single()
+        val store = legacyStore(); val id = store.saveContact(card); val op = store.unsent().single()
         store.receive(Changes(1, false, emptyList(), listOf(OpState(1, op.client_id, op.kind, op.payload, "done"))))
         assertEquals(card.name, store.state.value.records.people[id]?.name)
-        assertTrue(store.unsent().isEmpty()); assertTrue(store.state.value.pending.isEmpty()) // replicated changes are authoritative even before publication
+        assertTrue(store.unsent().isEmpty()); assertTrue(store.state.value.pending.single().completed) // legacy receipt waits for publication
         val canonical = Person(card.name, contact_uid = op.payload.text("contact_uid"), card = card.copy(user_edited = true, edit_id = op.client_id))
         store.receive(Changes(2, false, listOf(RecordChange("person", "10", json.encodeToJsonElement(canonical))), emptyList()))
         assertTrue(store.state.value.pending.isEmpty()); assertEquals(setOf(10), store.state.value.records.people.keys)
     }
     @Test fun `failed contact payload is recoverable after restart`() = runBlocking {
-        val dir = temp.newFolder(); val store = Store(dir); store.saveContact(card); val op = store.unsent().single()
+        val dir = temp.newFolder(); val store = legacyStore(dir); store.saveContact(card); val op = store.unsent().single()
         store.receive(Changes(1, false, emptyList(), listOf(OpState(1, op.client_id, op.kind, op.payload, "failed", "Rejected"))))
         val again = Store(dir); again.initialize()
         assertEquals(op.payload, again.state.value.failedEdits.single().payload)
@@ -99,10 +103,13 @@ class ContactsTest {
     @Test fun `standalone phone queue can adopt first Mac without losing contacts`() = runBlocking {
         val store = Store(temp.newFolder()); val id = store.saveContact(card)
         val source = UUID.randomUUID().toString()
-        assertEquals(1, store.bluetoothEdits(source).ops.size)
-        store.installOffline(TransferManifest(type = "snapshot", source = source, revision = 1, contact_version = 1))
+        val outgoing = store.bluetoothEdits(source)
+        assertTrue(outgoing.ops.isEmpty()); assertNotNull(outgoing.graph)
+        val empty = GraphBundle(UUID.randomUUID().toString())
+        store.installOffline(TransferManifest(type = "snapshot", source = source, revision = 1, graph = empty))
         assertEquals(card.name, store.state.value.records.people[id]?.name)
-        assertEquals(1, store.state.value.pending.size)
+        assertTrue(store.state.value.pending.isEmpty())
+        assertFalse(store.snapshot().graph!!.bundle.commits.isEmpty())
         try { store.installOffline(TransferManifest(type = "snapshot", source = UUID.randomUUID().toString(), revision = 1)); fail("foreign queue") } catch (_: IllegalArgumentException) { }
     }
     @Test fun `trash hides contacts facts moments and upcoming but restore is immediate`() {
@@ -141,7 +148,7 @@ class ContactsTest {
         assertEquals(listOf(1, 2), records.search("", "closeness").map { it.key })
     }
     @Test fun `full encrypted backup preserves trash failed and pending edits and photos`() = runBlocking {
-        val store = Store(temp.newFolder()); store.saveContact(card)
+        val store = legacyStore(); store.saveContact(card)
         val photo = "photo bytes".toByteArray(); val hash = BackupArchive.hash(photo)
         val disk = store.snapshot().copy(records = Records(people = mapOf(1 to Person("Trash", trashed = true, photo = hash))), failedEdits = store.unsent())
         val backup = ContactBackup(state = disk)
@@ -157,7 +164,7 @@ class ContactsTest {
         }
     }
     @Test fun `editor uid survives canonical id changes and temporary ids are never reused`() = runBlocking {
-        val store = Store(temp.newFolder()); val id = store.saveContact(card); val op = store.unsent().single()
+        val store = legacyStore(); val id = store.saveContact(card); val op = store.unsent().single()
         val uid = op.payload.text("contact_uid")
         val canonical = Person(card.name, contact_uid = uid, card = card.copy(user_edited = true, edit_id = op.client_id))
         store.receive(Changes(1, false, listOf(RecordChange("person", "17", json.encodeToJsonElement(canonical))), listOf(OpState(1, op.client_id, op.kind, op.payload, "done"))))
@@ -178,7 +185,7 @@ class ContactsTest {
         assertEquals(setOf(12), store.state.value.records.people.keys)
     }
     @Test fun `save acknowledgment clears after a later rename without reverting the name`() = runBlocking {
-        val store = Store(temp.newFolder()); val id = store.saveContact(card); val save = store.unsent().single()
+        val store = legacyStore(); val id = store.saveContact(card); val save = store.unsent().single()
         val uid = save.payload.text("contact_uid")
         store.enqueue("rename", buildJsonObject { put("person_id", id); put("contact_uid", uid); put("name", "Later name") })
         val all = store.unsent()
@@ -210,6 +217,7 @@ class ContactsTest {
     @Test fun `restore cannot discard current outbox`() = runBlocking {
         val store = Store(temp.newFolder()); store.saveContact(card)
         try { store.restoreBackup(DiskState()); fail("pending queue") } catch (_: IllegalArgumentException) { }
-        assertEquals(1, store.state.value.pending.size)
+        assertTrue(store.state.value.pending.isEmpty())
+        assertEquals(1, store.snapshot().graph!!.bundle.commits.size)
     }
 }

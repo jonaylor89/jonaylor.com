@@ -106,6 +106,8 @@ class DeviceContacts(private val context: Context, private val graph: app.mypeop
                     when (s(C.Data.DATA2)) { "1" -> "Home"; "2" -> if (s(C.Data.MIMETYPE) == K.Phone.CONTENT_ITEM_TYPE) "Mobile" else "Work"; "3" -> "Work"; else -> "Other" }
                 }
                 val pref = s(C.Data.IS_SUPER_PRIMARY) == "1"
+                val before = fields.size
+                val objectId = if (importing) "" else s(C.Data.SYNC1).takeIf { id -> runCatching { java.util.UUID.fromString(id).toString() == id }.getOrDefault(false) }.orEmpty()
                 when (s(C.Data.MIMETYPE)) {
                     K.StructuredName.CONTENT_ITEM_TYPE -> card = card.copy(name = value, given = s(K.StructuredName.GIVEN_NAME), family = s(K.StructuredName.FAMILY_NAME), middle = s(K.StructuredName.MIDDLE_NAME), prefix = s(K.StructuredName.PREFIX), suffix = s(K.StructuredName.SUFFIX), phonetic = s(K.StructuredName.PHONETIC_GIVEN_NAME))
                     K.Phone.CONTENT_ITEM_TYPE -> {
@@ -126,6 +128,7 @@ class DeviceContacts(private val context: Context, private val graph: app.mypeop
                         if (bytes != null && bytes.size <= 2 * 1024 * 1024) card = card.copy(photo = Base64.getEncoder().encodeToString(bytes))
                     }
                 }
+                if (fields.size > before && objectId.isNotEmpty()) fields[fields.lastIndex] = fields.last().copy(object_id = objectId)
             }
         }
         val favorite = resolver.query(ContentUris.withAppendedId(C.RawContacts.CONTENT_URI, rawId), arrayOf(C.RawContacts.STARRED), null, null, null)?.use { it.moveToFirst() && it.getInt(0) != 0 } ?: false
@@ -149,6 +152,7 @@ class DeviceContacts(private val context: Context, private val graph: app.mypeop
         for (f in card.fields) {
             val mime = mapOf("phone" to K.Phone.CONTENT_ITEM_TYPE, "email" to K.Email.CONTENT_ITEM_TYPE, "address" to K.StructuredPostal.CONTENT_ITEM_TYPE, "website" to K.Website.CONTENT_ITEM_TYPE, "im" to K.Im.CONTENT_ITEM_TYPE, "anniversary" to K.Event.CONTENT_ITEM_TYPE)[f.kind] ?: continue
             val values = mutableMapOf<String, Any?>(C.Data.DATA1 to (if (f.kind == "phone") phoneCallTarget(f.value, f.region.ifEmpty { card.region }) ?: f.value else f.value), C.Data.DATA2 to 0, C.Data.DATA3 to f.label, C.Data.IS_PRIMARY to if (f.preferred) 1 else 0, C.Data.IS_SUPER_PRIMARY to if (f.preferred) 1 else 0)
+            if (f.object_id.isNotEmpty()) values[C.Data.SYNC1] = f.object_id
             data(mime, values)
         }
         if (card.notes.isNotEmpty()) data(K.Note.CONTENT_ITEM_TYPE, mapOf(K.Note.NOTE to card.notes))
@@ -174,11 +178,20 @@ class DeviceContacts(private val context: Context, private val graph: app.mypeop
         return id
     }
     private fun originalField(f: ContactField, previous: MirrorEntry?, local: ContactCard): ContactField {
+        if (f.object_id.isNotEmpty()) {
+            val original = local.fields.firstOrNull { it.object_id == f.object_id }
+            if (original != null) {
+                val exported = previous?.exported?.fields?.firstOrNull { it.object_id == f.object_id }
+                if (exported != null && exported.value == f.value && exported.label == f.label) return original.copy(preferred = f.preferred)
+                return original.copy(value = f.value, label = f.label, preferred = f.preferred,
+                    structured = f.structured.ifEmpty { original.structured })
+            }
+        }
         val index = previous?.exported?.fields?.indexOfFirst { it.kind == f.kind && it.value == f.value && it.label == f.label } ?: -1
         val original = previous?.local?.fields?.filter { it.kind in setOf("phone", "email", "address", "website", "im", "anniversary") }?.getOrNull(index)
         if (original != null) return original.copy(preferred = f.preferred)
         return local.fields.firstOrNull { it.kind == f.kind && it.value == f.value && it.label == f.label }?.copy(preferred = f.preferred)
-            ?: f.copy(region = local.fields.firstOrNull { it.kind == f.kind && it.label == f.label }?.region.orEmpty())
+            ?: f.copy(object_id = "", region = local.fields.firstOrNull { it.kind == f.kind && it.label == f.label }?.region.orEmpty())
     }
     private fun loadMirror(): MirrorState = mirror.load()
     private fun saveMirror(state: MirrorState) = mirror.save(state)

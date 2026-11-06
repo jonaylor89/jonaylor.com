@@ -115,9 +115,10 @@ class ContactHistoryTest {
         val restarted = Store(dir); restarted.initialize()
         assertEquals(store.state.value.records, restarted.state.value.records)
         val outgoing = restarted.bluetoothEdits(source, publisher)
-        assertEquals(3, outgoing.contact_history.size)
-        assertEquals(3, outgoing.ops.size)
-        assertEquals(1, ContactHistory(outgoing.contact_history).contacts.size)
+        assertTrue(outgoing.contact_history.isEmpty())
+        assertTrue(outgoing.ops.isEmpty())
+        assertEquals(3, outgoing.graph!!.commits.size)
+        assertEquals(1, GraphStore(GraphState(outgoing.graph!!)).project().people.size)
     }
     @Test fun `receiving remote history cannot erase local offline changes or conflicts`() = runBlocking {
         val dir = temp.newFolder(); val store = Store(dir); val base = base()
@@ -255,7 +256,8 @@ class ContactHistoryTest {
         assertTrue(File(dir, "store.bin").exists())
         File(dir, "store.journal").writeBytes(old) // crash after checkpoint rename, before log truncation
         val restarted = Store(dir); restarted.initialize()
-        assertEquals(1, restarted.state.value.pending.size)
+        assertTrue(restarted.state.value.pending.isEmpty())
+        assertEquals(1, restarted.snapshot().graph!!.bundle.commits.size)
         assertEquals("Ada", restarted.state.value.records.people.values.single().name)
         restarted.saveContact(ContactCard("Ada", notes = "After checkpoint"), restarted.state.value.records.people.keys.single())
         val final = Store(dir); final.initialize()

@@ -276,6 +276,10 @@ def capture(conn, ids):
 
 
 def reversible_merge(conn, ids, action):
+    from . import graph_runtime
+    if graph_runtime.enabled(conn):
+        # Identity joins are graph edges, not snapshot rewinds.
+        return graph_runtime.merge(conn, ids)
     before = capture(conn, ids)
     keep = action()
     after = capture(conn, ids)
@@ -296,11 +300,21 @@ def _unchanged(conn, ids, after_data):
 
 def merge_can_be_undone(conn, keep):
     """Exactly what undo_merge will accept, so the view never offers an undo it would refuse."""
+    from . import graph_runtime
+    if graph_runtime.enabled(conn):
+        from .graph import Store
+        person = conn.execute("SELECT contact_uid FROM people WHERE id=?", (keep,)).fetchone()
+        if person is None: return False
+        graph = Store(conn).load()
+        return any(person[0] in members and len(members) > 1 for members in graph.components()["groups"].values())
     row = conn.execute("SELECT person_ids, after_data FROM contact_merge_undo WHERE keep_id=? AND undone=0 ORDER BY id DESC LIMIT 1", (keep,)).fetchone()
     return row is not None and _unchanged(conn, json.loads(row["person_ids"]), row["after_data"])
 
 
 def undo_merge(conn, keep):
+    from . import graph_runtime
+    if graph_runtime.enabled(conn):
+        return graph_runtime.unmerge(conn, keep)
     from . import replica
     person = conn.execute("SELECT contact_uid FROM people WHERE id=?", (keep,)).fetchone()
     linked = replica.load(conn).contact(person[0]) if person else None

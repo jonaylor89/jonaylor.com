@@ -1,7 +1,8 @@
 """Encrypted, serverless snapshots and edit bundles, carried by Bluetooth or USB.
 
-The OS transports an ordinary .sherloq file. Only the published phone-safe view is
-exported. Files use PBKDF2-HMAC-SHA256 + AES-256-GCM; Android uses the same format.
+The OS transports an ordinary .sherloq file. The published UI view accompanies a
+complete versioned graph (including raw conversations and full-size assets) for
+trusted peers. Files use PBKDF2-HMAC-SHA256 + AES-256-GCM on every platform.
 """
 from __future__ import annotations
 
@@ -28,6 +29,7 @@ ITERATIONS = 200_000
 MAX_FILE = 128 * 1024 * 1024
 MAX_EXPANDED = 256 * 1024 * 1024
 MAX_PHOTO = 10 * 1024 * 1024
+MAX_GRAPH = MAX_EXPANDED
 KEY_FILE = Path.home() / ".mypeople" / "transfer.key"
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS transfer_state (
@@ -56,7 +58,7 @@ def encrypt(data: bytes, password: str) -> bytes:
     key = hashlib.pbkdf2_hmac("sha256", _password(password), salt, ITERATIONS, 32)
     result = MAGIC + salt + nonce + AESGCM(key).encrypt(nonce, data, MAGIC)
     if len(result) > MAX_FILE:
-        raise TransferError("Transfer is too large. Export again with --no-photos.")
+        raise TransferError("Complete transfer exceeds the size limit; no graph history or assets were omitted.")
     return result
 
 
@@ -84,7 +86,10 @@ def key_file(path: Path = KEY_FILE, *, create: bool = False) -> str:
 
 
 def _prepare(conn: sqlite3.Connection) -> tuple[str, int]:
-    conn.executescript(SCHEMA)
+    # executescript would implicitly commit an enclosing graph/edit transaction.
+    for statement in SCHEMA.split(";"):
+        if statement.strip():
+            conn.execute(statement)
     if "publisher" not in {r[1] for r in conn.execute("PRAGMA table_info(transfer_state)")}:
         conn.execute("ALTER TABLE transfer_state ADD COLUMN publisher TEXT NOT NULL DEFAULT ''")
     conn.execute("INSERT OR IGNORE INTO transfer_state(slot, source, revision) VALUES (1, ?, 0)", (str(uuid.uuid4()),))
@@ -95,6 +100,8 @@ def _prepare(conn: sqlite3.Connection) -> tuple[str, int]:
 
 
 def pack(manifest: dict, photos: dict[str, str] | None = None, *, compact_history: bool = True) -> bytes:
+    manifest = dict(manifest)
+    graph = manifest.pop("graph", None)
     if compact_history:
         from .contact_wire import compact
         manifest = compact(manifest)
@@ -106,6 +113,12 @@ def pack(manifest: dict, photos: dict[str, str] | None = None, *, compact_histor
             raise TransferError("Transfer manifest exceeds 32 MiB. Update both clients for compact contact history; no history was truncated.")
         total += len(raw)
         archive.writestr("manifest.json", raw)
+        if graph is not None:
+            raw_graph = json.dumps(graph, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode()
+            total += len(raw_graph)
+            if len(raw_graph) > MAX_GRAPH or total > MAX_EXPANDED:
+                raise TransferError("Complete graph exceeds the archive size limit; nothing was truncated.")
+            archive.writestr("graph.json", raw_graph)
         for digest, path in (photos or {}).items():
             data = Path(path).read_bytes()
             if len(data) > MAX_PHOTO:
@@ -126,7 +139,7 @@ def unpack(data: bytes) -> dict:
             if len(entries) > 10_000 or sum(e.file_size for e in entries) > MAX_EXPANDED:
                 raise TransferError("Transfer exceeds the safe size limit.")
             names = [e.filename for e in entries]
-            if any(name != "manifest.json" and re.fullmatch(r"photos/[0-9a-f]{64}", name) is None for name in names):
+            if any(name not in ("manifest.json", "graph.json") and re.fullmatch(r"photos/[0-9a-f]{64}", name) is None for name in names):
                 raise TransferError("Unsafe path in transfer archive.")
             if len(set(names)) != len(names) or "manifest.json" not in names:
                 raise TransferError("Invalid transfer archive.")
@@ -136,6 +149,10 @@ def unpack(data: bytes) -> dict:
             if not isinstance(manifest, dict) or manifest.get("format") not in (1, 2):
                 raise TransferError("Unsupported transfer format.")
             uuid.UUID(manifest["source"])
+            if "graph.json" in names:
+                if "graph" in manifest or archive.getinfo("graph.json").file_size > MAX_GRAPH:
+                    raise TransferError("Invalid or oversized graph payload.")
+                manifest["graph"] = json.loads(archive.read("graph.json"))
             from .contact_wire import expand
             return expand(manifest)
     except (zipfile.BadZipFile, KeyError, TypeError, json.JSONDecodeError, AttributeError, ValueError) as e:
@@ -159,6 +176,27 @@ def write_file(path: Path, data: bytes) -> None:
 
 
 def validate_inventory(manifest: dict) -> None:
+    graph = manifest.get("graph")
+    if graph is not None:
+        if not isinstance(graph, dict) or set(graph) != {"collection", "heads", "commits", "blobs"}:
+            raise TransferError("Invalid graph bundle")
+        try:
+            if str(uuid.UUID(graph["collection"])) != graph["collection"]:
+                raise ValueError
+            if not isinstance(graph["heads"], list) or len(graph["heads"]) > 100_000 or len(set(graph["heads"])) != len(graph["heads"]):
+                raise ValueError
+            for head in graph["heads"]:
+                if str(uuid.UUID(head)) != head:
+                    raise ValueError
+        except (ValueError, TypeError, AttributeError):
+            raise TransferError("Invalid graph collection or frontier") from None
+        if not isinstance(graph["commits"], list) or len(graph["commits"]) > 100_000:
+            raise TransferError("Invalid graph commit list")
+        if not isinstance(graph["blobs"], dict) or len(graph["blobs"]) > 1_000_000 or any(
+            not isinstance(key, str) or re.fullmatch(r"[a-f0-9]{64}", key) is None or not isinstance(value, str)
+            for key, value in graph["blobs"].items()
+        ):
+            raise TransferError("Invalid graph blob inventory")
     hashes, photos = manifest.get("record_hashes", {}), manifest.get("photo_hashes", [])
     if not isinstance(hashes, dict) or len(hashes) > 100_000 or any(
         not isinstance(k, str) or ":" not in k or k.split(":", 1)[0] not in ("person", "event", "profile", "moment", "dupes") or
@@ -188,21 +226,32 @@ def validate_inventory(manifest: dict) -> None:
 def export_snapshot(conn: sqlite3.Connection, path: Path, password: str, *, include_photos: bool = True, compact_photos: bool = False, peer: dict | None = None) -> dict:
     if peer is not None: validate_inventory(peer)
     source, _ = _prepare(conn)
-    from . import replica
+    from . import replica, graph_runtime
+    graph_runtime.initialize(conn)
     history = replica.capture(conn)
     conn.commit()
+    source = conn.execute("SELECT source FROM transfer_state WHERE slot=1").fetchone()[0]
     if peer is not None and (peer.get("source") != source or peer.get("type") != "edits"):
         raise TransferError("Sync inventory belongs to another address book")
     replicated = peer is None or peer.get("contact_version") == 1
     known_heads = peer.get("contact_heads", []) if peer and replicated else []
     try:
-        contact_changes = history.missing(known_heads)
+        # The graph travels once in graph.json; never duplicate native commits
+        # inside the obsolete contact-card wire protocol.
+        contact_changes = [] if graph_runtime.enabled(conn) else history.missing(known_heads)
     except (ValueError, TypeError) as exc:
         raise TransferError(str(exc)) from exc
     revision = conn.execute("UPDATE transfer_state SET revision = revision + 1 WHERE slot = 1 RETURNING revision").fetchone()[0]
     conn.commit()
     records, photos = publish.records(conn)
     records = {key: data for key, data in records.items() if key[0] != "contact_change"}
+    # The small UI manifest must not duplicate megabytes of card originals/photos.
+    # Their complete authoritative bytes remain in the graph and its blobs.
+    for (kind, _), record in records.items():
+        if kind == "person" and record.get("card"):
+            record["card"] = {key: value for key, value in record["card"].items() if key not in ("photo", "originals", "source_records")}
+    graph = graph_runtime.bundle(conn, (peer.get("graph") or {}).get("heads", []) if peer else [])
+    conn.commit()
     requested = {op.get("client_id") for op in peer.get("ops", []) if isinstance(op, dict)} if peer is not None else None
     results = [dict(row) for row in conn.execute("SELECT client_id, kind, payload, status, message FROM transfer_applied")
                if requested is None or row["client_id"] in requested]
@@ -215,11 +264,12 @@ def export_snapshot(conn: sqlite3.Connection, path: Path, password: str, *, incl
         "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "records": [{"kind": kind, "id": rid, "data": record} for (kind, rid), record in records.items()],
         "results": results,
+        "graph": graph,
     }
     if peer is None:  # memory files can reach another Mac; a phone doesn't need what's forgotten
         manifest["fact_state"] = _fact_state(conn)
     if replicated:
-        manifest.update(contact_version=1, contact_history=contact_changes, contact_heads=history.heads)
+        manifest.update(contact_version=1, contact_history=contact_changes, contact_heads=[] if graph_runtime.enabled(conn) else history.heads)
     # QR transfers use avatar-sized JPEGs, not full-size contact originals. This
     # substantially reduces Bluetooth time and strips unneeded photo metadata.
     with tempfile.TemporaryDirectory(prefix="mypeople-photos-") as temp:
@@ -283,7 +333,7 @@ def export_snapshot(conn: sqlite3.Connection, path: Path, password: str, *, incl
         data = encrypt(pack(manifest, photos if include_photos else None, compact_history=compact_history), password)
     write_file(path, data)
     conn.commit()
-    return {"records": len(records), "updated": len(manifest["records"]), "changes": len(contact_changes) if replicated else 0,
+    return {"records": len(records), "updated": len(manifest["records"]), "changes": len(graph["commits"]),
             "photos": len(photos) if include_photos else 0, "bytes": len(data)}
 
 
@@ -340,23 +390,39 @@ def _merge_facts(conn: sqlite3.Connection, manifest: dict) -> dict:
 
 
 def merge_snapshot(conn: sqlite3.Connection, path: Path, password: str) -> dict:
-    """Join an empty CLI to a collection, or reconcile another peer's contact history.
+    """Join an empty CLI or reconcile a trusted peer's complete graph.
 
-    Notes and facts reconcile too, matched to people by contact. Messages stay behind.
-    An existing unrelated address book is never implicitly combined with this one.
+    Raw conversations, decisions, provenance, full assets and retractions travel
+    with contacts. A foreign existing collection is never implicitly combined.
     """
     from . import replica
     if path.stat().st_size > MAX_FILE:
         raise TransferError("Transfer exceeds the safe size limit.")
     manifest = unpack(decrypt(path.read_bytes(), password))
     validate_inventory(manifest)
-    if manifest.get("type") != "snapshot" or manifest.get("contact_version") != 1:
-        raise TransferError("Choose a memory file with replicated contact history.")
+    if manifest.get("type") != "snapshot" or (manifest.get("graph") is None and manifest.get("contact_version") != 1):
+        raise TransferError("Choose a memory file with a versioned graph.")
     source, _ = _prepare(conn)
     empty = not conn.execute("SELECT 1 FROM people LIMIT 1").fetchone() and not replica.load(conn).changes
     if source != manifest["source"] and not empty:
         raise TransferError("This memory belongs to a different address book. Clone into an empty --db instead.")
     try:
+        if manifest.get("graph") is not None:
+            from . import graph_runtime
+            before_people = conn.execute("SELECT count(*) FROM people").fetchone()[0]
+            fact_query = "SELECT type,value,date,source FROM events WHERE status=?"
+            before_facts = {tuple(row) for row in conn.execute(fact_query, ('active',))}
+            before_forgotten = {tuple(row) for row in conn.execute(fact_query, ('rejected',))}
+            with conn:
+                graph_runtime.receive(conn, manifest["graph"])
+                conn.execute("UPDATE transfer_state SET source=? WHERE slot=1", (manifest["source"],))
+            graph = graph_runtime.capture(conn)
+            conn.commit()
+            conflicts = len({target for target, prop in graph.versions if graph.conflicted(target, prop)})
+            return {"contacts": max(0, conn.execute("SELECT count(*) FROM people").fetchone()[0] - before_people),
+                    "conflicts": conflicts,
+                    "facts_added": len({tuple(row) for row in conn.execute(fact_query, ('active',))} - before_facts),
+                    "facts_forgotten": len({tuple(row) for row in conn.execute(fact_query, ('rejected',))} - before_forgotten)}
         with conn:
             history = replica.capture(conn)
             combined = replica.receive(conn, manifest.get("contact_history", []))
@@ -413,7 +479,14 @@ def apply_edits(conn: sqlite3.Connection, encrypted: bytes, password: str, *, en
     from . import replica
     if manifest.get("contact_version", 0) not in (0, 1):
         raise TransferError("Unsupported contact history version")
-    if manifest.get("contact_version") == 1:
+    if manifest.get("graph") is not None:
+        from . import graph_runtime
+        try:
+            with conn:
+                graph_runtime.receive(conn, manifest["graph"])
+        except (ValueError, TypeError) as exc:
+            raise TransferError(str(exc)) from exc
+    elif manifest.get("contact_version") == 1:
         try:
             with conn:
                 history = replica.capture(conn)
