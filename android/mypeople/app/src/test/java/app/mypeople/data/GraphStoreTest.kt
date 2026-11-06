@@ -18,6 +18,35 @@ class GraphStoreTest {
     private fun snapshot(bundle: GraphBundle, source: String = bundle.collection, revision: Long = 1) = TransferManifest(type = "snapshot", source = source, revision = revision, graph = bundle)
     private fun base(): GraphState = GraphStore(GraphStore.empty()).saveCard(uuid(), ContactCard("Cameron", given = "Cameron", notes = "Card note", fields = listOf(ContactField("phone", "+49123456789", "Mobile"), ContactField("email", "cameron@example.test")), originals = listOf("original vCard")))
 
+    @Test fun `Python handoff acknowledges six legacy edits and activates the graph without resetting`() = runBlocking {
+        val fixture = json.parseToJsonElement(javaClass.getResource("/python-legacy-graph-handoff.json")!!.readText()).jsonObject
+        val legacy = json.decodeFromJsonElement<DiskState>(fixture.getValue("legacy"))
+        val reply = json.decodeFromJsonElement<TransferManifest>(fixture.getValue("reply"))
+        val directory = temp.newFolder()
+        val store = Store(directory)
+        store.restoreBackup(legacy)
+        assertNull(store.snapshot().graph)
+        assertEquals(6, store.state.value.pending.size)
+        val before = store.state.value.records.people.entries.first { it.value.contactCard().notes == "Synthetic phone note 5" }
+        store.installOffline(reply)
+        assertNotNull(store.snapshot().graph)
+        assertTrue(store.state.value.pending.isEmpty())
+        val person = store.state.value.records.people.getValue(before.key)
+        assertEquals(before.value.contact_uid, person.contact_uid)
+        assertEquals("Synthetic phone note 5", person.contactCard().notes)
+        assertTrue(person.contactCard().favorite)
+        assertTrue(person.contactCard().legacy_unverified)
+        assertEquals(1, store.state.value.records.people.values.sumOf { p -> p.channels.sumOf { it.count } })
+        val field = person.contactCard().fields.single().object_id
+        store.saveContact(person.contactCard().copy(favorite = false), before.key)
+        assertEquals(field, store.state.value.records.people.getValue(before.key).contactCard().fields.single().object_id)
+        val restarted = Store(directory)
+        restarted.initialize()
+        assertNotNull(restarted.snapshot().graph)
+        assertTrue(restarted.state.value.pending.isEmpty())
+        assertEquals(store.state.value.records, restarted.state.value.records)
+    }
+
     @Test fun `small card saves reuse unrelated people and match a complete projection`() = runBlocking {
         val directory = temp.newFolder()
         val store = Store(directory)

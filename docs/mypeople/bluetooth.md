@@ -87,6 +87,28 @@ an edits file never clears the phone’s queue. Reimporting the same edits on th
 idempotent. `--no-enrich` defers model-backed requests instead of rejecting them; retryable
 model/network failures also remain queued for a later import.
 
+## Legacy-phone upgrade: “Unknown graph frontier”
+
+A phone upgraded from contact-history replication does **not** activate graph storage merely
+by installing a new APK. It needs a successful graph snapshot from the Mac. Until then,
+its pending edits and legacy history remain authoritative locally, including the legacy
+reducer's performance costs.
+
+The Mac handoff previously validated wire-v1 `contact_heads` against native graph commit
+UUIDs after translating the upload. Those are different namespaces, so valid legacy
+uploads failed with “Unknown graph frontier” and never reached the graph-download step.
+The compatibility receiver now validates the full legacy causal frontier against its
+retained v1 receipt history **before** translation. Invalid native graph frontiers still
+fail; they are not silently ignored. List translation preserves native ContactPoint UUIDs,
+compares omitted legacy defaults consistently, and respects surviving addition tags.
+
+Update/restart the Mac CLI engine, reopen MyPeople, and generate a fresh QR offer. Retry
+with the existing phone store; **do not clear, reset or uninstall either side**. The first
+successful handoff can take longer because it sends the full graph and acknowledges old
+queued edits. The phone activates graph storage only when that snapshot is committed.
+A shared synthetic Python/JVM fixture covers six pending edits, acknowledgments, graph
+activation, phone-safety flags, complete message retention and restart durability.
+
 ## File fallback
 
 ```sh

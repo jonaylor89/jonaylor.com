@@ -389,6 +389,24 @@ def _merge_facts(conn: sqlite3.Connection, manifest: dict) -> dict:
     return {"facts_added": counts["added"], "facts_forgotten": counts["forgotten"]}
 
 
+def _receive_contact_history(conn, manifest):
+    """Validate wire-v1 frontiers in their own namespace before graph translation.
+
+    A graph-backed replica facade exposes native commit heads. They are never
+    interchangeable with a pre-cutover phone's contact-change UUIDs. Keep the
+    legacy receipt history for causal validation and retry-safe handoff.
+    """
+    from . import replica
+    history = replica.capture(conn)
+    base = replica._legacy_load(conn) if isinstance(history, replica.GraphHistory) else history
+    incoming = manifest.get("contact_history", [])
+    combined = replica.History([*base.changes, *incoming])
+    if not combined.past(manifest.get("contact_heads", [])).issuperset(c["id"] for c in incoming):
+        raise ValueError("Invalid contact history frontier")
+    missing = [c for c in combined.changes if c["id"] not in base.by_id]
+    return replica.receive(conn, missing) if missing else history
+
+
 def merge_snapshot(conn: sqlite3.Connection, path: Path, password: str) -> dict:
     """Join an empty CLI or reconcile a trusted peer's complete graph.
 
@@ -425,9 +443,7 @@ def merge_snapshot(conn: sqlite3.Connection, path: Path, password: str) -> dict:
                     "facts_forgotten": len({tuple(row) for row in conn.execute(fact_query, ('rejected',))} - before_forgotten)}
         with conn:
             history = replica.capture(conn)
-            combined = replica.receive(conn, manifest.get("contact_history", []))
-            if not combined.past(manifest.get("contact_heads", [])).issuperset(c["id"] for c in manifest.get("contact_history", [])):
-                raise ValueError("Invalid contact history frontier")
+            combined = _receive_contact_history(conn, manifest)
             conn.execute("UPDATE transfer_state SET source=? WHERE slot=1", (manifest["source"],))
             facts = _merge_facts(conn, manifest)
         conflicts = sum(bool(combined.contact(uid).conflicts) for uid in {c["contact_uid"] for c in combined.changes} if combined.contact(uid))
@@ -489,11 +505,7 @@ def apply_edits(conn: sqlite3.Connection, encrypted: bytes, password: str, *, en
     elif manifest.get("contact_version") == 1:
         try:
             with conn:
-                history = replica.capture(conn)
-                if manifest.get("contact_history"):
-                    history = replica.receive(conn, manifest["contact_history"])
-                if not history.past(manifest.get("contact_heads", [])).issuperset(c["id"] for c in manifest.get("contact_history", [])):
-                    raise ValueError("Invalid contact history frontier")
+                _receive_contact_history(conn, manifest)
         except (ValueError, TypeError) as exc:
             raise TransferError(str(exc)) from exc
     stats = {"applied": 0, "failed": 0, "already_applied": 0, "deferred": 0}

@@ -533,19 +533,45 @@ def receive(conn, changes):
                 old = h.contact(change["contact_uid"])
                 card = dict(old.card) if old else {"name":change.get("values",{}).get("name","Unnamed person")}
                 card.update({k:v for k,v in change.get("values",{}).items() if not k.startswith("_")})
+                def legacy_value(key, value):
+                    if key == "fields" and isinstance(value, dict):
+                        # Wire-v1 values have no graph UUID and may omit defaults.
+                        # Compare their visible field value, retaining the native
+                        # object (and its UUID) whenever the old value is unchanged.
+                        value = dict(value)
+                        object_id = value.pop("object_id", None)
+                        if object_id in h.graph.objects:
+                            value["region"] = h.graph.value(object_id, "region", "")
+                        value = {"label":"", "preferred":False, "structured":"", "region":"", "user_added":False} | value
+                    return encoded(value)
                 for key, additions in change.get("adds",{}).items():
-                    card[key] = list({encoded(v):v for v in card.get(key,[]) + additions}.values())
+                    entries = list(card.get(key,[]))
+                    known = {legacy_value(key, v) for v in entries}
+                    for value in additions:
+                        marker = legacy_value(key, value)
+                        if marker not in known:
+                            entries.append(value)
+                            known.add(marker)
+                    card[key] = entries
                 # Legacy list removals reference tagged additions in contact_changes.
                 # Reconstruct only that old history to resolve the exact removed value.
                 removal_values = {}
                 if change.get("removes"):
                     legacy = History([json.loads(r[0]) for r in conn.execute("SELECT data FROM contact_changes")])
+                    after = History([*legacy.changes, change])
+                    contact = after.contact(change["contact_uid"])
                     for key,tags in change["removes"].items():
-                        c = legacy.contact(change["contact_uid"])
-                        if c:
-                            removal_values[key] = {encoded(c.tags.get(key,{}).get(tag)) for tag in tags}
+                        live = {legacy_value(key, v) for v in contact.tags.get(key,{}).values()}
+                        removed = set()
+                        for tag in tags:
+                            origin, field, offset = tag.split(":")
+                            value = after.by_id[origin]["adds"][field][int(offset)]
+                            marker = legacy_value(key, value)
+                            if marker not in live:
+                                removed.add(marker)
+                        removal_values[key] = removed
                     for key,gone in removal_values.items():
-                        card[key] = [v for v in card.get(key,[]) if encoded(v) not in gone]
+                        card[key] = [v for v in card.get(key,[]) if legacy_value(key, v) not in gone]
                 commit = h.edit(change["contact_uid"],card,values=change.get("values",{}),trashed=change.get("values",{}).get("_trashed"),links=change.get("links",[]))
                 if commit: store.receive([commit["graph_commit"]])
                 conn.execute("INSERT INTO contact_changes VALUES (?,?)",(change["id"],encoded(change)))
