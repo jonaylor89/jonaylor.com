@@ -13,16 +13,21 @@ enum Thumbnails {
 
     static func cached(_ path: String, size: CGFloat) -> NSImage? { box.cache.object(forKey: "\(path)#\(Int(size))" as NSString) }
 
-    static func load(_ path: String, size: CGFloat) async -> NSImage? {
-        await Task.detached(priority: .utility) {
+    /// Carries an image out of its decoding task. Nothing changes it after that, and not every
+    /// SDK marks NSImage as Sendable.
+    private struct Decoded: @unchecked Sendable { let image: NSImage }
+
+    @MainActor static func load(_ path: String, size: CGFloat) async -> NSImage? {
+        let decoded = await Task.detached(priority: .utility) { () -> Decoded? in
             let options: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true,
                                             kCGImageSourceThumbnailMaxPixelSize: Int(size * 2)]
             guard let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil),
                   let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
             let result = NSImage(cgImage: image, size: NSSize(width: size, height: size))
             box.cache.setObject(result, forKey: "\(path)#\(Int(size))" as NSString)
-            return result
+            return Decoded(image: result)
         }.value
+        return decoded?.image
     }
 }
 
