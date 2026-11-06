@@ -95,6 +95,36 @@ class VersionedGraphTest {
         assertEquals(before, base.alternatives(phone, "label"))
     }
 
+    @Test fun persistentIndexesShareUnchangedComponentsWithoutLeakingAcrossBranches() {
+        val person = VersionedGraph.createObject("Person")
+        val name = VersionedGraph.createObject("Name", buildJsonObject { put("display", "Original") })
+        val edge = VersionedGraph.createEdge("has_name", person.target, name.target)
+        val root = VersionedGraph().commit(id(), listOf(person, name, edge))
+        val base = VersionedGraph(listOf(root))
+        val components = base.components()
+        var next = base
+        repeat(64) { n ->
+            val c = next.commit(id(), listOf(next.edit(name.target, "display", JsonPrimitive("Edit $n"))))
+            next = next.appended(c)
+            assertSame(components, next.components())
+            assertEquals("Original", base.value(name.target, "display")!!.jsonPrimitive.content)
+        }
+        val branch = base.appended(base.commit(id(), listOf(base.edit(edge.target, "_lifecycle", JsonPrimitive("retracted")))))
+        assertFalse(branch.active(edge.target)); assertTrue(base.active(edge.target)); assertTrue(next.active(edge.target))
+        assertEquals(base.outgoing(person.target), next.outgoing(person.target))
+        assertEquals(base.incoming(name.target), next.incoming(name.target))
+        val replayed = VersionedGraph(next.ordered)
+        assertEquals(replayed.objects, next.objects)
+        assertEquals(replayed.edges, next.edges)
+        assertEquals(replayed.alternatives(name.target, "display"), next.alternatives(name.target, "display"))
+        val other = VersionedGraph.createObject("Person")
+        val expanded = next.appended(next.commit(id(), listOf(other)))
+        assertEquals(2, expanded.components().groups.size)
+        assertEquals(1, next.components().groups.size)
+        assertFalse(base.people.contains(other.target))
+        assertTrue(expanded.people.contains(other.target))
+    }
+
     @Test fun identityLinksCanBeRetractedWithoutDeletingObjects() {
         val a = VersionedGraph.createObject("Person")
         val b = VersionedGraph.createObject("Person")

@@ -5,6 +5,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -44,14 +46,15 @@ class GraphLargeImportTest {
         assertTrue(store.state.value.records.people.getValue(target.key).contactCard().favorite)
         assertSame(untouched.value, store.state.value.records.people.getValue(untouched.key))
         assertEquals(checkpointTime, checkpoint.lastModified())
-        assertTrue("Synthetic edit regressed to full-book latency: ${edit}ms", edit < 5000)
+        assertTrue("Synthetic edit regressed to full-book latency: ${edit}ms", edit < 250)
         val repeated = (0 until 6).map { n ->
             val start = System.nanoTime()
             store.saveContact(store.state.value.records.people.getValue(target.key).contactCard().copy(favorite = n % 2 == 1), target.key)
             (System.nanoTime() - start) / 1_000_000
         }
         println("Synthetic repeated edits: ${repeated}ms journal=${File(directory, "store.journal").length()} bytes")
-        assertTrue(repeated.all { it < 5000 })
+        assertTrue("Median edit must remain at least 10x below the prior ~750ms baseline", repeated.sorted()[repeated.size / 2] < 75)
+        assertTrue("No edit should return to whole-book latency", repeated.all { it < 500 })
         assertEquals("Small edits must not trigger full-book checkpoints", checkpointTime, checkpoint.lastModified())
         assertTrue("Card edits must journal small deltas", File(directory, "store.journal").length() < 64 * 1024)
         for (kind in listOf("rename", "phone")) {
@@ -62,7 +65,18 @@ class GraphLargeImportTest {
             store.saveContact(card, target.key)
             val elapsed = (System.nanoTime() - start) / 1_000_000
             println("Synthetic identity edit $kind: ${elapsed}ms")
-            assertTrue("Identity edit regressed: ${elapsed}ms", elapsed < 5000)
+            assertTrue("Identity edit regressed: ${elapsed}ms", elapsed < 250)
+        }
+        for (kind in listOf("note", "rename")) {
+            val start = System.nanoTime()
+            store.enqueue(kind, buildJsonObject {
+                put("person_id", target.key)
+                put("contact_uid", target.value.contact_uid)
+                put(if (kind == "note") "text" else "name", "Synthetic quick $kind")
+            })
+            val elapsed = (System.nanoTime() - start) / 1_000_000
+            println("Synthetic quick action $kind: ${elapsed}ms")
+            assertTrue("Quick action must reuse the current projection: ${elapsed}ms", elapsed < 250)
         }
         assertEquals(329000, store.state.value.records.people.values.sumOf { p -> p.channels.sumOf { it.count } })
         assertEquals(manifest.graph!!.blobs, store.snapshot().graph!!.bundle.blobs)
@@ -106,8 +120,19 @@ class GraphLargeImportTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val directory = File(context.cacheDir, "synthetic-large-graph-qa")
         check(directory.isDirectory)
+        val start = System.nanoTime()
         val store = Store(directory)
         store.initialize()
+        val ready = (System.nanoTime() - start) / 1_000_000
+        assertNotNull("Editing must be ready without a lazy full reduction", store.snapshot().graph!!.bundle.reducer)
+        assertTrue(store.snapshot().graph!!.bundle.blobsVerified)
+        val target = store.state.value.records.people.entries.first { it.value.contactCard().favorite }
+        val editStart = System.nanoTime()
+        store.saveContact(target.value.contactCard().copy(favorite = false), target.key)
+        val edit = (System.nanoTime() - editStart) / 1_000_000
+        println("Synthetic fresh-process ready=${ready}ms firstEdit=${edit}ms")
+        assertTrue("First save after restart must also be fast: ${edit}ms", edit < 250)
+        store.saveContact(store.state.value.records.people.getValue(target.key).contactCard().copy(favorite = true), target.key)
         assertEquals(2600, store.state.value.records.people.size)
         assertEquals(329000, store.state.value.records.people.values.sumOf { p -> p.channels.sumOf { it.count } })
         assertTrue(store.state.value.records.people.values.any { it.contactCard().favorite })

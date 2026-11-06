@@ -5,7 +5,8 @@ import android.net.Uri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.json.encodeToStream
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -20,13 +21,26 @@ data class ContactBackup(val format: Int = 1, val state: DiskState, val peopleFi
 /** Authenticated, versioned, bounded full phone backup. No OAuth/device/transfer secrets. */
 object BackupArchive {
     fun hash(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+    @OptIn(ExperimentalSerializationApi::class)
     fun encode(backup: ContactBackup, photos: Map<String, ByteArray>, passphrase: String): ByteArray {
-        val manifest = json.encodeToString(backup).toByteArray()
-        require(manifest.size <= 64 * 1024 * 1024 && photos.size <= 10000 && backup.state.pending.size <= 10000) { "Backup exceeds supported recovery limits." }
-        require(manifest.size.toLong() + photos.values.sumOf { it.size.toLong() } <= 256 * 1024 * 1024) { "Backup is too large." }
+        require(photos.size <= 10000 && backup.state.pending.size <= 10000) { "Backup exceeds supported recovery limits." }
         val out = ByteArrayOutputStream()
         ZipOutputStream(out).use { zip ->
-            zip.putNextEntry(ZipEntry("backup.json")); zip.write(manifest); zip.closeEntry()
+            // Keep the live reducer/indexes resident without allocating a second
+            // complete UTF-16 JSON string and UTF-8 byte array beside the graph.
+            val manifest = object : java.io.OutputStream() {
+                var size = 0L
+                private fun count(n: Int) {
+                    size += n
+                    require(size <= 64 * 1024 * 1024) { "Backup exceeds supported recovery limits." }
+                }
+                override fun write(value: Int) { count(1); zip.write(value) }
+                override fun write(bytes: ByteArray, offset: Int, length: Int) { count(length); zip.write(bytes, offset, length) }
+            }
+            zip.putNextEntry(ZipEntry("backup.json"))
+            json.encodeToStream(backup, manifest)
+            zip.closeEntry()
+            require(manifest.size + photos.values.sumOf { it.size.toLong() } <= 256 * 1024 * 1024) { "Backup is too large." }
             for ((hash, bytes) in photos) {
                 require(hash(bytes) == hash && bytes.size <= 10 * 1024 * 1024) { "Damaged photo." }
                 zip.putNextEntry(ZipEntry("photos/$hash")); zip.write(bytes); zip.closeEntry()

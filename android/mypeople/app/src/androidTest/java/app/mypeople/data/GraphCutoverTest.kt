@@ -47,6 +47,8 @@ class GraphCutoverTest {
         compose.setContent { MyPeopleTheme { SplitContactDialog(original, app, close = {}, opened = { opened = it }) } }
         compose.onNodeWithText("New person's name").performTextInput("Cameron B")
         compose.waitUntil(5000) { compose.onAllNodesWithText("+12025550102", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        // The sheet/IME can resize the lazy viewport after the row first appears.
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("+12025550102", substring = true))
         compose.onNodeWithText("+12025550102", substring = true).performClick()
         compose.onNodeWithText("Review split").performClick()
         compose.onNodeWithText("Move associations").performClick()

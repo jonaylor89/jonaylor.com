@@ -133,8 +133,8 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
                     val edge = gs.graph.edges[op.target]
                     listOfNotNull(op.target, edge?.from, edge?.to)
                 }.toSet() else null
-                val projected = gs.project(computeDuplicates = changed, derived = base, previous = if (incremental) view else null, changedTargets = targets)
-                if (changed) projected else projected.copy(dupes = view.dupes)
+                val projected = gs.project(computeDuplicates = changed, derived = base, previous = view, changedTargets = targets)
+                projected
             } ?: if (disk.replica.enabled) contactHistory().project(base, disk.replica.localIds) else base
             viewRecords = disk.records; viewPending = disk.pending; viewReplica = disk.replica; viewGraph = disk.graph
         }
@@ -180,9 +180,15 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
         startupTiming("address_book", (System.nanoTime() - start) / 1_000_000)
         disk = journal.load()
         startupTiming("disk", (System.nanoTime() - start) / 1_000_000)
+        // A cached screen projection is not a warm authority. Build/verify the
+        // reducer and its indexes before enabling editing, not on the first Save.
+        val graphStart = System.nanoTime()
+        disk.graph?.let { GraphStore(it).graph.components().membersByPerson }
         journal.cachedRecords?.let {
+            if (disk.graph != null) it.duplicateIndex = GraphDuplicateIndex().updated(it.people, it.people.keys)
             view = it; viewRecords = disk.records; viewPending = disk.pending; viewReplica = disk.replica; viewGraph = disk.graph
         }
+        startupTiming("graph_indexes", (System.nanoTime() - graphStart) / 1_000_000)
         loaded = true
         val projectStart = System.nanoTime()
         publish()
@@ -210,7 +216,7 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
         }
         require(kind in opKinds) { "Unsupported operation" }
         if (disk.graph != null) {
-            saveGraph(GraphStore(disk.graph!!).mutate(kind, payload))
+            saveGraph(GraphStore(disk.graph!!).mutate(kind, payload, current()))
             return@locked
         }
         if (disk.replica.enabled && kind in setOf("merge", "rename", "contact_trash", "contact_restore")) {
@@ -325,7 +331,7 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
         val failed = requireNotNull(disk.failedEdits.firstOrNull { it.client_id == clientId }) { "This edit has already been recovered." }
         require(failed.kind == "relationship") { "Review this failed edit before recovering it." }
         if (disk.graph != null) {
-            val next = GraphStore(GraphStore(disk.graph!!).mutate(failed.kind, failed.payload)).indexed()
+            val next = GraphStore(GraphStore(disk.graph!!).mutate(failed.kind, failed.payload, current())).indexed()
             save(disk.copy(graph = next, failedEdits = disk.failedEdits.filterNot { it.client_id == clientId }))
         } else {
             val retry = failed.copy(client_id = UUID.randomUUID().toString(), sent = false, completed = false, created_at = Instant.now().toString())

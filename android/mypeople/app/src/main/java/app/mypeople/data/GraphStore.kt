@@ -3,6 +3,7 @@ package app.mypeople.data
 import java.security.MessageDigest
 import java.util.Base64
 import java.util.UUID
+import kotlinx.collections.immutable.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
@@ -26,13 +27,13 @@ data class GraphSelection(val uid: String, val heads: List<String>, val associat
 class GraphStore(val state: GraphState) {
     val graph = state.bundle.reducer ?: VersionedGraph(state.bundle.commits).also { state.bundle.reducer = it }
     private val components by lazy { graph.components() }
-    private val membersByPerson by lazy { components.groups.values.flatMap { members -> members.map { it to members } }.toMap() }
-    private val outgoing by lazy { graph.edges.toList().filter { graph.active(it.first) }.groupBy { it.second.from } }
-    private val incoming by lazy { graph.edges.toList().filter { graph.active(it.first) }.groupBy { it.second.to } }
+    private val membersByPerson get() = components.membersByPerson
+    private fun outgoing(id: String) = graph.outgoing(id).filter { graph.active(it.first) }
+    private fun incoming(id: String) = graph.incoming(id).filter { graph.active(it.first) }
     private val preferredPeople by lazy {
-        val canonical = components.groups.flatMap { (root, members) -> members.map { it to root } }.toMap()
+        val canonical = components.rootByPerson
         buildMap {
-            graph.edges.forEach { (id, edge) ->
+            graph.edgesOfType("same_person").forEach { (id, edge) ->
                 val preferred = text(id, "preferred_person")
                 if (edge.type == "same_person" && graph.active(id) && preferred in canonical) put(canonical.getValue(preferred), preferred)
             }
@@ -96,10 +97,10 @@ class GraphStore(val state: GraphState) {
         return !hint || (legacyPhones(uid) && text(point, "kind") in setOf("phone", "email"))
     }
     fun properties(id: String): JsonObject = JsonObject(graph.propertyNames(id).associateWith { graph.value(id, it)!! })
-    private fun decisionsFor(uid: String): List<String> = incoming[uid].orEmpty().filter { (_, e) -> e.type == "targets" && graph.active(e.from!!) }.map { it.second.from!! }
+    private fun decisionsFor(uid: String): List<String> = incoming(uid).filter { (_, e) -> e.type == "targets" && graph.active(e.from!!) }.map { it.second.from!! }
     fun associated(uid: String): List<Pair<String, GraphEntity>> {
         val members = membersByPerson[uid] ?: listOf(uid)
-        return members.flatMap { outgoing[it].orEmpty().filter { edge -> edge.second.type in VersionedGraph.attributions && edge.second.type != "participant" } + incoming[it].orEmpty().filter { edge -> edge.second.type == "participant" } }.distinctBy { it.first }.sortedWith(compareBy<Pair<String, GraphEntity>> { (graph.value(it.first, "card_order") as? JsonPrimitive)?.intOrNull ?: 1_000_000 }.thenBy { it.first })
+        return members.flatMap { outgoing(it).filter { edge -> edge.second.type in VersionedGraph.attributions && edge.second.type != "participant" } + incoming(it).filter { edge -> edge.second.type == "participant" } }.distinctBy { it.first }.sortedWith(compareBy<Pair<String, GraphEntity>> { (graph.value(it.first, "card_order") as? JsonPrimitive)?.intOrNull ?: 1_000_000 }.thenBy { it.first })
     }
     fun selection(uid: String) = GraphSelection(uid, graph.heads, associated(uid).map { (id, e) ->
         val obj = if (e.type == "participant") e.from!! else e.to!!
@@ -110,7 +111,7 @@ class GraphStore(val state: GraphState) {
             "Note" -> text(obj, "body")
             "InteractionBatch" -> listOf("${text(obj, "count")} messages", text(obj, "channel"), text(obj, "thread").takeIf { it.isNotBlank() }?.let { "Thread: $it" }.orEmpty(), text(obj, "first_at"), text(obj, "last_at")).filter { it.isNotBlank() }.joinToString(" · ")
             "Interaction" -> {
-                val conversation = outgoing[obj].orEmpty().firstOrNull { it.second.type == "in_conversation" }?.second?.to
+                val conversation = outgoing(obj).firstOrNull { it.second.type == "in_conversation" }?.second?.to
                 listOf(text(obj, "channel"), text(obj, "at").ifBlank { text(obj, "timestamp").ifBlank { text(obj, "date") } }, text(obj, "direction"), conversation?.let { "Thread: ${text(it, "external_key")}" }.orEmpty(), text(obj, "text").ifBlank { text(obj, "snippet") }).filter { it.isNotBlank() }.joinToString(" · ")
             }
             else -> properties(obj).toString()
@@ -121,7 +122,7 @@ class GraphStore(val state: GraphState) {
         if (ops.isEmpty()) return state
         val c = graph.commit(state.peer, ops, state.bundle.collection)
         val reduced = graph.appended(c)
-        val bundle = state.bundle.copy(heads = listOf(c.id), commits = state.bundle.commits + c, blobs = state.bundle.blobs + blobs).also { it.reducer = reduced }
+        val bundle = state.bundle.copy(heads = listOf(c.id), commits = reduced.ordered, blobs = if (blobs.isEmpty()) state.bundle.blobs else state.bundle.blobs + blobs).also { it.reducer = reduced }
         // This store already validated the immutable base. Only new bytes and
         // references need checking; never rehash every conversation on a card edit.
         verifyBlobs(blobs, listOf(c), bundle.blobs)
@@ -174,30 +175,36 @@ class GraphStore(val state: GraphState) {
         return state.bundle.copy(commits = graph.ordered.filterNot { it.id in known }, blobs = state.bundle.blobs.filterKeys { it !in knownBlobs })
     }
     fun indexed(): GraphState {
+        // Constructor validation established that every mapped UUID is a Person.
+        if (state.localIds.size == graph.people.size) return state
         val ids = state.localIds.toMutableMap()
         var next = minOf(-1, (ids.values.minOrNull() ?: 0) - 1)
-        graph.objects.filterValues { it.type == "Person" }.keys.sorted().forEach { if (it !in ids) ids[it] = next-- }
+        graph.people.sorted().forEach { if (it !in ids) ids[it] = next-- }
         return state.copy(localIds = ids)
     }
     fun project(computeDuplicates: Boolean = true, derived: Records = Records(), previous: Records? = null, changedTargets: Set<String>? = null): Records {
         val hints = derived.people.values.flatMap { p -> (listOf(p.contact_uid) + p.contact_aliases).map { it to p } }.toMap()
         val ids = indexed().localIds
-        val people = mutableMapOf<Int, Person>(); val events = mutableMapOf<String, Event>(); val profiles = mutableMapOf<String, Profile>(); val moments = mutableMapOf<String, Moment>()
-        val groups = components.groups
-        val reused = mutableSetOf<Int>()
-        val personIds = groups.flatMap { (root, members) -> members.map { it to ids.getValue(root) } }.toMap()
+        val incremental = previous != null && changedTargets != null
+        val roots = if (incremental) changedTargets!!.flatMap { target ->
+            // Include inactive edges: removing an attribution must invalidate its
+            // old owner too. Shared objects can invalidate more than one person.
+            listOfNotNull(components.rootByPerson[target]) + graph.incoming(target).filter { it.second.type in VersionedGraph.attributions }.mapNotNull { components.rootByPerson[it.second.from] }
+        }.toSet() else components.groups.keys
+        val groups = roots.sorted().associateWith { components.groups.getValue(it) }
+        val dirtyIds = roots.map { ids.getValue(it) }.toSet()
+        val people = (if (incremental) previous!!.people.toPersistentHashMap() else persistentHashMapOf()).builder()
+        val events = persistentHashMapOf<String, Event>().builder()
+        val profiles = persistentHashMapOf<String, Profile>().builder()
+        val moments = (if (incremental) previous!!.moments.toPersistentHashMap() else persistentHashMapOf()).builder()
+        dirtyIds.forEach(people::remove)
+        val personIds by lazy { components.rootByPerson.mapValues { (_, root) -> ids.getValue(root) } }
         groups.forEach { (uid, members) ->
             if (members.any { (graph.value(it, "is_me") as? JsonPrimitive)?.booleanOrNull == true }) return@forEach
             val edges = associated(uid)
-            val decisions = members.flatMap { incoming[it].orEmpty() }.filter { (_, e) -> e.type == "targets" && graph.active(e.from!!) }.map { it.second.from!! }
+            val decisions = members.flatMap { incoming(it) }.filter { (_, e) -> e.type == "targets" && graph.active(e.from!!) }.map { it.second.from!! }
             val entities = (members + edges.map { it.first } + edges.map { if (it.second.type == "participant") it.second.from!! else it.second.to!! } + decisions).distinct()
             val pid = ids.getValue(uid)
-            val cached = previous?.people?.get(pid)
-            if (changedTargets != null && cached != null && entities.none { it in changedTargets }) {
-                people[pid] = cached
-                reused += pid
-                return@forEach
-            }
             fun objects(type: String) = edges.filter { it.second.type == type }.map { it.second.to!! }.filter { graph.active(it) }.distinct()
             val names = objects("has_name"); val claims = objects("subject_of"); val notes = objects("has_note")
             val primary = primaryName(uid)
@@ -247,31 +254,36 @@ class GraphStore(val state: GraphState) {
                 channels = interactions.groupBy { text(it, "channel") }.map { ChannelCount(it.key, it.value.sumOf(::interactionCount)) }, first_contact = firstContact, last_contact = lastContact)
             (claims + notes).forEach memory@{ obj ->
                 val p = properties(obj); val predicate = p.text("predicate")
-                val reviews = incoming[obj].orEmpty().filter { (_, e) -> e.type == "targets" && graph.active(e.from!!) }.map { text(it.second.from!!, "action") }
+                val reviews = incoming(obj).filter { (_, e) -> e.type == "targets" && graph.active(e.from!!) }.map { text(it.second.from!!, "action") }
                 if (predicate != "public_profile" && (p.text("status") in setOf("rejected", "forgotten") || reviews.any { it in setOf("reject", "rejected", "forget", "forgotten") })) return@memory
                 if (predicate == "public_profile") {
-                    val statuses = incoming[obj].orEmpty().filter { (_, e) -> e.type == "targets" && graph.active(e.from!!) }.map { text(it.second.from!!, "action") }.filter { it in setOf("confirmed", "rejected", "suggested") }
+                    val statuses = incoming(obj).filter { (_, e) -> e.type == "targets" && graph.active(e.from!!) }.map { text(it.second.from!!, "action") }.filter { it in setOf("confirmed", "rejected", "suggested") }
                     profiles[obj] = Profile(pid, p.text("site"), p.text("url").ifBlank { p.text("value") }, p.text("title"), statuses.lastOrNull() ?: p.text("status").ifBlank { "suggested" }, p.text("assessment").ifBlank { "possible" }, p.text("reason"), p["confidence"]?.jsonPrimitive?.doubleOrNull ?: 0.0)
                 } else {
-                    val evidence = outgoing[obj].orEmpty().firstOrNull { it.second.type == "supported_by" }?.second?.to?.let { text(it, "quote") }
+                    val evidence = outgoing(obj).firstOrNull { it.second.type == "supported_by" }?.second?.to?.let { text(it, "quote") }
                     events[obj] = Event(pid, if (obj in notes) "note" else predicate.ifBlank { p.text("type") }, if (obj in notes) p.text("body").ifBlank { p.text("value") } else p.text("value"), p.text("date"), p["confidence"]?.jsonPrimitive?.doubleOrNull ?: 1.0, p.text("source").ifBlank { "manual" }, evidence ?: p.text("evidence").ifBlank { null }, p.text("said_at").ifBlank { null }, p.text("created_at"))
                 }
             }
         }
-        previous?.let { cached ->
-            events.putAll(cached.events.filterValues { it.person_id in reused })
-            profiles.putAll(cached.profiles.filterValues { it.person_id in reused })
+        if (incremental) {
+            // A shared memory object keeps the full projection's owner when that
+            // owner's component did not change (full projection is root-ordered).
+            events.putAll(previous!!.events.filterValues { it.person_id !in dirtyIds })
+            profiles.putAll(previous.profiles.filterValues { it.person_id !in dirtyIds })
         }
-        graph.edges.forEach { (id, e) -> if (e.type == "about" && graph.active(id) && graph.objects[e.from]?.type == "Moment" && graph.active(e.from!!)) {
+        if (!incremental) graph.edgesOfType("about").forEach { (id, e) -> if (graph.active(id) && graph.objects[e.from]?.type == "Moment" && graph.active(e.from!!)) {
             val pid = personIds[e.to] ?: return@forEach; val p = properties(e.from)
             moments[e.from] = Moment(pid, p.text("kind"), p.text("reason"), p.text("context").ifBlank { null }, p["score"]?.jsonPrimitive?.doubleOrNull ?: 0.0, p.text("surfaced_on"), p.text("status").ifBlank { "new" })
         } }
-        val records = Records(people, events, profiles, moments)
-        val distinct = graph.edges.filter { (id, e) -> e.type == "distinct_person" && graph.active(id) }.values.mapNotNull { e ->
+        val records = Records(people.build(), events.build(), profiles.build(), moments.build())
+        val distinct = graph.edgesOfType("distinct_person").filter { (id, _) -> graph.active(id) }.mapNotNull { (_, e) ->
             val a = personIds[e.from]; val b = personIds[e.to]
             if (a != null && b != null) setOf(a, b) else null
         }
-        return if (computeDuplicates) records.copy(dupes = localDuplicates(records, people.values.map { it.contact_uid }.toSet(), distinct)) else records
+        val oldIndex = if (incremental) previous!!.duplicateIndex else null
+        val index = (oldIndex ?: GraphDuplicateIndex()).updated(records.people, if (oldIndex == null) records.people.keys else dirtyIds)
+        val dupes = if (computeDuplicates || (incremental && index !== oldIndex)) index.groups(distinct) else previous?.dupes.orEmpty()
+        return records.copy(dupes = dupes).also { it.duplicateIndex = index }
     }
 
     fun saveCard(uid: String, card: ContactCard, restore: Boolean = false): GraphState {

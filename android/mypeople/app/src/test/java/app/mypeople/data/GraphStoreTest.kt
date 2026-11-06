@@ -51,6 +51,46 @@ class GraphStoreTest {
         assertEquals(store.state.value.records, restarted.state.value.records)
     }
 
+    @Test fun `non identity fallback projections retain existing duplicate candidates`() = runBlocking {
+        val store = Store(temp.newFolder())
+        val fields = listOf(ContactField("email", "shared@example.test"))
+        val a = store.saveContact(ContactCard("A", fields = fields))
+        store.saveContact(ContactCard("B", fields = fields))
+        val dupes = store.state.value.records.dupes
+        assertFalse(dupes.isEmpty())
+        val uid = store.state.value.records.people.getValue(a).contact_uid
+        store.enqueue("note", personPayload(uid) { put("text", "Keep candidates") })
+        assertEquals(dupes, store.state.value.records.dupes)
+        val event = store.state.value.records.events.keys.single()
+        store.enqueue("event_forget", personPayload(uid) { put("event_id", event) })
+        assertEquals(dupes, store.state.value.records.dupes)
+        val gs = GraphStore(store.snapshot().graph!!)
+        val profile = VersionedGraph.createObject("Claim", buildJsonObject { put("predicate", "public_profile"); put("value", "https://example.test/a") })
+        store.installOffline(snapshot(gs.commit(listOf(profile, VersionedGraph.createEdge("subject_of", uid, profile.target))).bundle))
+        // Decision/targets changes deliberately use the full fallback projection.
+        store.enqueue("profile_status", personPayload(uid) { put("profile_id", profile.target); put("status", "confirmed") })
+        assertEquals(dupes, store.state.value.records.dupes)
+        assertEquals(GraphStore(store.snapshot().graph!!).project(), store.state.value.records)
+    }
+
+    @Test fun `component projection preserves shared memory ownership and removes retracted attributes`() = runBlocking {
+        val store = Store(temp.newFolder())
+        val a = store.saveContact(ContactCard("A"))
+        val b = store.saveContact(ContactCard("B"))
+        val gs = GraphStore(store.snapshot().graph!!)
+        val note = VersionedGraph.createObject("Note", buildJsonObject { put("body", "Shared note"); put("origin", "contact_card_notes") })
+        val edges = listOf(a, b).map { VersionedGraph.createEdge("has_note", store.state.value.records.people.getValue(it).contact_uid, note.target) }
+        store.installOffline(snapshot(gs.commit(listOf(note) + edges).bundle))
+        for (id in listOf(a, b, a)) {
+            store.saveContact(store.state.value.records.people.getValue(id).contactCard().copy(favorite = true), id)
+            assertEquals(GraphStore(store.snapshot().graph!!).project(), store.state.value.records)
+        }
+        store.saveContact(store.state.value.records.people.getValue(a).contactCard().copy(notes = "Changed shared note"), a)
+        assertEquals(GraphStore(store.snapshot().graph!!).project(), store.state.value.records)
+        store.saveContact(store.state.value.records.people.getValue(b).contactCard().copy(notes = ""), b)
+        assertEquals(GraphStore(store.snapshot().graph!!).project(), store.state.value.records)
+    }
+
     @Test fun `verified base never bypasses validation of newly appended blobs and references`() {
         val gs = GraphStore(base())
         assertTrue(gs.state.bundle.blobsVerified)

@@ -37,6 +37,7 @@ kotlin {
 }
 
 dependencies {
+    implementation(libs.immutable)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.material3)

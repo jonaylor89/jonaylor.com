@@ -3,6 +3,7 @@ package app.mypeople.data
 import java.time.OffsetDateTime
 import java.util.PriorityQueue
 import java.util.UUID
+import kotlinx.collections.immutable.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
@@ -30,7 +31,10 @@ data class GraphCommit(
 data class GraphEntity(val type: String, val from: String? = null, val to: String? = null)
 data class GraphAlternative(val operation: String, val value: JsonElement)
 data class GraphSplit(val person: String, val operations: List<GraphOperation>, val review: List<String>)
-data class GraphComponents(val groups: Map<String, List<String>>, val contradictions: List<String>)
+data class GraphComponents(val groups: Map<String, List<String>>, val contradictions: List<String>) {
+    val rootByPerson by lazy { groups.flatMap { (root, members) -> members.map { it to root } }.toMap() }
+    val membersByPerson by lazy { groups.values.flatMap { members -> members.map { it to members } }.toMap() }
+}
 
 class VersionedGraph private constructor(input: List<GraphCommit>, base: VersionedGraph?) {
     constructor(input: List<GraphCommit> = emptyList()) : this(input, null)
@@ -85,15 +89,27 @@ class VersionedGraph private constructor(input: List<GraphCommit>, base: Version
     val ordered: List<GraphCommit>
     val heads: List<String>
     val collection: String?
-    private val mutableObjects = mutableMapOf<String, GraphEntity>()
-    private val mutableEdges = mutableMapOf<String, GraphEntity>()
+    // HAMT builders share immutable nodes with the previous snapshot. Appending
+    // ten operations must not copy hundreds of thousands of history/index entries.
+    private val mutableObjects: PersistentMap.Builder<String, GraphEntity> = (base?.mutableObjects?.build() ?: persistentHashMapOf()).builder()
+    private val mutableEdges: PersistentMap.Builder<String, GraphEntity> = (base?.mutableEdges?.build() ?: persistentHashMapOf()).builder()
     val objects: Map<String, GraphEntity> = java.util.Collections.unmodifiableMap(mutableObjects)
     val edges: Map<String, GraphEntity> = java.util.Collections.unmodifiableMap(mutableEdges)
-    private val versions = mutableMapOf<Pair<String, String>, MutableMap<String, JsonElement>>()
-    private val propertyIndex = mutableMapOf<String, MutableSet<String>>()
-    private val operations = mutableMapOf<String, GraphOperation>()
-    private val origins = mutableMapOf<String, String>()
-    private val creation = mutableMapOf<String, String>()
+    private val versions: PersistentMap.Builder<Pair<String, String>, MutableMap<String, JsonElement>> = (base?.versions?.build() ?: persistentHashMapOf<Pair<String, String>, MutableMap<String, JsonElement>>()).builder()
+    private val propertyIndex: PersistentMap.Builder<String, MutableSet<String>> = (base?.propertyIndex?.build() ?: persistentHashMapOf<String, MutableSet<String>>()).builder()
+    private val operations: PersistentMap.Builder<String, GraphOperation> = (base?.operations?.build() ?: persistentHashMapOf<String, GraphOperation>()).builder()
+    private val origins: PersistentMap.Builder<String, String> = (base?.origins?.build() ?: persistentHashMapOf<String, String>()).builder()
+    private val creation: PersistentMap.Builder<String, String> = (base?.creation?.build() ?: persistentHashMapOf<String, String>()).builder()
+    private val outgoingIndex: PersistentMap.Builder<String, PersistentList<String>> = (base?.outgoingIndex?.build() ?: persistentHashMapOf<String, PersistentList<String>>()).builder()
+    private val incomingIndex: PersistentMap.Builder<String, PersistentList<String>> = (base?.incomingIndex?.build() ?: persistentHashMapOf<String, PersistentList<String>>()).builder()
+    private val edgeTypeIndex: PersistentMap.Builder<String, PersistentList<String>> = (base?.edgeTypeIndex?.build() ?: persistentHashMapOf<String, PersistentList<String>>()).builder()
+    private val personIndex: PersistentSet.Builder<String> = (base?.personIndex?.build() ?: persistentHashSetOf<String>()).builder()
+    private var componentCache: GraphComponents? = base?.componentCache
+
+    fun outgoing(id: String) = outgoingIndex[id].orEmpty().map { it to edges.getValue(it) }
+    fun incoming(id: String) = incomingIndex[id].orEmpty().map { it to edges.getValue(it) }
+    fun edgesOfType(type: String) = edgeTypeIndex[type].orEmpty().map { it to edges.getValue(it) }
+    val people: Set<String> get() = personIndex.build()
 
     init {
         if (base != null) {
@@ -106,13 +122,10 @@ class VersionedGraph private constructor(input: List<GraphCommit>, base: Version
             OffsetDateTime.parse(c.recorded_at)
             c.operations.forEach { validateJson(it.payload, 3) }
             require(base.commits.size < 100_000 && base.operations.size.toLong() + c.operations.size <= 1_000_000)
-            commits = base.commits + (c.id to c)
-            ordered = base.ordered + c
+            commits = base.commits.toPersistentHashMap().put(c.id, c)
+            ordered = base.ordered.toPersistentList().add(c)
             heads = listOf(c.id)
             collection = c.collection
-            mutableObjects.putAll(base.mutableObjects); mutableEdges.putAll(base.mutableEdges)
-            versions.putAll(base.versions); propertyIndex.putAll(base.propertyIndex)
-            operations.putAll(base.operations); origins.putAll(base.origins); creation.putAll(base.creation)
             c.operations.map { it.target }.distinct().forEach { target ->
                 propertyIndex[target] = base.propertyIndex[target].orEmpty().toMutableSet()
             }
@@ -142,7 +155,7 @@ class VersionedGraph private constructor(input: List<GraphCommit>, base: Version
         }
         require(index.size <= 100_000 && index.values.sumOf { it.operations.size.toLong() } <= 1_000_000) { "Graph exceeds supported history size" }
         require(index.values.map { it.collection }.distinct().size <= 1) { "Cannot join different collections" }
-        commits = index.toMap()
+        commits = index.toPersistentHashMap()
         collection = index.values.firstOrNull()?.collection
         val children = mutableMapOf<String, MutableList<String>>()
         val pending = index.mapValues { it.value.parents.size }.toMutableMap()
@@ -162,7 +175,7 @@ class VersionedGraph private constructor(input: List<GraphCommit>, base: Version
             }
         }
         require(sorted.size == index.size) { "Cyclic commit history" }
-        ordered = sorted
+        ordered = sorted.toPersistentList()
         heads = (index.keys - children.keys).sorted()
         ordered.forEach { c -> c.operations.forEach { apply(c.id, it) } }
         }
@@ -202,6 +215,7 @@ class VersionedGraph private constructor(input: List<GraphCommit>, base: Version
                 if (objectCreation) {
                     require(type in objectTypes) { "Unknown object type" }
                     mutableObjects[op.target] = GraphEntity(type)
+                    if (type == "Person") { personIndex.add(op.target); componentCache = null }
                 } else {
                     val allowed = requireNotNull(edgeTypes[type]) { "Unknown edge type" }
                     val from = string(p["from"]); val to = string(p["to"])
@@ -209,6 +223,9 @@ class VersionedGraph private constructor(input: List<GraphCommit>, base: Version
                     require((allowed.first == null || mutableObjects[from]?.type in allowed.first!!) && (allowed.second == null || mutableObjects[to]?.type in allowed.second!!)) { "Invalid edge endpoint type" }
                     require(type !in setOf("same_person", "distinct_person") || from != to) { "Identity assertions need two people" }
                     mutableEdges[op.target] = GraphEntity(type, from, to)
+                    outgoingIndex[from] = (outgoingIndex[from] ?: persistentListOf()).add(op.target)
+                    incomingIndex[to] = (incomingIndex[to] ?: persistentListOf()).add(op.target)
+                    edgeTypeIndex[type] = (edgeTypeIndex[type] ?: persistentListOf()).add(op.target)
                 }
                 creation[op.target] = commit
                 values = props + ("_lifecycle" to JsonPrimitive("active"))
@@ -240,6 +257,7 @@ class VersionedGraph private constructor(input: List<GraphCommit>, base: Version
             }
             else -> error("Unknown operation kind")
         }
+        if (mutableEdges[op.target]?.type in setOf("same_person", "distinct_person")) componentCache = null
         operations[op.id] = op; origins[op.id] = commit
         values.forEach { (prop, value) ->
             versions.getOrPut(op.target to prop) { mutableMapOf() }[op.id] = value
@@ -263,12 +281,12 @@ class VersionedGraph private constructor(input: List<GraphCommit>, base: Version
         versions[target to "_lifecycle"].orEmpty().forEach { (lifecycle, state) ->
             if (state != JsonPrimitive("active")) {
                 val deletion = origins.getValue(lifecycle)
-                versions.filterKeys { it.first == target && it.second != "_lifecycle" }.forEach { (key, alternatives) ->
-                    alternatives.forEach { (operation, value) ->
+                propertyNames(target).forEach { property ->
+                    versions[target to property].orEmpty().forEach { (operation, value) ->
                         val edit = origins.getValue(operation)
                         if (!observed(deletion, edit) && !observed(edit, deletion)) {
                             conflicts[lifecycle] = buildJsonObject { put("property", "_lifecycle"); put("value", state) }
-                            conflicts[operation] = buildJsonObject { put("property", key.second); put("value", value) }
+                            conflicts[operation] = buildJsonObject { put("property", property); put("value", value) }
                         }
                     }
                 }
@@ -285,19 +303,20 @@ class VersionedGraph private constructor(input: List<GraphCommit>, base: Version
     fun commit(peer: String, operations: List<GraphOperation>, collection: String? = this.collection): GraphCommit = GraphCommit(id(), collection ?: id(), peer, OffsetDateTime.now(java.time.ZoneOffset.UTC).toString(), 1, heads, operations)
 
     fun components(): GraphComponents {
-        val roots = mutableObjects.filterValues { it.type == "Person" }.keys.associateWith { it }.toMutableMap()
+        componentCache?.let { return it }
+        val roots = personIndex.associateWith { it }.toMutableMap()
         fun root(start: String): String {
             var key = start
             while (roots.getValue(key) != key) { roots[key] = roots.getValue(roots.getValue(key)); key = roots.getValue(key) }
             return key
         }
-        mutableEdges.toSortedMap().forEach { (id, edge) -> if (edge.type == "same_person" && active(id)) {
+        edgesOfType("same_person").sortedBy { it.first }.forEach { (id, edge) -> if (active(id)) {
             val a = root(edge.from!!); val b = root(edge.to!!)
             roots[maxOf(a, b)] = minOf(a, b)
         } }
         val groups = roots.keys.sorted().groupBy(::root)
-        val contradictions = mutableEdges.toSortedMap().filter { (id, e) -> e.type == "distinct_person" && active(id) && root(e.from!!) == root(e.to!!) }.keys.toList()
-        return GraphComponents(groups, contradictions)
+        val contradictions = edgesOfType("distinct_person").filter { (id, e) -> active(id) && root(e.from!!) == root(e.to!!) }.map { it.first }.sorted()
+        return GraphComponents(groups, contradictions).also { componentCache = it }
     }
 
     fun split(person: String, name: String, attributions: List<String>): GraphSplit {

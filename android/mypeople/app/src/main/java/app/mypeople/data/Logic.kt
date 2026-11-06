@@ -21,7 +21,10 @@ data class Records(
     val moments: Map<String, Moment> = emptyMap(),
     val dupes: Map<String, Dupes> = emptyMap(),
     val contactChanges: Map<String, ContactChange> = emptyMap(),
-)
+) {
+    @kotlinx.serialization.Transient
+    internal var duplicateIndex: GraphDuplicateIndex? = null
+}
 
 fun Records.applyChanges(changes: List<RecordChange>): Records {
     val people = people.toMutableMap(); val events = events.toMutableMap()
