@@ -113,12 +113,12 @@ fun ContactsSettings(graph: AppGraph, state: StoreState, feedback: (String) -> U
     var candidates by remember { mutableStateOf<List<ContactCard>?>(null) }
     var recovering by remember { mutableStateOf<PendingOp?>(null) }
     var report by remember { mutableStateOf(false) }; var consent by remember { mutableStateOf(false) }
-    var permissionAction by remember { mutableStateOf("") }; var conflict by remember { mutableStateOf("") }
+    var permissionAction by remember { mutableStateOf("") }
     var backupAction by remember { mutableStateOf("") }; var backupUri by remember { mutableStateOf<Uri?>(null) }
     // Secrets deliberately never saved in instance state.
     var passphrase by remember { mutableStateOf("") }; var backupError by remember { mutableStateOf<String?>(null) }
     fun runTask(block: suspend () -> Unit) { scope.launch { busy = true; try { block() } catch (e: Exception) { feedback(e.message ?: "Operation failed; saved contacts were kept.") } finally { busy = false } } }
-    fun reconcile(prefer: String = "") = runTask { status = graph.deviceContacts.reconcile(prefer); enabled = graph.settings.contactsEnabled }
+    fun reconcile() = runTask { status = graph.deviceContacts.reconcile(); enabled = graph.settings.contactsEnabled }
     fun enableIntegration() = runTask { withContext(Dispatchers.IO) { graph.deviceContacts.ensureAccount() }; graph.settings.contactsEnabled = true; enabled = true; status = graph.deviceContacts.reconcile() }
     fun importDevice() = runTask { candidates = graph.deviceContacts.importCandidates() }
     val permissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
@@ -154,12 +154,8 @@ fun ContactsSettings(graph: AppGraph, state: StoreState, feedback: (String) -> U
             }); Text("Enable integration", Modifier.padding(start = 12.dp, top = 12.dp)) }
             Text(status, style = MaterialTheme.typography.bodySmall)
             if (enabled) {
-                OutlinedButton(enabled = !busy, onClick = { reconcile() }) { Text("Reconcile Android contacts") }
-                Text("Edits in other contact apps are imported. If both sides change, that contact is left untouched until you choose which version wins.", style = MaterialTheme.typography.bodySmall)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(enabled = !busy, onClick = { conflict = "mypeople" }) { Text("Keep MyPeople versions") }
-                    TextButton(enabled = !busy, onClick = { conflict = "android" }) { Text("Keep Android versions") }
-                }
+                OutlinedButton(enabled = !busy, onClick = { reconcile() }) { Text("Retry Android copy update") }
+                Text("MyPeople is the source of truth. Saved edits automatically update its Android copies. Edits or deletions in other contact apps are replaced with the MyPeople version. Resolve offline conflicts inside MyPeople before those contacts can update.", style = MaterialTheme.typography.bodySmall)
             }
         }
     }
@@ -199,8 +195,7 @@ fun ContactsSettings(graph: AppGraph, state: StoreState, feedback: (String) -> U
     }
     candidates?.let { ImportContactsReview(it, graph) { candidates = null } }
     if (report) AlertDialog(onDismissRequest = { report = false }, title = { Text("Migration safety report") }, text = { Text(state.records.migrationReport().summary(), Modifier.verticalScroll(rememberScrollState())) }, confirmButton = { TextButton(onClick = { report = false }) { Text("Close") } })
-    if (consent) AlertDialog(onDismissRequest = { consent = false }, title = { Text("Make contacts available to Android?") }, text = { Text("Apps with Contacts permission can read these details. Only the MyPeople account is managed. Existing Google/SIM/device contacts are not removed and may aggregate with the new copies. Import and review your original contacts first.") }, confirmButton = { TextButton(onClick = { consent = false; permissionAction = "enable"; permissions.launch(arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.WRITE_CONTACTS)) }) { Text("Allow & enable") } }, dismissButton = { TextButton(onClick = { consent = false }) { Text("Cancel") } })
-    if (conflict.isNotEmpty()) AlertDialog(onDismissRequest = { conflict = "" }, title = { Text("Resolve conflicting edits?") }, text = { Text("For contacts changed on both sides, keep the ${if (conflict == "android") "Android" else "MyPeople"} version. This may discard the other version's conflicting changes. Make a backup first.") }, confirmButton = { TextButton(onClick = { val preference = conflict; conflict = ""; reconcile(preference) }) { Text("Resolve conflicts") } }, dismissButton = { TextButton(onClick = { conflict = "" }) { Text("Cancel") } })
+    if (consent) AlertDialog(onDismissRequest = { consent = false }, title = { Text("Make contacts available to Android?") }, text = { Text("Apps with Contacts permission can read these details. Only the MyPeople account is managed. Existing Google/SIM/device contacts are not removed and may aggregate with the new copies. MyPeople is authoritative: edits or deletions of its copies in other apps will be replaced automatically. Edit in MyPeople instead. Import and review your original contacts first.") }, confirmButton = { TextButton(onClick = { consent = false; permissionAction = "enable"; permissions.launch(arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.WRITE_CONTACTS)) }) { Text("Allow & enable") } }, dismissButton = { TextButton(onClick = { consent = false }) { Text("Cancel") } })
     if (backupAction.isNotEmpty()) AlertDialog(onDismissRequest = { if (!busy) { backupAction = ""; passphrase = "" } }, title = { Text(if (backupAction == "export") "Protect your backup" else "Restore this phone?") }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(if (backupAction == "export") "Use a separate passphrase of at least 12 ASCII characters. Losing it means losing access to the backup." else "Replaces saved phone memory. Pending edits in the backup are restored and retried by UUID. Android integration is paused and server credentials must be entered again. Your current pending queue must be empty.")

@@ -44,11 +44,11 @@ class AppGraph(context: Application, startMemoryImmediately: Boolean = true) {
                 delay(500)
                 while (contactsRequests.tryReceive().isSuccess) { /* coalesce provider callbacks */ }
                 try { deviceContacts.reconcile() }
-                catch (_: Exception) { messages.send("Android contacts could not be reconciled. Copies were not reset; check Settings.") }
+                catch (_: Exception) { messages.send("Android copies could not be updated. MyPeople contacts are safe; check Settings and retry.") }
             }
         }
         scope.launch {
-            deviceContacts.statusFlow.collect { status -> if (status.startsWith("Conflicts")) messages.send("Android contact conflicts need review in Settings. Neither version was overwritten.") }
+            deviceContacts.statusFlow.collect { status -> if (status.startsWith("Conflicts")) messages.send("Offline contact conflicts need review in MyPeople. Android copies were left untouched.") }
         }
         scope.launch {
             var previous: Records? = null

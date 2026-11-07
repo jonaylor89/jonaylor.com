@@ -10,7 +10,20 @@ import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 
 @Serializable
-internal data class MirrorEntry(val rawId: Long, val exported: ContactCard, val local: ContactCard, val phoneFormat: Int = 0)
+internal data class MirrorEntry(val rawId: Long, val exported: ContactCard, val local: ContactCard, val phoneFormat: Int = 0) {
+    /** Android is a projection, never an authority or a source of graph edits. */
+    fun needsWrite(current: ContactCard, external: ContactCard?): Boolean =
+        external == null || current.androidBaseline() != local.androidBaseline() ||
+            external.androidBaseline() != exported.androidBaseline() ||
+            (current.fields.any { it.kind == "phone" } && phoneFormat != 1)
+}
+
+/** Full originals stay in the graph, not the provider baseline; photos compare by bytes. */
+internal fun ContactCard.androidBaseline(): ContactCard = copy(
+    originals = emptyList(), source_records = emptyList(), edit_id = "", user_edited = false,
+    photo_hash = if (photo.isNotEmpty()) GraphStore.digest(java.util.Base64.getDecoder().decode(photo)) else photo_hash,
+    photo = "",
+)
 @Serializable
 internal data class MirrorState(val entries: Map<String, MirrorEntry> = emptyMap(), val sequence: Long = 0)
 @Serializable

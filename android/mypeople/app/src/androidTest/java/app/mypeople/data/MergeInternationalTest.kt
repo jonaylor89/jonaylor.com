@@ -28,7 +28,7 @@ import java.util.UUID
 class MergeInternationalTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun unrelatedConflictsDoNotBlockMergeButSelectedConflictsStayVisible() = runBlocking {
+    @Test fun androidDifferencesAreRepairedAndDoNotBlockMerges() = runBlocking {
         assumeTrue(InstrumentationRegistry.getArguments().getString("myPeopleDisposable") == "true")
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -64,13 +64,11 @@ class MergeInternationalTest {
         graph.store.saveContact(cards.getValue(3).copy(notes = "MyPeople version"), 3)
         }
         graph.settings.contactsEnabled = true
-        val conflictStatus = graph.deviceContacts.reconcile()
-        assertTrue(conflictStatus, conflictStatus.startsWith("Conflicts"))
+        assertFalse(graph.deviceContacts.reconcile().startsWith("Conflicts"))
+        assertEquals("MyPeople version", resolver.query(C.Data.CONTENT_URI, arrayOf(K.Note.NOTE), "${C.Data.RAW_CONTACT_ID}=? AND ${C.Data.MIMETYPE}=?", arrayOf(charlieRaw.toString(), K.Note.CONTENT_ITEM_TYPE), null)!!.use { assertTrue(it.moveToFirst()); it.getString(0) })
         graph.submitEdit("merge", buildJsonObject { putJsonArray("person_ids") { add(1); add(2) } })
         assertEquals(1, graph.store.state.value.pending.count { it.kind == "merge" })
         assertEquals(setOf(1, 3, 4), graph.store.state.value.records.people.keys)
-        assertTrue(graph.deviceContacts.status.startsWith("Conflicts")) // scoped checks don't erase unrelated status
-        assertEquals("MyPeople version", graph.store.state.value.records.people.getValue(3).card!!.notes)
 
         compose.setContent {
             val state by graph.store.state.collectAsStateWithLifecycle()
@@ -79,14 +77,9 @@ class MergeInternationalTest {
         compose.onNodeWithText("Duplicates").performClick()
         compose.onNodeWithText("Merge all 2 records").performScrollTo().performClick()
         compose.onNodeWithText("Merge", useUnmergedTree = true).performClick()
-        val error = "Resolve Android contact conflicts for the selected people in Settings before merging. No merge was queued."
-        compose.waitUntil(5000) { compose.onAllNodesWithText(error).fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText(error).assertIsDisplayed()
-        compose.onNodeWithText("Merge 2 people?").assertIsDisplayed()
-        compose.onNodeWithText("Cancel").performClick()
-        assertEquals(1, graph.store.state.value.pending.count { it.kind == "merge" })
-        assertTrue(graph.store.state.value.records.people.keys.containsAll(listOf(3, 4)))
-        assertEquals("Android version", resolver.query(C.Data.CONTENT_URI, arrayOf(K.Note.NOTE), "${C.Data.RAW_CONTACT_ID}=? AND ${C.Data.MIMETYPE}=?", arrayOf(charlieRaw.toString(), K.Note.CONTENT_ITEM_TYPE), null)!!.use { assertTrue(it.moveToFirst()); it.getString(0) })
+        compose.waitUntil(5000) { graph.store.state.value.pending.count { it.kind == "merge" } == 2 }
+        assertEquals(setOf(1, 3), graph.store.state.value.records.people.keys)
+        assertEquals("MyPeople version\n\nOriginal notes", graph.store.state.value.records.people.getValue(3).contactCard().notes)
         graph.settings.contactsEnabled = false
         Unit
     }

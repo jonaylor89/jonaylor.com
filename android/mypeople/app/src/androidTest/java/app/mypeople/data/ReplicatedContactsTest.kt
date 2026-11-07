@@ -38,27 +38,39 @@ class ReplicatedContactsTest {
         val second = graph.store.saveContact(ContactCard("Ada duplicate QA", notes = "Original", fields = listOf(ContactField("email", "ada@example.test"))))
         val people = graph.store.state.value.records.people
         val uid = people.getValue(second).contact_uid
-        val base = ContactHistory(graph.store.snapshot().replica.changes)
+        val base = graph.store.snapshot().graph!!
+        graph.store.saveContact(graph.store.state.value.records.people.getValue(second).contactCard().copy(notes = "Phone note"), second)
         graph.deviceContacts.ensureAccount(); graph.settings.contactsEnabled = true
         assertFalse(graph.deviceContacts.reconcile().contains("Conflicts"))
         val start = System.nanoTime()
         graph.submitEdit("merge", buildJsonObject { putJsonArray("person_ids") { add(first); add(second) } })
         println("Provider-backed local merge: ${(System.nanoTime() - start) / 1_000_000}ms")
         assertEquals(1, graph.store.state.value.records.people.size)
-        assertEquals(3, graph.store.state.value.pending.count { it.kind == "contact_change" })
+        assertNotNull(graph.store.snapshot().graph)
+        assertTrue(graph.store.state.value.pending.isEmpty())
         graph.deviceContacts.reconcile()
         var merged = graph.store.state.value.records.people.values.single()
         assertNotNull(graph.deviceContacts.lookup(merged.contact_uid))
         assertEquals(1, context.contentResolver.query(C.RawContacts.CONTENT_URI, arrayOf(C.RawContacts._ID), "${C.RawContacts.ACCOUNT_TYPE}=? AND ${C.RawContacts.DELETED}=0", arrayOf(DeviceContacts.ACCOUNT_TYPE), null)!!.use { it.count })
         graph.settings.contactsEnabled = false
-        val remote = base.plus(listOf(base.edit(uid, values = buildJsonObject { put("notes", "Mac note") })))
+        // A real Store creates the synthetic peer branch; indexed snapshots are read-only.
+        val peer = Store(File(context.cacheDir, "replicated-qa-peer"))
+        peer.initialize()
+        peer.installOffline(TransferManifest(type = "snapshot", source = base.bundle.collection, revision = 1, graph = base.bundle))
+        val remotePerson = peer.state.value.records.people.entries.first { it.value.contact_uid == uid }
+        peer.saveContact(remotePerson.value.contactCard().copy(notes = "Mac note"), remotePerson.key)
+        val remote = peer.snapshot().graph!!
         // The remote branch has never seen our merge. Import must join, not replace it.
         graph.store.installOffline(TransferManifest(type = "snapshot", source = newContactUid(), publisher = newContactUid(), revision = 1,
-            contact_version = 1, contact_history = remote.changes, contact_heads = remote.heads))
+            graph = remote.bundle))
         merged = graph.store.state.value.records.people.values.single()
-        assertEquals(setOf("Original", "Mac note"), merged.contact_conflicts.getValue("notes").map { it.value.jsonPrimitive.content }.toSet())
+        assertEquals(setOf("Phone note", "Mac note"), merged.contact_conflicts.values.flatten().map { it.value.jsonPrimitive.content }.toSet())
         graph.settings.contactsEnabled = true
         assertTrue(graph.deviceContacts.reconcile().contains("Conflicts"))
+        try {
+            graph.deviceContacts.prepareMerge(graph.store.state.value.records.people.keys)
+            fail("Offline conflicts must still block merge preparation")
+        } catch (e: EditRejected) { assertTrue(e.message!!.contains("offline contact conflicts")) }
         compose.setContent {
             val state by graph.store.state.collectAsStateWithLifecycle()
             val person = state.records.people.entries.single()
@@ -67,15 +79,16 @@ class ReplicatedContactsTest {
         compose.onNodeWithText("Two versions, safely kept").assertIsDisplayed()
         compose.onNodeWithText("Keep Mac note").performClick()
         compose.waitUntil(5000) { graph.store.state.value.records.people.values.single().contact_conflicts.isEmpty() }
-        assertEquals("Mac note", graph.store.state.value.records.people.values.single().contactCard().notes)
+        assertTrue(graph.store.state.value.records.people.values.single().contactCard().notes.contains("Mac note"))
         assertFalse(graph.deviceContacts.reconcile().contains("Conflicts"))
         val root = graph.store.state.value.records.people.values.single().contact_uid
         val rawId = context.contentResolver.query(C.RawContacts.CONTENT_URI, arrayOf(C.RawContacts._ID), "${C.RawContacts.ACCOUNT_TYPE}=? AND ${C.RawContacts.SOURCE_ID}=? AND ${C.RawContacts.DELETED}=0", arrayOf(DeviceContacts.ACCOUNT_TYPE, root), null)!!.use { assertTrue(it.moveToFirst()); it.getLong(0) }
         val note = context.contentResolver.query(C.Data.CONTENT_URI, arrayOf(K.Note.NOTE), "${C.Data.RAW_CONTACT_ID}=? AND ${C.Data.MIMETYPE}=?", arrayOf(rawId.toString(), K.Note.CONTENT_ITEM_TYPE), null)!!.use { assertTrue(it.moveToFirst()); it.getString(0) }
-        assertEquals("Mac note", note)
+        assertEquals(graph.store.state.value.records.people.values.single().contactCard().notes, note)
         val restarted = Store(File(context.filesDir, "memory")); restarted.initialize()
-        assertEquals("Mac note", restarted.state.value.records.people.values.single().contactCard().notes)
-        assertEquals(4, restarted.state.value.pending.size)
+        assertEquals(note, restarted.state.value.records.people.values.single().contactCard().notes)
+        assertTrue(restarted.state.value.pending.isEmpty())
+        assertEquals(graph.store.snapshot().graph!!.bundle.heads, restarted.snapshot().graph!!.bundle.heads)
         graph.settings.contactsEnabled = false
         Unit
     }

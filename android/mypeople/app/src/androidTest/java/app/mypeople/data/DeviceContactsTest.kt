@@ -19,8 +19,9 @@ import org.junit.runner.RunWith
 /** Run ONLY on a fresh disposable emulator: see docs/contacts.md. No personal-data tests. */
 @RunWith(AndroidJUnit4::class)
 class DeviceContactsTest {
-    @Test fun ownedAccountExternalEditsConflictsTrashRestoreAndPicker() = runBlocking {
+    @Test fun ownedAccountAutomaticCopiesTrashRestoreAndPicker() = runBlocking {
         org.junit.Assume.assumeTrue(InstrumentationRegistry.getArguments().getString("myPeopleDisposable") == "true")
+        check(android.os.Build.HARDWARE in setOf("ranchu", "goldfish")) { "Disposable emulator only." }
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val graph = (context.applicationContext as MyPeopleApp).graph
@@ -47,20 +48,20 @@ class DeviceContactsTest {
         assertFalse(graph.deviceContacts.reconcile().contains("Conflicts"))
         val ownRaw = r.query(C.RawContacts.CONTENT_URI, arrayOf(C.RawContacts._ID), "${C.RawContacts.SOURCE_ID}=? AND ${C.RawContacts.ACCOUNT_TYPE}=?", arrayOf(uid, DeviceContacts.ACCOUNT_TYPE), null)!!.use { assertTrue(it.moveToFirst()); it.getLong(0) }
         assertNotEquals(foreignId, ownRaw)
+        assertEquals(1, r.query(ContentUris.withAppendedId(C.RawContacts.CONTENT_URI, ownRaw), arrayOf(C.RawContacts.STARRED), null, null, null)!!.use { assertTrue(it.moveToFirst()); it.getInt(0) })
         graph.settings.contactsEnabled = false
         r.update(phoneUri!!, ContentValues().apply { put(K.Phone.NUMBER, "+4930123456") }, null, null)
         graph.settings.contactsEnabled = true
         graph.deviceContacts.reconcile()
-        assertEquals("+4930123456", graph.store.state.value.records.people.getValue(id).card!!.fields.first { it.kind == "phone" }.value)
-        // Simultaneous changes: default behavior must not overwrite either side.
+        assertEquals("+442079460018", graph.store.state.value.records.people.getValue(id).card!!.fields.first { it.kind == "phone" }.value)
+        // Simultaneous changes automatically publish the saved MyPeople version.
         graph.settings.contactsEnabled = false
         r.update(C.Data.CONTENT_URI, ContentValues().apply { put(K.Note.NOTE, "Android version") }, "${C.Data.RAW_CONTACT_ID}=? AND ${C.Data.MIMETYPE}=?", arrayOf(ownRaw.toString(), K.Note.CONTENT_ITEM_TYPE))
         graph.store.saveContact(graph.store.state.value.records.people.getValue(id).card!!.copy(notes = "MyPeople version"), id)
         graph.settings.contactsEnabled = true
-        assertTrue(graph.deviceContacts.reconcile().contains("Conflicts"))
+        assertFalse(graph.deviceContacts.reconcile().contains("Conflicts"))
         assertEquals("MyPeople version", graph.store.state.value.records.people.getValue(id).card!!.notes)
-        graph.deviceContacts.reconcile("android")
-        assertEquals("Android version", graph.store.state.value.records.people.getValue(id).card!!.notes)
+        assertEquals("MyPeople version", r.query(C.Data.CONTENT_URI, arrayOf(K.Note.NOTE), "${C.Data.RAW_CONTACT_ID}=? AND ${C.Data.MIMETYPE}=?", arrayOf(ownRaw.toString(), K.Note.CONTENT_ITEM_TYPE), null)!!.use { assertTrue(it.moveToFirst()); it.getString(0) })
         graph.store.enqueue("contact_trash", buildJsonObject { put("person_id", id); put("contact_uid", uid) })
         graph.deviceContacts.reconcile()
         assertNull(graph.deviceContacts.lookup(uid))
@@ -68,22 +69,20 @@ class DeviceContactsTest {
         graph.deviceContacts.reconcile()
         assertNotNull(graph.deviceContacts.lookup(uid))
         assertEquals("Other account untouched", r.query(C.Data.CONTENT_URI, arrayOf(K.StructuredName.DISPLAY_NAME), "${C.Data.RAW_CONTACT_ID}=? AND ${C.Data.MIMETYPE}=?", arrayOf(foreignId.toString(), K.StructuredName.CONTENT_ITEM_TYPE), null)!!.use { assertTrue(it.moveToFirst()); it.getString(0) })
-        // Full backup including unsynced edits, followed by a simulated canonical
-        // acknowledgment and real restore through the Android document I/O path.
+        // Export includes unsynced graph history. Restore must refuse to overwrite
+        // a live native graph (fresh-store restore is covered by StreamingGraphLoadTest).
         val backupFile = java.io.File(context.cacheDir, "contacts-qa-backup.sherloq")
         graph.backups.export(android.net.Uri.fromFile(backupFile), "device-backup-test")
         val savedOps = graph.store.state.value.pending
+        val savedGraph = graph.store.snapshot().graph!!
         graph.settings.contactsEnabled = false
-        val person = graph.store.state.value.records.people.getValue(id)
-        val history = ContactHistory(graph.store.snapshot().replica.changes)
-        graph.store.installOffline(TransferManifest(type = "snapshot", source = java.util.UUID.randomUUID().toString(), revision = 1,
-            contact_version = 1, contact_history = history.changes, contact_heads = history.heads,
-            records = listOf(RecordChange("person", "1", kotlinx.serialization.json.Json.encodeToJsonElement(Person.serializer(), person))),
-            results = savedOps.mapIndexed { i, op -> OpState(i.toLong(), op.client_id, op.kind, op.payload, "done") }))
-        assertTrue(graph.store.state.value.pending.isEmpty())
-        graph.backups.restore(android.net.Uri.fromFile(backupFile), "device-backup-test")
+        try {
+            graph.backups.restore(android.net.Uri.fromFile(backupFile), "device-backup-test")
+            fail("A live graph must not be overwritten by restore")
+        } catch (e: IllegalArgumentException) { assertTrue(e.message!!.contains("Back up this phone's graph")) }
         assertEquals(savedOps.map { it.client_id }, graph.store.state.value.pending.map { it.client_id })
-        assertEquals("Android version", graph.store.state.value.records.people.getValue(id).card!!.notes)
+        assertEquals(savedGraph.bundle.heads, graph.store.snapshot().graph!!.bundle.heads)
+        assertEquals("MyPeople version", graph.store.state.value.records.people.getValue(id).card!!.notes)
         assertFalse(graph.settings.contactsEnabled)
         graph.settings.contactsEnabled = true
         android.accounts.AccountManager.get(context).removeAccountExplicitly(android.accounts.Account(DeviceContacts.ACCOUNT_NAME, DeviceContacts.ACCOUNT_TYPE))

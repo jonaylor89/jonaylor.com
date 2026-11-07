@@ -15,14 +15,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import java.io.File
 import java.util.Base64
 
 /** Only writes raw contacts owned by our account. Never updates Google/SIM/other raw contacts.
  * A persisted baseline distinguishes external edits from our own observer callbacks.
- * Conflicting edits stop at that contact until the user explicitly chooses a side.
+ * MyPeople is authoritative: external edits/deletions of our copies are repaired.
+ * Only unresolved conflicts within MyPeople itself pause an export.
  */
 class DeviceContacts(private val context: Context, private val graph: app.mypeople.AppGraph) {
     companion object {
@@ -73,9 +72,9 @@ class DeviceContacts(private val context: Context, private val graph: app.mypeop
             selection += " AND ${C.RawContacts.SOURCE_ID} IN (${onlyUids.joinToString { "?" }})"
             args.addAll(onlyUids)
         }
-        return resolver.query(syncUri(C.RawContacts.CONTENT_URI), arrayOf(C.RawContacts._ID, C.RawContacts.SOURCE_ID, C.RawContacts.DELETED), selection, args.toTypedArray(), null)?.use { c ->
+        return checkNotNull(resolver.query(syncUri(C.RawContacts.CONTENT_URI), arrayOf(C.RawContacts._ID, C.RawContacts.SOURCE_ID, C.RawContacts.DELETED), selection, args.toTypedArray(), null)) { "Android Contacts Provider unavailable." }.use { c ->
             buildList { while (c.moveToNext()) add(Triple(c.getLong(0), c.getString(1).orEmpty(), c.getInt(2) != 0)) }
-        }.orEmpty()
+        }
     }
     private fun versions(onlyUids: Set<String>? = null): Map<String, Long> {
         if (onlyUids != null && onlyUids.isEmpty()) return emptyMap()
@@ -85,28 +84,22 @@ class DeviceContacts(private val context: Context, private val graph: app.mypeop
             selection += " AND ${C.RawContacts.SOURCE_ID} IN (${onlyUids.joinToString { "?" }})"
             args.addAll(onlyUids)
         }
-        return resolver.query(syncUri(C.RawContacts.CONTENT_URI), arrayOf(C.RawContacts.SOURCE_ID, C.RawContacts.VERSION), selection, args.toTypedArray(), null)?.use { c ->
+        return checkNotNull(resolver.query(syncUri(C.RawContacts.CONTENT_URI), arrayOf(C.RawContacts.SOURCE_ID, C.RawContacts.VERSION), selection, args.toTypedArray(), null)) { "Android Contacts Provider unavailable." }.use { c ->
             buildMap { while (c.moveToNext()) c.getString(0)?.let { put(it, c.getLong(1)) } }
-        }.orEmpty()
+        }
     }
-    /** Baselines track provider-visible values, not duplicate full images/vCards.
-     * Full originals remain in the authoritative graph; photos compare by bytes. */
-    private fun baseline(card: ContactCard): ContactCard = card.copy(
-        originals = emptyList(), source_records = emptyList(), edit_id = "", user_edited = false,
-        photo_hash = if (card.photo.isNotEmpty()) GraphStore.digest(Base64.getDecoder().decode(card.photo)) else card.photo_hash,
-        photo = "",
-    )
+    private fun baseline(card: ContactCard) = card.androidBaseline()
     private fun needsPhones(card: ContactCard) = card.legacy_unverified && card.fields.any { it.kind == "phone" }
     /** Nothing changed on either side since this contact last settled. */
-    private fun settled(person: Person, old: MirrorEntry?, version: Long?, prefer: String): Boolean {
-        if (prefer.isNotEmpty() || version == null || old == null || person.trashed || person.contact_conflicts.isNotEmpty()) return false
+    private fun settled(person: Person, old: MirrorEntry?, version: Long?): Boolean {
+        if (version == null || old == null || person.trashed || person.contact_conflicts.isNotEmpty()) return false
         if (settledVersions[person.contact_uid] != version) return false
         val local = person.contactCard()
         return baseline(local) == baseline(old.local) && !needsPhones(local) && !(local.fields.any { it.kind == "phone" } && old.phoneFormat != 1)
     }
     private fun readCard(rawId: Long, importing: Boolean = false): ContactCard {
         var card = ContactCard(""); val fields = mutableListOf<ContactField>(); var unknownCountry = false
-        resolver.query(C.Data.CONTENT_URI, null, "${C.Data.RAW_CONTACT_ID}=?", arrayOf(rawId.toString()), C.Data._ID)?.use { c ->
+        checkNotNull(resolver.query(C.Data.CONTENT_URI, null, "${C.Data.RAW_CONTACT_ID}=?", arrayOf(rawId.toString()), C.Data._ID)) { "Android Contacts Provider unavailable." }.use { c ->
             fun s(name: String) = c.getColumnIndex(name).takeIf { it >= 0 }?.let { c.getString(it) }.orEmpty()
             while (c.moveToNext()) {
                 val value = s(C.Data.DATA1); val label = s(C.Data.DATA3).ifEmpty {
@@ -138,7 +131,10 @@ class DeviceContacts(private val context: Context, private val graph: app.mypeop
                 if (fields.size > before && objectId.isNotEmpty()) fields[fields.lastIndex] = fields.last().copy(object_id = objectId)
             }
         }
-        val favorite = resolver.query(ContentUris.withAppendedId(C.RawContacts.CONTENT_URI, rawId), arrayOf(C.RawContacts.STARRED), null, null, null)?.use { it.moveToFirst() && it.getInt(0) != 0 } ?: false
+        val favorite = checkNotNull(resolver.query(ContentUris.withAppendedId(C.RawContacts.CONTENT_URI, rawId), arrayOf(C.RawContacts.STARRED), null, null, null)) { "Android Contacts Provider unavailable." }.use {
+            check(it.moveToFirst()) { "Android contact changed while reading; retry." }
+            it.getInt(0) != 0
+        }
         return card.copy(favorite = favorite, legacy_unverified = unknownCountry, name = card.name.ifBlank { fields.firstOrNull()?.value ?: "Unnamed contact" }, fields = fields)
     }
     suspend fun importCandidates(): List<ContactCard> = withContext(Dispatchers.IO) {
@@ -179,38 +175,39 @@ class DeviceContacts(private val context: Context, private val graph: app.mypeop
             if (small !== bitmap) small.recycle(); bitmap.recycle()
             data(K.Photo.CONTENT_ITEM_TYPE, mapOf(K.Photo.PHOTO to out.toByteArray()))
         }
+        // Fields, favorite and clean state succeed or fail together. A failed flags
+        // update must not leave a half-exported copy recorded as settled.
+        val flags = ContentProviderOperation.newUpdate(syncUri(C.RawContacts.CONTENT_URI))
+            .withSelection("${C.RawContacts._ID}=?", arrayOf(existing?.toString() ?: "0"))
+            .withValue(C.RawContacts.DIRTY, 0).withValue(C.RawContacts.STARRED, if (card.favorite) 1 else 0)
+            .withExpectedCount(1)
+        if (existing == null) flags.withSelectionBackReference(0, 0)
+        ops.add(flags.build())
         val results = resolver.applyBatch(C.AUTHORITY, ops)
-        val id = existing ?: ContentUris.parseId(requireNotNull(results.first().uri))
-        resolver.update(syncUri(ContentUris.withAppendedId(C.RawContacts.CONTENT_URI, id)), android.content.ContentValues().apply { put(C.RawContacts.DIRTY, 0); put(C.RawContacts.STARRED, if (card.favorite) 1 else 0) }, null, null)
-        return id
-    }
-    private fun originalField(f: ContactField, previous: MirrorEntry?, local: ContactCard): ContactField {
-        if (f.object_id.isNotEmpty()) {
-            val original = local.fields.firstOrNull { it.object_id == f.object_id }
-            if (original != null) {
-                val exported = previous?.exported?.fields?.firstOrNull { it.object_id == f.object_id }
-                if (exported != null && exported.value == f.value && exported.label == f.label) return original.copy(preferred = f.preferred)
-                return original.copy(value = f.value, label = f.label, preferred = f.preferred,
-                    structured = f.structured.ifEmpty { original.structured })
-            }
-        }
-        val index = previous?.exported?.fields?.indexOfFirst { it.kind == f.kind && it.value == f.value && it.label == f.label } ?: -1
-        val original = previous?.local?.fields?.filter { it.kind in setOf("phone", "email", "address", "website", "im", "anniversary") }?.getOrNull(index)
-        if (original != null) return original.copy(preferred = f.preferred)
-        return local.fields.firstOrNull { it.kind == f.kind && it.value == f.value && it.label == f.label }?.copy(preferred = f.preferred)
-            ?: f.copy(object_id = "", region = local.fields.firstOrNull { it.kind == f.kind && it.label == f.label }?.region.orEmpty())
+        return existing ?: ContentUris.parseId(requireNotNull(results.first().uri))
     }
     private fun loadMirror(): MirrorState = mirror.load()
     private fun saveMirror(state: MirrorState) = mirror.save(state)
     suspend fun <T> exclusive(block: suspend () -> T): T = mutex.withLock { block() }
     private data class Outcome(val message: String, val conflicts: Boolean = false, val changed: Int = 0, val unverified: Int = 0)
-    suspend fun reconcile(prefer: String = ""): String = reconcileScope(prefer, null).message
-    suspend fun prepareMerge(personIds: Set<Int>) {
-        val result = reconcileScope("", personIds)
-        if (result.conflicts) throw EditRejected("Resolve Android contact conflicts for the selected people in Settings before merging. No merge was queued.")
+    suspend fun reconcile(): String {
+        try { return reconcileScope(null).message }
+        catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (e: Exception) {
+            status = "Android copies could not be updated. MyPeople contacts are safe; check permission and retry."
+            throw e
+        }
     }
-    private suspend fun reconcileScope(prefer: String, onlyPeople: Set<Int>?): Outcome {
-        if (onlyPeople != null) return reconcileBatch(prefer, onlyPeople, true)
+    suspend fun prepareMerge(personIds: Set<Int>) {
+        val result = reconcileScope(personIds)
+        if (result.conflicts) throw EditRejected("Resolve offline contact conflicts for the selected people in MyPeople before merging. No merge was queued.")
+    }
+    private suspend fun reconcileScope(onlyPeople: Set<Int>?): Outcome {
+        if (!graph.settings.contactsEnabled || !permitted()) {
+            status = "Contacts integration is off or permission was revoked. MyPeople contacts were kept."
+            return Outcome(status)
+        }
+        if (onlyPeople != null) return reconcileBatch(onlyPeople, true)
         // Release the lock between small batches. A two-person merge never queues
         // behind an entire address book's provider queries/photo writes.
         var changed = 0; var unverified = 0; val conflicts = mutableListOf<String>()
@@ -227,11 +224,12 @@ class DeviceContacts(private val context: Context, private val graph: app.mypeop
             graph.store.state.value.records.people.filter { (_, person) ->
                 if (person.contact_uid.isBlank()) false
                 else if (!person.trashed && needsPhones(person.contactCard())) { unverified++; false }
-                else !settled(person, baseline.entries[person.contact_uid], current[person.contact_uid], prefer)
+                else !settled(person, baseline.entries[person.contact_uid], current[person.contact_uid])
             }.keys.toList()
         } }
+        if (!graph.settings.contactsEnabled) return Outcome(status)
         for (ids in candidates.chunked(8)) {
-            val result = reconcileBatch(prefer, ids.toSet(), false)
+            val result = reconcileBatch(ids.toSet(), false)
             changed += result.changed; unverified += result.unverified
             if (result.conflicts) conflicts.add(result.message)
             kotlinx.coroutines.yield()
@@ -247,12 +245,17 @@ class DeviceContacts(private val context: Context, private val graph: app.mypeop
                 saveMirror(MirrorState(next))
             }
         } }
+        if (!graph.settings.contactsEnabled) return Outcome(status)
+        if (!permitted()) {
+            status = "Contacts permission was revoked. MyPeople contacts were kept; allow permission and retry."
+            return Outcome(status)
+        }
         val message = if (conflicts.isNotEmpty()) conflicts.distinct().joinToString("\n") else "Android contacts up to date · $changed changes" +
             if (unverified > 0) "\n$unverified contacts need original numbers re-imported or verified before Android export." else ""
         status = message
         return Outcome(message, conflicts.isNotEmpty(), changed, unverified)
     }
-    private suspend fun reconcileBatch(prefer: String, onlyPeople: Set<Int>, preparing: Boolean): Outcome = mutex.withLock { withContext(Dispatchers.IO) {
+    private suspend fun reconcileBatch(onlyPeople: Set<Int>, preparing: Boolean): Outcome = mutex.withLock { withContext(Dispatchers.IO) {
         if (!graph.settings.contactsEnabled || !permitted()) return@withContext Outcome("Contacts integration is off or permission was revoked.")
         if (AccountManager.get(context).getAccountsByType(ACCOUNT_TYPE).none { it.name == ACCOUNT_NAME }) {
             graph.settings.contactsEnabled = false
@@ -267,9 +270,12 @@ class DeviceContacts(private val context: Context, private val graph: app.mypeop
         val baseline = loadMirror()
         val people = graph.store.state.value.records.people.filterKeys { it in onlyPeople }
         val next = baseline.entries.toMutableMap(); val raws = rawContacts(true, people.values.map { it.contact_uid }.toSet()).associateBy { it.second }
-        val conflicts = mutableListOf<String>(); val unverified = mutableListOf<String>(); var changed = 0; var edited = false
-        val settledNow = mutableSetOf<String>()
-        for ((id, person) in people) {
+        val conflicts = mutableListOf<String>(); val unverified = mutableListOf<String>(); var changed = 0
+        // Capture versions before reading values. An external edit racing a read must
+        // be revisited, not accidentally marked settled with its newer VERSION.
+        val observedVersions = versions(people.values.map { it.contact_uid }.toSet())
+        val settledNow = mutableMapOf<String, Long>()
+        for (person in people.values) {
             val uid = person.contact_uid
             if (uid.isBlank()) continue
             if (person.contact_conflicts.isNotEmpty()) { conflicts.add("${person.name} (review offline edits in MyPeople)"); continue }
@@ -277,44 +283,24 @@ class DeviceContacts(private val context: Context, private val graph: app.mypeop
             val local = person.contactCard()
             if (!person.trashed && local.legacy_unverified && local.fields.any { it.kind == "phone" }) { unverified.add(person.name); continue }
             val external = raw?.takeUnless { it.third }?.let { readCard(it.first) }
-            // Never overwrite an existing provider copy after losing our baseline.
-            if (raw != null && old == null && prefer.isEmpty()) { conflicts.add(person.name); continue }
-            val externalChanged = (raw != null && old == null) || (old != null && (external == null || baseline(external) != baseline(old.exported)))
-            val localChanged = old != null && baseline(local) != baseline(old.local)
-            if (externalChanged && (localChanged || person.trashed) && prefer.isEmpty()) { conflicts.add(person.name); continue }
-            val preferLocal = externalChanged && (localChanged || person.trashed || old == null) && prefer == "mypeople"
-            if (externalChanged && !preferLocal) {
-                if (external == null) {
-                    try { graph.store.enqueue("contact_trash", buildJsonObject { put("person_id", id); put("contact_uid", uid) }, expectedPerson = person) }
-                    catch (_: EditRejected) { conflicts.add(person.name); continue }
-                    if (raw != null) resolver.delete(syncUri(ContentUris.withAppendedId(C.RawContacts.CONTENT_URI, raw.first)), null, null)
-                    next.remove(uid); settledVersions.remove(uid)
-                } else {
-                    // Preserve fields the provider can't represent and imported original properties.
-                    val retained = local.fields.filter { it.kind !in setOf("phone", "email", "address", "website", "im", "anniversary") }
-                    val updated = local.copy(favorite = external.favorite, name = external.name, given = external.given, family = external.family, middle = external.middle, prefix = external.prefix, suffix = external.suffix, phonetic = external.phonetic, fields = external.fields.map { f -> originalField(f, old, local) } + retained, birthday = external.birthday, organization = external.organization, title = external.title, notes = external.notes, photo = if (old != null && baseline(external).photo_hash == baseline(old.exported).photo_hash) local.photo else external.photo,
-                        photo_hash = if (old != null && baseline(external).photo_hash == baseline(old.exported).photo_hash) local.photo_hash else "")
-                    try { graph.store.saveContact(updated, id, expectedPerson = person, restore = person.trashed) }
-                    catch (_: EditRejected) { conflicts.add(person.name); continue }
-                    next[uid] = MirrorEntry(raw.first, baseline(external), baseline(graph.store.state.value.records.people[id]?.contactCard() ?: updated), old?.phoneFormat ?: 0)
-                    settledNow.add(uid)
-                }
-                changed++; edited = true; continue
-            }
+            // No provider edit is imported into the graph. Missing baselines are repaired
+            // in place by SOURCE_ID too (e.g. a crash after applyBatch, before mirror save).
+            val needsWrite = old == null || old.needsWrite(local, external)
             if (person.trashed) {
                 if (raw != null) resolver.delete(syncUri(ContentUris.withAppendedId(C.RawContacts.CONTENT_URI, raw.first)), null, null)
                 next.remove(uid); settledVersions.remove(uid); continue
             }
-            if (raw == null || raw.third || localChanged || preferLocal || (local.fields.any { it.kind == "phone" } && old?.phoneFormat != 1)) {
+            if (raw == null || raw.third || needsWrite) {
                 if (raw?.third == true) resolver.delete(syncUri(ContentUris.withAppendedId(C.RawContacts.CONTENT_URI, raw.first)), null, null)
                 val rawId = write(uid, local, raw?.takeUnless { it.third }?.first)
+                val writtenVersion = versions(setOf(uid))[uid]
                 next[uid] = MirrorEntry(rawId, baseline(readCard(rawId)), baseline(local), phoneFormat = 1); changed++
-            }
-            settledNow.add(uid)
+                if (writtenVersion != null) settledNow[uid] = writtenVersion
+            } else observedVersions[uid]?.let { settledNow[uid] = it }
         }
         saveMirror(MirrorState(next))
-        settledVersions.putAll(versions(settledNow))
-        var message = if (conflicts.isEmpty()) "Android contacts up to date · $changed changes" else "Conflicts (left untouched): ${conflicts.joinToString()}. Choose which version to keep in Settings."
+        settledVersions.putAll(settledNow)
+        var message = if (conflicts.isEmpty()) "Android contacts up to date · $changed changes" else "Conflicts (left untouched): ${conflicts.joinToString()}. Review offline edits in MyPeople; Android copies were left untouched."
         if (unverified.isNotEmpty()) message += "\n${unverified.size} contacts need original numbers re-imported or verified before Android export."
         Outcome(message, conflicts.isNotEmpty(), changed, unverified.size)
     } }
