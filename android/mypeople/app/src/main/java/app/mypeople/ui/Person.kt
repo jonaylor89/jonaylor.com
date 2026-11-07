@@ -27,7 +27,10 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -41,6 +44,20 @@ import app.mypeople.data.*
 import kotlinx.serialization.json.*
 import kotlin.math.roundToInt
 
+/** Compose keys must not call Map.equals on lazy database-backed records. */
+private class DetailSource(private val records: Records) {
+    override fun equals(other: Any?) = other is DetailSource && records === other.records
+    override fun hashCode() = System.identityHashCode(records)
+}
+
+private class PersonRows(
+    val source: Records,
+    val owner: Int,
+    val events: List<Map.Entry<String, Event>> = emptyList(),
+    val links: List<Profile> = emptyList(),
+    val failed: Boolean = false,
+)
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -> Unit) {
@@ -49,6 +66,21 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
     if (rememberedUid.isEmpty() && records.people[routeId]?.contact_uid?.isNotEmpty() == true) rememberedUid = records.people[routeId]!!.contact_uid
     val id = if (rememberedUid.isNotEmpty()) records.people.entries.firstOrNull { it.value.contact_uid == rememberedUid || rememberedUid in it.value.contact_aliases }?.key else routeId?.takeIf { it in records.people }
     val person = records.people[id]
+    var detailAttempt by remember(id) { mutableIntStateOf(0) }
+    val loadedRows by produceState<PersonRows?>(null, DetailSource(records), id, detailAttempt) {
+        value = null
+        if (id != null && person != null) {
+            try {
+                value = withContext(Dispatchers.IO) {
+                    PersonRows(records, id, records.eventsFor(id).entries.toList(),
+                        records.profilesFor(id).values.filter { it.status == "confirmed" })
+                }
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { value = PersonRows(records, id, failed = true) }
+        }
+    }
+    // Never display another person's rows while a new keyed load starts.
+    val rows = loadedRows?.takeIf { it.source === records && it.owner == id }
     var editContact by rememberSaveable(routeId) { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     var dialog by rememberSaveable(id) { mutableStateOf<String?>(null) }
@@ -92,8 +124,8 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
             EmptyState("Person unavailable", "They may have been merged or removed. Go back to your people.", "Back to people", onBack)
             return@Column
         }
-        val events = remember(records, id) { records.eventsFor(id).entries.toList() }
-        val profile = remember(events) { currentProfile(events.map { it.value }) }
+        val events = rows?.events.orEmpty()
+        val profile = remember(rows) { currentProfile(events.map { it.value }) }
         LazyColumn(state = list, modifier = Modifier.testTag("person-list"), contentPadding = PaddingValues(start = KinSpace.s4, end = KinSpace.s4, bottom = KinSpace.s8)) {
             item { ContactHero(person, profile, graph) }
             item { Box(Modifier.padding(top = KinSpace.s4)) { ContactActions(person, edit = { editContact = true }) } }
@@ -123,7 +155,7 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
                     }
                 }
             }
-            val links = records.profiles.values.filter { it.person_id == id && it.status == "confirmed" }
+            val links = rows?.links.orEmpty()
             if (links.isNotEmpty()) {
                 item { Section("Around the web") }
                 itemsIndexed(links, key = { _, link -> link.url }) { index, link ->
@@ -140,7 +172,14 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
                 Section("Notes and facts")
                 Text("Tap one to see where it came from.", Modifier.padding(bottom = KinSpace.s3), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            if (events.isEmpty()) item {
+            if (rows == null) item {
+                Text("Loading notes and facts…", Modifier.padding(vertical = KinSpace.s4), style = MaterialTheme.typography.bodyMedium)
+            } else if (rows.failed) item {
+                Column {
+                    Text("Notes and links could not be loaded. Your saved data has not been changed.")
+                    TextButton(onClick = { detailAttempt++ }) { Text("Retry") }
+                }
+            } else if (events.isEmpty()) item {
                 Text("Nothing yet. Add a note or a fact from the menu.", Modifier.padding(vertical = KinSpace.s4), style = MaterialTheme.typography.bodyMedium)
             }
             itemsIndexed(events, key = { _, entry -> entry.key }) { index, (eventId, event) ->

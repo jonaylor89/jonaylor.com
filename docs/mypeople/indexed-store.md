@@ -20,6 +20,10 @@ and not an in-memory cache that must be reconstructed on each launch.
 - `screen` stores version-bounded derived/person/event/profile/moment rows.
   `person_fast` is a rebuildable typed row cache so normal startup avoids JSON
   parsing of every contact. Events/profiles are read lazily in bounded pages.
+  Person pages use the existing `screen_owner` index and version bounds to load
+  only that person's rows on `Dispatchers.IO`; the contact header renders without
+  waiting for notes/links. Never filter the entire SQL-backed map in composition
+  or compare lazy record maps as Compose effect keys.
 - Duplicate matching keys are persisted. Their rules and explicit exclusions are
   unchanged; unrelated edits do not renormalize every contact.
 
@@ -69,6 +73,10 @@ never pass their contents in command arguments or logs.
   152,547 operations, 37,461 blobs, ~57 MB metadata and ~497 MB raw data. Cold
   readiness, durable edits, merges and a second process are measured with a
   192 MiB heap. This fixture must never be installed on a personal device.
+- Owner-query regression tests verify bounded decoding, actual query plans,
+  historical ownership, projection exclusions and in-memory compatibility. A
+  40,003-row synthetic Compose test rejects unscoped/main-thread detail reads
+  and checks refresh and person switching without leaking another person's rows.
 - Additional emulator checks cover 329,000 messages, 272 MiB streaming blobs,
   encrypted backup/fresh restore, actual Provider field UUIDs, photo lifecycle
   and unverified legacy numbers. Native frame/operation timing logs contain only

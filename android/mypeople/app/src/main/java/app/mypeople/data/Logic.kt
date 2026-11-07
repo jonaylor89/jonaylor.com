@@ -168,7 +168,8 @@ val Event.origin: String get() = when (source) {
 fun whenKnown(e: Event): String = if (e.date.isEmpty() || e.date.startsWith("--")) e.created_at.take(10) else e.date
 fun currentProfile(events: Collection<Event>): Map<String, Event> = events.filter { it.type in setOf("job", "move", "education") }
     .groupBy { it.type }.mapValues { (_, es) -> es.maxWith(compareBy<Event> { it.source != "vcard" }.thenBy { whenKnown(it) }) }
-fun Records.eventsFor(id: Int): Map<String, Event> = events.filterValues { it.person_id == id }.entries.sortedByDescending { whenKnown(it.value) }.associate { it.toPair() }
+fun Records.eventsFor(id: Int): Map<String, Event> = events.rowsForOwner(id) { it.person_id }.entries.sortedByDescending { whenKnown(it.value) }.associate { it.toPair() }
+fun Records.profilesFor(id: Int): Map<String, Profile> = profiles.rowsForOwner(id) { it.person_id }
 private val contactCombiningMarks = Regex("\\p{M}+")
 private fun contactSortKey(name: String): String =
     java.text.Normalizer.normalize(name.trim(), java.text.Normalizer.Form.NFD)

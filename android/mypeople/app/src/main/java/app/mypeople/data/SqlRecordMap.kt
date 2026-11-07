@@ -1,13 +1,29 @@
 package app.mypeople.data
 
+/** Preserve owner lookup through SQL-backed maps and uncommitted projection deltas. */
+internal interface OwnerScopedRows<T> : Map<String,T> {
+    fun forOwner(owner: Int, ownerOf: (T)->Int): Map<String,T>
+}
+
+internal fun <T> Map<String,T>.rowsForOwner(owner: Int, ownerOf: (T)->Int): Map<String,T> =
+    if (this is OwnerScopedRows<T>) forOwner(owner,ownerOf) else filterValues { ownerOf(it) == owner }
+
 /** Immutable, version-bounded screen rows. Events/profiles are decoded only when used. */
-internal class SqlRecordMap<T>(private val db: IndexedGraphDatabase, val scope: String, val kind: String, val version: Long, val decode: (String)->T, private val excluded: Set<Int> = emptySet()) : AbstractMap<String,T>() {
-    private val where = "scope=? AND kind=? AND born<=? AND (died IS NULL OR died>?)" + if (excluded.isEmpty()) "" else " AND (owner IS NULL OR owner NOT IN (${excluded.joinToString(",") { "?" }}))"
-    private val args: List<Any?> = listOf(scope,kind,version,version)+excluded.toList()
-    fun without(owners: Set<Int>) = SqlRecordMap(db,scope,kind,version,decode,excluded+owners)
-    override val size get() = db.scalar("SELECT count(*) FROM screen WHERE $where",args)!!.toInt()
-    override fun containsKey(key: String) = db.scalar("SELECT 1 FROM screen WHERE $where AND id=?",args+key) != null
-    override fun get(key: String): T? = db.scalar("SELECT data FROM screen WHERE $where AND id=?",args+key)?.let(decode)
+internal class SqlRecordMap<T>(private val db: IndexedGraphDatabase, val scope: String, val kind: String, val version: Long, val decode: (String)->T, private val excluded: Set<Int> = emptySet(), private val owner: Int? = null) : AbstractMap<String,T>(), OwnerScopedRows<T> {
+    private val where = "scope=? AND kind=? AND born<=? AND (died IS NULL OR died>?)" +
+        (if (excluded.isEmpty()) "" else " AND (owner IS NULL OR owner NOT IN (${excluded.joinToString(",") { "?" }}))") +
+        (if (owner == null) "" else " AND owner=?")
+    private val args: List<Any?> = listOf(scope,kind,version,version)+excluded.toList()+listOfNotNull(owner)
+    // ORDER BY id + LIMIT can otherwise make SQLite scan the book's id index,
+    // filtering owners afterward. Sorting one owner's small slice is the bounded path.
+    private val table = if (owner == null) "screen" else "screen INDEXED BY screen_owner"
+    fun without(owners: Set<Int>) = SqlRecordMap(db,scope,kind,version,decode,excluded+owners,owner)
+    override fun forOwner(owner: Int, ownerOf: (T)->Int): Map<String,T> =
+        if (owner in excluded || (this.owner != null && this.owner != owner)) emptyMap()
+        else SqlRecordMap(db,scope,kind,version,decode,excluded,owner)
+    override val size get() = db.scalar("SELECT count(*) FROM $table WHERE $where",args)!!.toInt()
+    override fun containsKey(key: String) = db.scalar("SELECT 1 FROM $table WHERE $where AND id=?",args+key) != null
+    override fun get(key: String): T? = db.scalar("SELECT data FROM $table WHERE $where AND id=?",args+key)?.let(decode)
     override val entries: Set<Map.Entry<String,T>> get() = object : AbstractSet<Map.Entry<String,T>>() {
         override val size get() = this@SqlRecordMap.size
         override fun iterator(): Iterator<Map.Entry<String,T>> = object : Iterator<Map.Entry<String,T>> {
@@ -15,7 +31,7 @@ internal class SqlRecordMap<T>(private val db: IndexedGraphDatabase, val scope: 
             override fun hasNext(): Boolean {
                 if (position < page.size) return true
                 if (done) return false
-                page = db.sql.query("SELECT id,data FROM screen WHERE $where AND id>? ORDER BY id LIMIT 128",args+after)
+                page = db.sql.query("SELECT id,data FROM $table WHERE $where AND id>? ORDER BY id LIMIT 128",args+after)
                 position=0; done=page.isEmpty(); return !done
             }
             override fun next(): Map.Entry<String,T> {
@@ -27,8 +43,10 @@ internal class SqlRecordMap<T>(private val db: IndexedGraphDatabase, val scope: 
 }
 
 /** A projection delta, not a copy of every memory row in the address book. */
-internal class ProjectedRows<T>(private val previous: SqlRecordMap<T>, private val dirty: Set<Int>, private val generated: Map<String,T>) : AbstractMap<String,T>() {
+internal class ProjectedRows<T>(private val previous: SqlRecordMap<T>, private val dirty: Set<Int>, private val generated: Map<String,T>) : AbstractMap<String,T>(), OwnerScopedRows<T> {
     private val retained = previous.without(dirty)
+    override fun forOwner(owner: Int, ownerOf: (T)->Int): Map<String,T> =
+        retained.forOwner(owner,ownerOf) + generated.filter { (key,value) -> ownerOf(value) == owner && !retained.containsKey(key) }
     override val size get() = retained.size + generated.keys.count { !retained.containsKey(it) }
     override fun get(key: String) = retained[key] ?: generated[key]
     override fun containsKey(key: String) = retained.containsKey(key) || generated.containsKey(key)
