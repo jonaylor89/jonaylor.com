@@ -44,6 +44,7 @@ REFRESH_BACKOFF = 5  # never spend more than a fifth of the time refreshing
 STOP_SECONDS = 5
 HIDDEN_CARD_KEYS = ("photo", "originals", "source_records")  # large; the editor loads the full card
 HISTORY_LIMIT = 200
+VIEW_CACHE_FORMAT = 1  # bump when a record's shape changes in a way an older cache can't satisfy
 # Edits the app may send straight to ops.apply. Contact edits go through replica instead, as
 # `mypeople contact` does, so they enter causal history immediately. Model-backed operations
 # are jobs.
@@ -227,6 +228,10 @@ class Engine:
         self.view_error: str | None = None
         self.initialization_error: Exception | None = None
         self.conn: sqlite3.Connection | None = None
+        # The last view, kept beside the database so the next launch can show it at once.
+        self.cache_path = db_path.parent / "app-cache" / f"{db_path.stem}-view.json"
+        self.cache_dirty = False
+        self.cache_lock = threading.Lock()
 
     # --- sending ---
 
@@ -289,6 +294,7 @@ class Engine:
             try:
                 self._publish(self.view.build(conn, people), people)
                 self.edits += 1
+                self.cache_dirty = True
             except Exception:
                 traceback.print_exc()  # the edit committed, and the next full refresh will show it
         self.send({"id": id, "result": result if result is not None else {}})
@@ -352,12 +358,16 @@ class Engine:
             self.view_error = f"Couldn't open {self.db_path}: {exc}"
             self.view.ready.set()
             return
+        if self._load_cache():
+            self.view.ready.set()  # answer the snapshot now; the first refresh below sends a delta
         seen_version = seen_day = None
         finished = -math.inf
         wait = 0.0
         while not self.stopping.is_set():
             asked = self.wake.wait(self.poll)
             self.wake.clear()
+            if self.cache_dirty:
+                self._save_cache()
             try:
                 version = conn.execute("PRAGMA data_version").fetchone()[0]
             except sqlite3.Error:
@@ -379,7 +389,10 @@ class Engine:
                     stale = self.edits != edits
                     if not stale and (delta := self.view.diff(new)) is not None:
                         self.event("view.delta", delta)
+                        self.cache_dirty = True
                 self.view_error = None
+                if not stale and (self.cache_dirty or not self.cache_path.exists()):
+                    self._save_cache()
             except Exception as exc:
                 traceback.print_exc()
                 self.view_error = str(exc) if isinstance(exc, sqlite3.Error) else "Couldn't read the database."
@@ -401,6 +414,47 @@ class Engine:
         self.requests.put(None)
         if threading.current_thread() is not self.serial:
             self.serial.join(STOP_SECONDS)  # let an edit in progress finish
+        if self.cache_dirty:
+            self._save_cache()
+
+    # --- the view cache ---
+    # A full refresh takes seconds on a large database, and the app would wait for it on every
+    # launch. Instead the engine answers the first snapshot with the view it last published, then
+    # refreshes as usual and sends the difference. The cache is only ever a starting point: the
+    # database stays authoritative, and edits are checked against it, never against the cache.
+
+    def _cache_key(self) -> dict:
+        return {"format": VIEW_CACHE_FORMAT, "protocol": PROTOCOL, "version": _version(), "db": str(self.db_path.resolve())}
+
+    def _load_cache(self) -> bool:
+        try:
+            data = json.loads(self.cache_path.read_bytes())
+            if not isinstance(data, dict) or data.get("key") != self._cache_key():
+                return False
+            records = {(r["kind"], r["id"]): r["data"] for r in data["records"]}
+        except (OSError, ValueError, KeyError, TypeError):
+            return False
+        with self.view.lock:
+            if not self.view.records:
+                self.view.records = records
+        return True
+
+    def _save_cache(self) -> None:
+        """Atomically, and private to this user: the cache holds what the database does."""
+        with self.cache_lock:
+            self.cache_dirty = False
+            with self.view.lock:
+                records = [{"kind": k[0], "id": k[1], "data": v} for k, v in self.view.records.items()]
+            temp = self.cache_path.with_suffix(f".{uuid.uuid4().hex}.tmp")
+            try:
+                self.cache_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(fd, "wb") as out:
+                    out.write(encode({"key": self._cache_key(), "records": records}))
+                temp.replace(self.cache_path)
+            except OSError:
+                traceback.print_exc()  # a missing cache only costs the next launch a wait
+                temp.unlink(missing_ok=True)
 
 
 def _error(exc: Exception) -> dict:

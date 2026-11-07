@@ -198,7 +198,8 @@ def variant_groups(conn: sqlite3.Connection) -> list[list[sqlite3.Row]]:
         "SELECT p.*, (SELECT COUNT(*) FROM interactions i WHERE i.person_id = p.id) AS n "
         "FROM people p WHERE merged_into IS NULL AND is_me = 0 ORDER BY n DESC"
     ).fetchall()
-    full = [r for r in rows if sum(len(w) >= 2 for w in _words(r["name"])) >= 2 and not identity.looks_like_identifier(r["name"])]
+    words_of = {r["id"]: _words(r["name"]) for r in rows}  # split each name once: the loop below is pairwise
+    full = [r for r in rows if sum(len(w) >= 2 for w in words_of[r["id"]]) >= 2 and not identity.looks_like_identifier(r["name"])]
     by_first: dict[str, list[sqlite3.Row]] = {}
     for r in full:
         by_first.setdefault(_fold(r["name"]).replace(".", " ").split()[0], []).append(r)
@@ -208,8 +209,8 @@ def variant_groups(conn: sqlite3.Connection) -> list[list[sqlite3.Row]]:
             aliases.setdefault(a["person_id"], []).append(a["alias"])
     groups = []
     for r in full:
-        words = _words(r["name"])
-        longer = [o for o in by_first[_fold(r["name"]).replace(".", " ").split()[0]] if words < _words(o["name"])]
+        words = words_of[r["id"]]
+        longer = [o for o in by_first[_fold(r["name"]).replace(".", " ").split()[0]] if words < words_of[o["id"]]]
         if 0 < len(longer) <= MAX_CANDIDATES:
             groups.append([r, *longer])
     for r in rows:

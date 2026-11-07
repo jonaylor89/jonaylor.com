@@ -289,6 +289,7 @@ def test_deltas_from_every_edit_keep_the_view_identical_to_a_fresh_one(home, see
 
     patched = {k: v for k, v in e.apply_deltas(view).items() if k[0] != "dupes"}
     e.close()
+    (home / ".mypeople" / "app-cache" / "mypeople-view.json").unlink(missing_ok=True)  # compare with a real build
     fresh_engine = Engine(home)
     fresh = {k: v for k, v in fresh_engine.view().items() if k[0] != "dupes"}
     fresh_engine.close()
@@ -315,6 +316,49 @@ def _wait(predicate, timeout=TIMEOUT):
             return True
         time.sleep(0.01)
     return False
+
+
+def test_a_launch_shows_the_last_view_at_once_and_then_catches_up(home, seeded):
+    first = Engine(home)
+    first.view()
+    first.close()
+    cache = home / ".mypeople" / "app-cache" / "mypeople-view.json"
+    assert cache.stat().st_mode & 0o777 == 0o600 and cache.parent.stat().st_mode & 0o777 == 0o700
+
+    # Another process adds a plan while the app is closed.
+    conn = db.connect(home / ".mypeople" / "mypeople.db")
+    add_event(conn, seeded["Grace Hopper"], "plan", "Added while the app was closed", "", 1.0, "manual")
+    conn.commit()
+    conn.close()
+
+    def added(records):
+        return any(r["kind"] == "event" and r["data"]["value"] == "Added while the app was closed" for r in records)
+
+    second = Engine(home)
+    snapshot = second.call("view.snapshot")  # straight from the cache, so the plan isn't in it yet
+    assert not added(snapshot["records"])
+    second.mark = len(second.log)
+    second.wait_event("view.delta", lambda d: added(d["upserts"]))
+    caught_up = second.apply_deltas({(r["kind"], r["id"]): r["data"] for r in snapshot["records"]})
+    second.close()
+    (cache).unlink()
+    fresh = Engine(home)
+    assert {k: v for k, v in caught_up.items() if k[0] != "dupes"} == {k: v for k, v in fresh.view().items() if k[0] != "dupes"}
+    fresh.close()
+
+
+def test_a_cache_from_another_database_or_format_is_ignored(home, seeded):
+    first = Engine(home)
+    first.view()
+    first.close()
+    cache = home / ".mypeople" / "app-cache" / "mypeople-view.json"
+    data = json.loads(cache.read_bytes())
+    data["key"]["db"] = "/elsewhere/mypeople.db"
+    data["records"] = [{"kind": "person", "id": "999999", "data": {"name": "Someone else"}}]
+    cache.write_text(json.dumps(data))
+    e = Engine(home)
+    assert ("person", "999999") not in e.view()
+    e.close()
 
 
 def test_commits_from_other_processes_reach_the_view(home, seeded):

@@ -92,6 +92,14 @@ every click, so there are two refresh paths:
 A full refresh that overlaps an edit is discarded and rerun, so stale data can never overwrite
 a scoped update. Deltas carry a version; if Swift ever sees a gap it asks for a new snapshot.
 
+- **Launch.** A launch must not wait for a full refresh. The engine keeps the last view it published in
+  `app-cache/<db>-view.json` beside the database (0600, written atomically), and answers the first
+  `view.snapshot` from it once the database has opened. It then refreshes as usual and sends the
+  difference as a delta. The cache is keyed by database path, protocol, CLI version and cache format,
+  and anything that doesn't match is ignored. It is only a starting point: edits are always checked
+  against the database. The app also reuses the login shell's `PATH` from the last launch, and
+  looks again in the background.
+
 ## Notes and facts belong to the contact
 
 The [versioned graph](versioned-graph.md) is authoritative. Native splitting loads exact
@@ -147,7 +155,8 @@ for the next CLI transfer. A question stays out of job announcements (`_public`)
   quotes and names render as plain text. Control characters are stripped from job output.
 - **The view only offers what will work.** `can_undo_merge` applies the same check as the undo
   itself. A moment that was merely surfaced doesn't block an undo, but one you acted on does.
-- **Nothing is logged to disk.** Engine stderr and job output stay in bounded memory buffers.
+- **Nothing is logged to disk.** Engine stderr and job output stay in bounded memory buffers. The only
+  thing written outside the database is the view cache, which holds nothing the database doesn't.
 - **Tests use synthetic data only.** The engine honours `MYPEOPLE_DB`, and the Swift
   integration test runs against a throwaway database.
 

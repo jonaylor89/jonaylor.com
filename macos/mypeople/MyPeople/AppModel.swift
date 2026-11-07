@@ -200,7 +200,7 @@ final class AppModel {
         generation += 1
         let generation = generation
         viewVersion = -1
-        if shellPath == nil { shellPath = await EngineLocator.loginShellPath() }
+        if shellPath == nil { shellPath = await loginShellPath() }
         guard !stopping, generation == self.generation else { return }
         let locator = EngineLocator(shellPath: shellPath)
         guard let command = locator.locate(chosen: enginePath) else {
@@ -256,6 +256,23 @@ final class AppModel {
         } catch {
             // The process ended; engineEnded decides what to do and has the diagnostics.
         }
+    }
+
+    /// Starting a login shell costs a few hundred milliseconds, so launches use the PATH the last one
+    /// found and look again in the background, for the next connection.
+    private func loginShellPath() async -> String? {
+        let key = "loginShellPath"
+        guard let cached = UserDefaults.standard.string(forKey: key), !cached.isEmpty else {
+            let found = await EngineLocator.loginShellPath()
+            if let found { UserDefaults.standard.set(found, forKey: key) }
+            return found
+        }
+        Task { [weak self] in
+            guard let found = await EngineLocator.loginShellPath() else { return }
+            UserDefaults.standard.set(found, forKey: key)
+            self?.shellPath = found
+        }
+        return cached
     }
 
     private func engineEnded(generation: Int, client: EngineClient) async {

@@ -9,12 +9,7 @@ struct RootView: View {
         Group {
             switch model.state {
             case .starting where !model.hasLoaded:
-                VStack(spacing: 12) {
-                    ProgressView()
-                    Text("Opening your memory…").foregroundStyle(Kin.onSurfaceVariant)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Kin.surface)
+                OpeningView()
             case .failed(let failure):
                 EngineFailedView(failure: failure)
             default:
@@ -208,5 +203,24 @@ struct EngineFailedView: View {
         .frame(maxWidth: 620)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Kin.surface)
+    }
+}
+
+/// A launch normally opens the last view in a fraction of a second; say something only if it doesn't.
+private struct OpeningView: View {
+    @State private var slow = false
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+            Text("Opening your memory…").foregroundStyle(Kin.onSurfaceVariant)
+        }
+        .opacity(slow ? 1 : 0)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Kin.surface)
+        .task {
+            try? await Task.sleep(for: .milliseconds(500))
+            slow = true
+        }
     }
 }
