@@ -105,7 +105,7 @@ def capture(conn, graph, operations, *, archive=False):
             if state is None:
                 raise GraphError("Missing local interaction batch mapping")
             if graph.objects.get(batch, {}).get("type") == "Interaction":
-                rows = [_raw({key: graph.value(batch, key) for entity, key in graph.versions if entity == batch and not key.startswith('_')})]
+                rows = [_raw({key: graph.value(batch, key) for key in graph.registers(batch) if not key.startswith('_')})]
             else:
                 rows = _read(conn, state[0])
             changed[batch] = (state, {r["source_ref"]: r for r in rows})
@@ -200,12 +200,13 @@ def capture(conn, graph, operations, *, archive=False):
     conn.execute("DELETE FROM graph_deleted WHERE table_name='interactions'")
 
 
-def project(conn, graph, *, props=None, canonical=None, people=None):
+def project(conn, graph, *, props=None, canonical=None, people=None, scope=None):
     """Incrementally project batches and legacy/override Interaction entities.
 
     Caller supplies canonical UUID -> displayed local person ID as ``people``.
     Without indexes the helper derives them. Stable source_ref reuses local IDs.
     Unchanged batches never read payloads or update any interaction SQL rows.
+    ``scope`` limits the work to batches whose participant is one of those person UUIDs.
     """
     _schema(conn)
     if canonical is None:
@@ -224,7 +225,11 @@ def project(conn, graph, *, props=None, canonical=None, people=None):
     # Select only explicit participant endpoints. No owner is inferred for blobs
     # lacking an attribution. Multiple explicit edges remain in graph history.
     active = {}
-    for eid, edge in sorted(graph.edges.items()):
+    if scope is None:
+        participants = graph.edges_of_type({"participant"})
+    else:
+        participants = [pair for person in scope for pair in graph.edges_to(person, {"participant"})]
+    for eid, edge in sorted(participants):
         obj = edge["from"]
         if (edge["type"] == "participant" and graph.active(eid) and graph.active(obj)
                 and graph.objects.get(obj, {}).get("type") in ("InteractionBatch", "Interaction")):
@@ -233,7 +238,14 @@ def project(conn, graph, *, props=None, canonical=None, people=None):
             if root not in people:
                 raise GraphError("Interaction participant is missing from SQL projection")
             active[obj] = (owner, eid, people[root])
-    previous = {r[0]: tuple(r[1:]) for r in conn.execute("SELECT entity,digest,owner,edge,person_id FROM graph_interaction_batches")}
+    if scope is None:
+        previous = {r[0]: tuple(r[1:]) for r in conn.execute("SELECT entity,digest,owner,edge,person_id FROM graph_interaction_batches")}
+    else:
+        previous, owners = {}, sorted(scope)
+        for n in range(0, len(owners), 500):
+            chunk = owners[n:n + 500]
+            previous.update({r[0]: tuple(r[1:]) for r in conn.execute(
+                f"SELECT entity,digest,owner,edge,person_id FROM graph_interaction_batches WHERE owner IN ({','.join('?' * len(chunk))})", chunk)})
     removed_override = any(graph.objects.get(obj, {}).get("type") == "Interaction"
                            for obj in previous.keys() - active.keys())
     obsolete = []

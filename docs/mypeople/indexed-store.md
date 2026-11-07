@@ -81,3 +81,34 @@ never pass their contents in command arguments or logs.
   encrypted backup/fresh restore, actual Provider field UUIDs, photo lifecycle
   and unverified legacy numbers. Native frame/operation timing logs contain only
   stage names/durations, never person IDs, names, contact content or payloads.
+
+## Python CLI index
+
+The Python engine keeps the same kind of index in the main database, so no command replays the
+whole history to answer a question about one contact. `graph_index.py` owns it:
+
+- `graph_index_commits`, `graph_index_entities`, `graph_index_operations` and
+  `graph_index_registers` hold the reduced graph: commit rank and ancestry, objects and edges by
+  owner and target, which commit wrote each operation, and the live alternatives of every
+  property. `graph_index_affected` remembers which people each commit involves, for history.
+- `graph_commits` stays the authority. Every write updates the index in the same transaction,
+  through `IndexedGraph`, which runs the reducer's own `_apply` rules against SQL. Commits that
+  extend the current heads are cheap; others rerank the order. More than `BULK` new commits at
+  once, as in a first transfer, rebuild the index from an in-memory replay instead.
+- `graph_index_meta` records the format, the number of commits and the highest `graph_commits`
+  rowid seen. Commits written by a CLI that predates the index are applied on the next open; a
+  missing or different format rebuilds it. A database that can't be written (read-only, or
+  locked by another writer) is replayed in memory, as before.
+- A graph object read earlier keeps its own view: when another write bumps the connection's
+  generation, its next read replays up to its own commit sequence.
+- `projected` is the sequence up to which the SQL compatibility rows reflect the graph.
+  `graph_runtime.project` rebuilds only the contacts touched since then, widened to everyone
+  who shared a contact with them before or after and everyone competing for the same globally
+  unique identifier or moment key. If it meets anything it can't place, it rebuilds everything.
+  The engine builds the index and the watermark before its first request
+  (`graph_runtime.warm`), so the first edit after an upgrade doesn't pay for it.
+
+`MYPEOPLE_GRAPH_VERIFY=1` checks every index write against a full replay, and every partial
+projection against a full one run in a savepoint that is then rolled back. The test suite turns
+it on for every test (`tests/conftest.py`); `tests/test_graph_index.py` covers catch-up, format
+rebuilds, stale views and partial projections.

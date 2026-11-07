@@ -73,6 +73,8 @@ def records(
     from . import replica, graph_runtime
     history = replica.load(conn)
     graph_mode = graph_runtime.enabled(conn)
+    if graph_mode:
+        history.prime([p["contact_uid"] for p in people_rows])
     out: dict[tuple[str, str], dict] = {}
     files: dict[str, str] = {}
     for p in people_rows:

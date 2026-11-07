@@ -37,13 +37,17 @@ def _parse_day(at: str) -> dt.date:
 
 def infer(conn: sqlite3.Connection, person_id: int, today: dt.date | None = None) -> Relationship:
     today = today or dt.date.today()
-    rows = conn.execute(
-        "SELECT at, direction, channel FROM interactions WHERE person_id = ? AND at <= ? ORDER BY at",
-        (person_id, f"{today.isoformat()} 23:59:59"),
-    ).fetchall()
+    until = f"{today.isoformat()} 23:59:59"
+    # One row per day rather than per message: a close contact has tens of thousands.
+    per_day = [(_parse_day(r[0]), r[1], r[2]) for r in conn.execute(
+        "SELECT substr(at, 1, 10), SUM(direction = 'out'), SUM(direction = 'in') FROM interactions "
+        "WHERE person_id = ? AND at <= ? GROUP BY substr(at, 1, 10)", (person_id, until))]
+    # The same row the full ordered list would end on: interactions_person_at orders ties by rowid.
+    last = conn.execute("SELECT channel FROM interactions WHERE person_id = ? AND at <= ? ORDER BY at DESC, rowid DESC LIMIT 1",
+                        (person_id, until)).fetchone()
     override = conn.execute("SELECT * FROM relationship_overrides WHERE person_id = ?", (person_id,)).fetchone()
 
-    days = sorted({_parse_day(r["at"]) for r in rows})
+    days = sorted({day for day, _, _ in per_day})
     year_ago = today - dt.timedelta(days=365)
     recent_days = [d for d in days if d > year_ago]
     days_since = (today - days[-1]).days if days else None
@@ -67,8 +71,8 @@ def infer(conn: sqlite3.Connection, person_id: int, today: dt.date | None = None
         trend = "steady"
 
     # Closeness: how often you talk, whether it goes both ways, and how recently.
-    outgoing = sum(1 for r in rows if r["direction"] == "out" and _parse_day(r["at"]) > year_ago)
-    incoming = sum(1 for r in rows if r["direction"] == "in" and _parse_day(r["at"]) > year_ago)
+    outgoing = sum(out for day, out, _ in per_day if day > year_ago)
+    incoming = sum(inc for day, _, inc in per_day if day > year_ago)
     frequency = min(1.0, math.log1p(len(recent_days)) / math.log1p(120))
     reciprocity = 0.5 + 0.5 * (min(outgoing, incoming) / max(outgoing, incoming)) if outgoing and incoming else 0.5
     recency = math.exp(-days_since / 180) if days_since is not None else 0.0
@@ -90,7 +94,7 @@ def infer(conn: sqlite3.Connection, person_id: int, today: dt.date | None = None
         days_since=days_since,
         trend=trend,
         days_365=len(recent_days),
-        last_channel=rows[-1]["channel"] if rows else None,
+        last_channel=last[0] if last else None,
         muted=muted,
     )
 

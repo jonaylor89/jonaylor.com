@@ -78,7 +78,9 @@ The Mac view differs from the phone's in four ways, all in `appserver.py`:
 
 A full `publish.records()` takes about 2.2 s on a synthetic database the size of a real
 install (2,600 people, 329k messages). That is fine in the background and unacceptable after
-every click, so there are two refresh paths:
+every click, so there are two refresh paths. Both read the engine's persistent graph index
+(`docs/mypeople/indexed-store.md`), so a scoped refresh, an edit or a contact's history touch only
+that contact's rows rather than replaying every commit:
 
 - **Scoped refresh.** After an edit, the serial lane rebuilds only the people it touched
   (`publish.records(people=…)`) and sends the difference as a `view.delta` *before* the

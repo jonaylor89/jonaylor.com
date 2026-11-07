@@ -99,21 +99,59 @@ def initialize(conn):
 def _append(conn, graph, operations):
     if not operations:
         return graph
+    from . import graph_index
     store = Store(conn)
     commit = graph.commit(store.peer, operations, store.collection)
-    # Validate before persisting; all batches share a single load/reduction.
+    store.verify_references(graph, commits=[commit])
+    # Validate before persisting; all batches share a single load/reduction. An indexed
+    # graph writes its index rows here, inside the caller's transaction.
     result = graph._append_local(commit)
-    store.verify_references(result, commits=[commit])
     conn.execute("INSERT INTO graph_commits VALUES (?,?)", (commit["id"], encoded(commit)))
+    if isinstance(result, graph_index.IndexedGraph):
+        graph_index.noted(conn)
     return result
 
 
 def _properties(graph):
+    from .graph_index import IndexedGraph
+    if isinstance(graph, IndexedGraph):
+        return _Props(graph)
     result = defaultdict(dict)
     for (entity, prop), versions in graph.versions.items():
         if prop != "_lifecycle" and versions:
             result[entity][prop] = versions[max(versions)]
     return result
+
+
+class _Props(Mapping):
+    """entity -> {property: current value}, read from the index one entity at a time."""
+
+    def __init__(self, graph):
+        self.graph = graph
+        self.cache = {}
+
+    def __getitem__(self, entity):
+        if entity not in self.cache:
+            self.cache[entity] = {prop: versions[max(versions)] for prop, versions in self.graph.registers(entity).items()
+                                  if prop != "_lifecycle" and versions}
+        return self.cache[entity]
+
+    def get(self, entity, default=None):
+        return self[entity] or default
+
+    def __contains__(self, entity):
+        return bool(self[entity])
+
+    def __iter__(self):
+        self.graph.preload()
+        return iter([entity for entity in self.graph._regs if self[entity]])
+
+    def __len__(self):
+        return len(list(iter(self)))
+
+
+OWNED_FROM = frozenset(ATTRIBUTIONS - {"participant"})  # Person -> object
+OWNED_TO = frozenset(("participant", "about"))  # object -> Person
 
 
 def capture(conn, *, archive=False):
@@ -211,7 +249,7 @@ def capture(conn, *, archive=False):
                     if child is None and key.startswith("field_uid:"):
                         field_uid = key.partition(":")[2]
                         members = next((set(group) for group in graph.components()["groups"].values() if person in group), {person})
-                        links = [(eid, edge) for eid, edge in graph.edges.items() if edge["type"] == "has_contact_point" and edge["from"] in members and edge["to"] == field_uid and graph.active(eid)]
+                        links = [(eid, edge) for eid, edge in graph.edges_to(field_uid, {"has_contact_point"}) if edge["from"] in members and graph.active(eid)]
                         if not links or graph.objects.get(field_uid, {}).get("type") != "ContactPoint":
                             raise GraphError("Contact field identity is not an association of this person")
                         edge_id = min(eid for eid, _ in links)
@@ -242,8 +280,9 @@ def capture(conn, *, archive=False):
                 before_merge = json.loads(old[2]).get("merged_into") if old else None
                 after_merge = values.get("merged_into")
                 if before_merge != after_merge:
-                    for edge_id, e in graph.edges.items():
-                        if e["type"] == "same_person" and entity in (e["from"], e["to"]) and graph.active(edge_id):
+                    identity = {**dict(graph.edges_from(entity, {"same_person"})), **dict(graph.edges_to(entity, {"same_person"}))}
+                    for edge_id in sorted(identity, key=graph.creation_order):
+                        if graph.active(edge_id):
                             retract(edge_id)
                     if after_merge is not None:
                         # Created after the person pass, below.
@@ -289,9 +328,8 @@ def capture(conn, *, archive=False):
                         object_("Conversation", {"channel": values["channel"], "external_key": values["thread"]}, conversation)
                     if not old or json.loads(old[2]).get("thread") != values["thread"]:
                         if old:
-                            for eid,e in graph.edges.items():
-                                if e["type"] == "in_conversation" and e["from"] == entity:
-                                    retract(eid)
+                            for eid,e in graph.edges_from(entity, {"in_conversation"}):
+                                retract(eid)
                         edge_("in_conversation", entity, conversation)
             if archive:
                 digest = store.put_blob(snapshot.encode())
@@ -377,7 +415,14 @@ def receive(conn, data):
         store = Store(conn)
         if data["collection"] != store.collection and (current.commits or conn.execute("SELECT 1 FROM people LIMIT 1").fetchone()):
             raise GraphError("Cannot join different collections")
-        merged = Graph([*current.commits.values(), *data["commits"]], copy_commits=False)
+        from . import graph_index
+        indexed = isinstance(current, graph_index.IndexedGraph) and len(data["commits"]) <= graph_index.BULK
+        if indexed:
+            # Only the commits we don't have are reduced, against the indexed history.
+            current.apply_commits(data["commits"])
+            merged = current
+        else:
+            merged = Graph([*current.commits.values(), *data["commits"]], copy_commits=False)
         if merged.collection and merged.collection != data["collection"]:
             raise GraphError("Bundle collection does not match its commits")
         # A sender's heads describe its own complete history (not the receiver's branches).
@@ -396,21 +441,39 @@ def receive(conn, data):
             # Bound memory to one blob, not the complete conversation/photo book.
             # The surrounding transaction rolls these writes back on any failure.
             store.put_blob(content)
-        store.verify_references(merged)
+        # Stored commits were checked when they arrived; every commit in the bundle is checked now.
+        store.verify_references(merged, commits=data["commits"] if indexed else None)
         for commit in data["commits"]:
             conn.execute("INSERT OR IGNORE INTO graph_commits VALUES (?,?)", (commit["id"],encoded(commit)))
+        if indexed:
+            graph_index.noted(conn)
+        elif isinstance(current, graph_index.IndexedGraph):
+            graph_index.rebuild(conn, merged)
+            merged = Store(conn).load()
         if store.collection != data["collection"]:
             conn.execute("UPDATE graph_meta SET value=? WHERE key='collection'", (data["collection"],))
         project(conn, merged)
         return merged
 
 
-def _view(graph):
-    """Linear indexes shared by SQL/card/association projections."""
+def _view(graph, roots=None):
+    """Linear indexes shared by SQL/card/association projections. With `roots`, only those
+    people's associations are read, in the order a full scan would list them."""
     props = _properties(graph)
     groups = graph.components()["groups"]
     canonical = {p: root for root, members in groups.items() for p in members}
     associations = defaultdict(list)
+    if roots is not None:
+        for root in roots:
+            found = []
+            for member in groups.get(root, [root]):
+                found += [(eid, edge, member, edge["to"]) for eid, edge in graph.edges_from(member, OWNED_FROM)]
+                found += [(eid, edge, member, edge["from"]) for eid, edge in graph.edges_to(member, OWNED_TO)]
+            found.sort(key=lambda row: graph.creation_order(row[0]))
+            for eid, edge, person, obj in found:
+                if graph.active(eid) and obj in graph.objects and graph.active(obj):
+                    associations[root].append((eid, edge["type"], obj, person))
+        return props, groups, canonical, associations
     for eid, edge in graph.edges.items():
         if not graph.active(eid):
             continue
@@ -423,10 +486,15 @@ def _view(graph):
     return props, groups, canonical, associations
 
 
-def _preferred_people(graph, canonical, props):
+def _preferred_people(graph, canonical, props, groups=None, roots=None):
     preferred = {}
-    rank = {c:i for i,c in enumerate(graph.order)}
-    candidates = sorted(graph.edges, key=lambda e:(rank[graph.creation[e]],e))
+    if roots is not None:
+        edges = {eid for root in roots for member in groups.get(root, [root])
+                 for eid, _ in graph.edges_from(member, {"same_person"}) + graph.edges_to(member, {"same_person"})}
+        candidates = sorted(edges, key=lambda e: (graph.creation_order(e)[0], e))
+    else:
+        rank = {c:i for i,c in enumerate(graph.order)}
+        candidates = sorted(graph.edges, key=lambda e:(rank[graph.creation[e]],e))
     for eid in candidates:
         e = graph.edges[eid]
         person = props[eid].get("preferred_person")
@@ -435,11 +503,14 @@ def _preferred_people(graph, canonical, props):
     return preferred
 
 
-def cards(graph, conn=None):
-    props, groups, canonical, associations = _view(graph)
+def cards(graph, conn=None, roots=None):
+    """Each contact's card. With `roots`, only those contacts are built, from indexed reads."""
+    if roots is not None:
+        roots = [r for r in dict.fromkeys(roots)]
+    props, groups, canonical, associations = _view(graph, roots)
     result = {}
-    preferred = _preferred_people(graph,canonical,props)
-    for root, members in groups.items():
+    preferred = _preferred_people(graph,canonical,props,groups,roots)
+    for root, members in (groups.items() if roots is None else [(r, groups[r]) for r in roots if r in groups]):
         from .replica import DEFAULTS
         card = DEFAULTS | {"name": "Unnamed person", "fields": [], "originals": [], "source_records": []}
         regions = {owner:props[obj].get("region") for _,rel,obj,owner in associations[root] if rel == "has_preferences" and props[obj].get("region")}
@@ -484,11 +555,20 @@ def cards(graph, conn=None):
                         "is_me": any(props[p].get("is_me", False) for p in members)}
     # Decisions authored by native peers use the original foundation schema.
     targets = defaultdict(list)
-    for eid,e in graph.edges.items():
-        if e["type"] == "targets" and graph.active(eid):
-            targets[e["from"]].append(e["to"])
-    for obj, base in graph.objects.items():
-        if base["type"] != "Decision" or not graph.active(obj):
+    if roots is None:
+        decisions = graph.objects
+        for eid,e in graph.edges.items():
+            if e["type"] == "targets" and graph.active(eid):
+                targets[e["from"]].append(e["to"])
+    else:
+        found = {e["from"] for root in result for member in groups[root] for _, e in graph.edges_to(member, {"targets"})}
+        for decision in found:
+            for eid, e in graph.edges_from(decision, {"targets"}):
+                if graph.active(eid):
+                    targets[decision].append(e["to"])
+        decisions = sorted(found, key=graph.creation_order)
+    for obj in decisions:
+        if graph.objects.get(obj, {}).get("type") != "Decision" or not graph.active(obj):
             continue
         p = props[obj]
         for target in targets[obj]:
@@ -498,26 +578,144 @@ def cards(graph, conn=None):
                     result[root]["card"]["favorite"] = bool(result[root]["card"].get("favorite") or p.get("value"))
                 elif target == preferred.get(root,root) or not result[root]["card"].get(p["action"]):
                     result[root]["card"][p["action"]] = p.get("value")
-    # Register conflicts map back to editable card field names for the existing UI.
-    owner_by_object = {obj: root for root, rows in associations.items() for _,_,obj,_ in rows}
-    for (obj, prop), versions in graph.versions.items():
-        if len({encoded(v) for v in versions.values()}) <= 1:
-            continue
-        root = canonical.get(obj, owner_by_object.get(obj))
-        if root not in result:
-            continue
-        field = "name" if prop == "display" else "notes" if prop == "body" and props[obj].get("origin") in ("contact_card_notes","legacy_card_notes") else props[obj].get("predicate",prop) if prop == "value" and props[obj].get("asserted_by") in ("contact_card","legacy_contact_card") else prop
-        result[root]["conflicts"][field] = [{"change": operation, "value": value, "entity": obj, "property": prop} for operation,value in sorted(versions.items())]
+    # Register conflicts map back to editable card field names for the existing UI. Each
+    # contact's people and associated objects are checked in creation order, so a full and a
+    # scoped build agree on which conflict a field shows.
+    for root in result:
+        owned = [*groups[root], *dict.fromkeys(obj for _,_,obj,_ in associations.get(root, []))]
+        for obj in sorted(owned, key=graph.creation_order):
+            for prop, versions in sorted(graph.registers(obj).items()):
+                if len({encoded(v) for v in versions.values()}) <= 1:
+                    continue
+                field = "name" if prop == "display" else "notes" if prop == "body" and props[obj].get("origin") in ("contact_card_notes","legacy_card_notes") else props[obj].get("predicate",prop) if prop == "value" and props[obj].get("asserted_by") in ("contact_card","legacy_contact_card") else prop
+                result[root]["conflicts"][field] = [{"change": operation, "value": value, "entity": obj, "property": prop} for operation,value in sorted(versions.items())]
     return result
 
 
-def project(conn, graph=None):
-    """Rebuild compatibility rows from graph entities; graph attribution is untouched.
+def _child_rows(conn, graph, props, root_rows, people, displayed, display_ids, photo_paths):
+    """graph_children for each contact, and the compatibility rows its associations want."""
+    desired = defaultdict(list)
+    for root, rows in root_rows:
+        if root not in people:
+            continue
+        for eid, relation, obj, owner in rows:
+            p = props[obj]
+            kind = graph.objects[obj]["type"]
+            if kind in ("Interaction", "InteractionBatch"):
+                continue  # independent incremental interaction projection
+            table = p.get("compat_table")
+            child_key = None
+            if relation == "has_name" and p.get("label") != "alias":
+                child_key = "name"
+            elif relation == "has_contact_point" and table != "identifiers" and not p.get("matching_hint"):
+                child_key = "field_uid:" + obj
+            elif relation == "has_note" and p.get("origin") in ("contact_card_notes", "legacy_card_notes"):
+                child_key = "notes"
+            elif relation == "subject_of" and p.get("asserted_by") in ("contact_card", "legacy_contact_card"):
+                child_key = p.get("predicate")
+            elif relation == "has_asset" and p.get("role") == "contact_photo":
+                child_key = "photo"
+            elif relation == "has_preferences" and p.get("origin") == "contact_card":
+                child_key = "card_preferences"
+            if child_key:
+                conn.execute("INSERT OR IGNORE INTO graph_children VALUES (?,?,?,?,?)", (displayed[root],child_key,obj,eid,encoded(p)))
+                continue
+            if not table:
+                table = {"Name":"aliases", "ContactPoint":"identifiers", "Note":"events", "Interaction":"interactions", "RelationshipPreferences":"relationship_overrides", "Moment":"moments", "Asset":"photos", "Claim":"profiles" if p.get("predicate") == "public_profile" else "events"}.get(kind)
+            if table not in KINDS:
+                continue
+            v = {k:v for k,v in p.items() if k not in ("compat_table", "predicate", "body", "origin", "asserted_by", "content", "role", "matching_hint")}
+            v["person_id"] = display_ids[root]
+            if table == "aliases":
+                v = {"person_id": display_ids[root], "alias": p.get("display", "")}
+            elif table == "identifiers":
+                v.setdefault("source", "graph")
+            elif table == "events":
+                v.update(type="note" if kind == "Note" else p.get("predicate", p.get("type", "other")), value=p.get("body", p.get("value", "")))
+                v.setdefault("date", "")
+                v.setdefault("confidence", 1)
+                v.setdefault("source", "graph")
+                v.setdefault("status", "active")
+                v.setdefault("generation", 2 if v["status"] == "rejected" else 1)
+            elif table == "profiles":
+                v["url"] = p.get("url", p.get("value", ""))
+                v.setdefault("site", "website")
+                v.setdefault("confidence", 1)
+            elif table == "interactions":
+                v.setdefault("at", "")
+                v.setdefault("channel", "unknown")
+                v.setdefault("direction", "in")
+                v.setdefault("source_ref", "graph:" + obj)
+            elif table == "photos":
+                digest = (p.get("content") or {}).get("blob_hash")
+                blob = conn.execute("SELECT content FROM graph_blobs WHERE hash=?", (digest,)).fetchone()
+                if not blob:
+                    raise GraphError("Missing photo content")
+                # Derived assets live beside the explicitly selected database,
+                # never in a user's default photo directory.
+                database = conn.execute("PRAGMA database_list").fetchone()[2]
+                if not database:
+                    import tempfile
+                    directory = Path(tempfile.gettempdir()) / ("mypeople-graph-" + Store(conn).collection)
+                else:
+                    directory = Path(database).parent / (Path(database).name + ".assets")
+                directory.mkdir(parents=True, exist_ok=True)
+                path = directory / digest
+                if not path.exists():
+                    path.write_bytes(blob[0])
+                previous = photo_paths.get(obj)
+                if previous and Path(previous).is_file() and hashlib.sha256(Path(previous).read_bytes()).hexdigest() == digest:
+                    path = Path(previous)
+                v["path"] = str(path)
+                v.setdefault("source", "graph:" + obj)
+            desired[table].append((obj,eid,v))
+    return desired
+
+
+def _insert_rows(conn, desired, old_rows, decisions, floor=None):
+    """Insert wanted compatibility rows, keeping each entity's local ID. New rows number
+    from above `floor[table]`, so a partial rebuild never reuses a row other people hold."""
+    floor = floor or {}
+    for table, rows in desired.items():
+        # SQL uniqueness is a compatibility display rule only. Retain every
+        # colliding original in graph and prefer the strongest explicit
+        # review/generation in this disposable materialized view.
+        if table == "events":
+            rows.sort(key=lambda row:(-int(row[2].get("generation",1)),row[0]))
+        elif table == "profiles":
+            from .profile_urls import profile_url
+            for obj,eid,v in rows:
+                v["url"] = profile_url(v.get("url", "")) or v.get("url", "")
+            rows.sort(key=lambda row:({"confirmed":0,"rejected":1,"suggested":2}.get(row[2].get("status","suggested"),3),row[0]))
+        elif table == "photos":
+            rows.sort(key=lambda row:(-int(row[2].get("width",0)),row[0]))
+        columns = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        used_ids = set()
+        next_id = max([old_rows.get((table,obj), 0) for obj,_,_ in rows] + [floor.get(table, 0)]) + 1
+        for obj,eid,values in rows:
+            v = {k:encoded(v) if isinstance(v,(dict,list)) else v for k,v in values.items() if k in columns and k != "id"}
+            if table == "profiles" and obj in decisions:
+                v["status"] = decisions[obj]
+            local = old_rows.get((table,obj))
+            if "id" in columns:
+                if not local or local in used_ids:
+                    local, next_id = next_id, next_id + 1
+                v["id"] = local
+                used_ids.add(local)
+            keys = list(v)
+            cursor = conn.execute(f'INSERT OR IGNORE INTO "{table}" ({",".join(keys)}) VALUES ({",".join("?" for _ in keys)})', [v[k] for k in keys])
+            if cursor.rowcount:
+                local = v.get("id", v.get("person_id") if table == "relationship_overrides" else cursor.lastrowid)
+                row = dict(conn.execute(f'SELECT * FROM "{table}" WHERE rowid=?', (local,)).fetchone())
+                conn.execute("INSERT INTO graph_rows VALUES (?,?,?,?,?)", (table,local,obj,eid,encoded(row)))
+
+
+def _project_all(conn, graph):
+    """Rebuild every compatibility row from graph entities; graph attribution is untouched.
 
     Local IDs are reused across remote refreshes, including after splits. SQL unique
     collisions may hide a duplicate compatibility row, never its graph object.
     """
-    graph = graph or Store(conn).load()
     props, groups, canonical, associations = _view(graph)
     contact_cards = cards(graph, conn)
     from .contacts import rebuild_keys
@@ -541,81 +739,7 @@ def project(conn, graph=None):
         # Child indexes are local edit aids. Rebuild them so SQL card edits replace
         # the exact remote entity/version rather than spawning a duplicate card.
         conn.execute("DELETE FROM graph_children")
-        desired = defaultdict(list)
-        for root, rows in associations.items():
-            if root not in people:
-                continue
-            for eid, relation, obj, owner in rows:
-                p = props[obj]
-                kind = graph.objects[obj]["type"]
-                if kind in ("Interaction", "InteractionBatch"):
-                    continue  # independent incremental interaction projection
-                table = p.get("compat_table")
-                child_key = None
-                if relation == "has_name" and p.get("label") != "alias":
-                    child_key = "name"
-                elif relation == "has_contact_point" and table != "identifiers" and not p.get("matching_hint"):
-                    child_key = "field_uid:" + obj
-                elif relation == "has_note" and p.get("origin") in ("contact_card_notes", "legacy_card_notes"):
-                    child_key = "notes"
-                elif relation == "subject_of" and p.get("asserted_by") in ("contact_card", "legacy_contact_card"):
-                    child_key = p.get("predicate")
-                elif relation == "has_asset" and p.get("role") == "contact_photo":
-                    child_key = "photo"
-                elif relation == "has_preferences" and p.get("origin") == "contact_card":
-                    child_key = "card_preferences"
-                if child_key:
-                    conn.execute("INSERT OR IGNORE INTO graph_children VALUES (?,?,?,?,?)", (displayed[root],child_key,obj,eid,encoded(p)))
-                    continue
-                if not table:
-                    table = {"Name":"aliases", "ContactPoint":"identifiers", "Note":"events", "Interaction":"interactions", "RelationshipPreferences":"relationship_overrides", "Moment":"moments", "Asset":"photos", "Claim":"profiles" if p.get("predicate") == "public_profile" else "events"}.get(kind)
-                if table not in KINDS:
-                    continue
-                v = {k:v for k,v in p.items() if k not in ("compat_table", "predicate", "body", "origin", "asserted_by", "content", "role", "matching_hint")}
-                v["person_id"] = display_ids[root]
-                if table == "aliases":
-                    v = {"person_id": display_ids[root], "alias": p.get("display", "")}
-                elif table == "identifiers":
-                    v.setdefault("source", "graph")
-                elif table == "events":
-                    v.update(type="note" if kind == "Note" else p.get("predicate", p.get("type", "other")), value=p.get("body", p.get("value", "")))
-                    v.setdefault("date", "")
-                    v.setdefault("confidence", 1)
-                    v.setdefault("source", "graph")
-                    v.setdefault("status", "active")
-                    v.setdefault("generation", 2 if v["status"] == "rejected" else 1)
-                elif table == "profiles":
-                    v["url"] = p.get("url", p.get("value", ""))
-                    v.setdefault("site", "website")
-                    v.setdefault("confidence", 1)
-                elif table == "interactions":
-                    v.setdefault("at", "")
-                    v.setdefault("channel", "unknown")
-                    v.setdefault("direction", "in")
-                    v.setdefault("source_ref", "graph:" + obj)
-                elif table == "photos":
-                    digest = (p.get("content") or {}).get("blob_hash")
-                    blob = conn.execute("SELECT content FROM graph_blobs WHERE hash=?", (digest,)).fetchone()
-                    if not blob:
-                        raise GraphError("Missing photo content")
-                    # Derived assets live beside the explicitly selected database,
-                    # never in a user's default photo directory.
-                    database = conn.execute("PRAGMA database_list").fetchone()[2]
-                    if not database:
-                        import tempfile
-                        directory = Path(tempfile.gettempdir()) / ("mypeople-graph-" + Store(conn).collection)
-                    else:
-                        directory = Path(database).parent / (Path(database).name + ".assets")
-                    directory.mkdir(parents=True, exist_ok=True)
-                    path = directory / digest
-                    if not path.exists():
-                        path.write_bytes(blob[0])
-                    previous = photo_paths.get(obj)
-                    if previous and Path(previous).is_file() and hashlib.sha256(Path(previous).read_bytes()).hexdigest() == digest:
-                        path = Path(previous)
-                    v["path"] = str(path)
-                    v.setdefault("source", "graph:" + obj)
-                desired[table].append((obj,eid,v))
+        desired = _child_rows(conn, graph, props, associations.items(), people, displayed, display_ids, photo_paths)
         # Explicit decision reviews override provisional profile status.
         decisions = {}
         for eid,e in graph.edges.items():
@@ -632,38 +756,7 @@ def project(conn, graph=None):
             local = people[person]
             row = dict(conn.execute("SELECT * FROM people WHERE id=?", (local,)).fetchone())
             conn.execute("INSERT INTO graph_rows VALUES (?,?,?,?,?)", ("people",local,person,None,encoded(row)))
-        for table, rows in desired.items():
-            # SQL uniqueness is a compatibility display rule only. Retain every
-            # colliding original in graph and prefer the strongest explicit
-            # review/generation in this disposable materialized view.
-            if table == "events":
-                rows.sort(key=lambda row:(-int(row[2].get("generation",1)),row[0]))
-            elif table == "profiles":
-                from .profile_urls import profile_url
-                for obj,eid,v in rows:
-                    v["url"] = profile_url(v.get("url", "")) or v.get("url", "")
-                rows.sort(key=lambda row:({"confirmed":0,"rejected":1,"suggested":2}.get(row[2].get("status","suggested"),3),row[0]))
-            elif table == "photos":
-                rows.sort(key=lambda row:(-int(row[2].get("width",0)),row[0]))
-            columns = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
-            used_ids = set()
-            next_id = max([old_rows.get((table,obj), 0) for obj,_,_ in rows] + [0]) + 1
-            for obj,eid,values in rows:
-                v = {k:encoded(v) if isinstance(v,(dict,list)) else v for k,v in values.items() if k in columns and k != "id"}
-                if table == "profiles" and obj in decisions:
-                    v["status"] = decisions[obj]
-                local = old_rows.get((table,obj))
-                if "id" in columns:
-                    if not local or local in used_ids:
-                        local, next_id = next_id, next_id + 1
-                    v["id"] = local
-                    used_ids.add(local)
-                keys = list(v)
-                cursor = conn.execute(f'INSERT OR IGNORE INTO "{table}" ({",".join(keys)}) VALUES ({",".join("?" for _ in keys)})', [v[k] for k in keys])
-                if cursor.rowcount:
-                    local = v.get("id", v.get("person_id") if table == "relationship_overrides" else cursor.lastrowid)
-                    row = dict(conn.execute(f'SELECT * FROM "{table}" WHERE rowid=?', (local,)).fetchone())
-                    conn.execute("INSERT INTO graph_rows VALUES (?,?,?,?,?)", (table,local,obj,eid,encoded(row)))
+        _insert_rows(conn, desired, old_rows, decisions)
         for eid,e in graph.edges.items():
             if e["type"] == "distinct_person" and graph.active(eid):
                 a,b = sorted((people[e["from"]],people[e["to"]]))
@@ -676,18 +769,287 @@ def project(conn, graph=None):
         conn.execute("DELETE FROM graph_deleted")
 
 
+def warm(conn):
+    """Build the graph index, and the projection watermark that partial rebuilds start from, if
+    either is missing: once after an upgrade, so that no later edit pays for it. Commits."""
+    from . import graph_index
+    with _atomic(conn):
+        graph = Store(conn).load()
+        if isinstance(graph, graph_index.IndexedGraph) and graph_index.projected(conn) is None:
+            project(conn, graph)
+    conn.commit()
+
+
+class _Unscoped(Exception):
+    """A partial rebuild met something only a full one handles; rebuild everything instead."""
+
+
+def project(conn, graph=None):
+    """Bring SQL compatibility rows up to date with the graph.
+
+    With the persistent index, only the contacts touched by commits since the last projection
+    are rebuilt. A full rebuild runs when there is no watermark yet, for a replayed graph, or
+    when the partial one can't be sure of its answer. MYPEOPLE_GRAPH_VERIFY=1 checks every
+    partial rebuild against a full one.
+    """
+    from . import graph_index
+    graph = graph or Store(conn).load()
+    indexed = isinstance(graph, graph_index.IndexedGraph) and not graph._frozen
+    watermark = graph_index.projected(conn) if indexed else None
+    if watermark is not None:
+        try:
+            with transaction(conn):
+                _project_scope(conn, graph, graph.affected_since(watermark))
+                if graph_index.verifying():
+                    _verify_projection(conn, graph)
+            graph_index.set_projected(conn, graph.seq)
+            return
+        except _Unscoped:
+            pass
+    _project_all(conn, graph)
+    if indexed:
+        graph_index.set_projected(conn, graph.seq)
+
+
+def _owners(graph, entity, depth=0):
+    """The people whose projected rows an entity can appear in."""
+    row = graph._row(entity)
+    if row is None or depth > 3:
+        return set()
+    kind, is_edge, source, target = row[:4]
+    if is_edge:
+        return _owners(graph, source, depth + 1) | _owners(graph, target, depth + 1)
+    if kind == "Person":
+        return {entity}
+    found = set()
+    for _, e in graph.edges_to(entity, OWNED_FROM):
+        found.add(e["from"])
+    for _, e in graph.edges_from(entity, OWNED_TO | {"targets"}):
+        found |= _owners(graph, e["to"], depth + 1)
+    return found
+
+
+def _unique_values(conn, graph, people, locals_):
+    """Identifier values and moment keys, which SQL keeps unique across people."""
+    values, keys = set(), set()
+    for person in people:
+        for _, e in graph.edges_from(person, {"has_contact_point"}):
+            v = graph.value(e["to"], "value")
+            if isinstance(v, str):
+                values.add(v)
+        for _, e in graph.edges_to(person, {"about"}):
+            k = graph.value(e["from"], "key")
+            if isinstance(k, str):
+                keys.add(k)
+    for chunk in _chunks(locals_):
+        marks = ",".join("?" * len(chunk))
+        values.update(r[0] for r in conn.execute(f"SELECT value FROM identifiers WHERE person_id IN ({marks})", chunk))
+        keys.update(r[0] for r in conn.execute(f"SELECT key FROM moments WHERE person_id IN ({marks})", chunk))
+    return values, keys
+
+
+def _chunks(items, size=500):
+    items = list(items)
+    return [items[n:n + size] for n in range(0, len(items), size)]
+
+
+def _people_ids(conn, uids):
+    found = {}
+    for chunk in _chunks(uids):
+        found.update({r[0]: r[1] for r in conn.execute(f"SELECT contact_uid,id FROM people WHERE contact_uid IN ({','.join('?' * len(chunk))})", chunk)})
+    return found
+
+
+def _scope(conn, graph, entities, groups, canonical):
+    """Every contact a full rebuild could change after these entities changed: their people,
+    whoever shared a contact with them before or after, and whoever competes with them for an
+    identifier or moment key."""
+    people = set()
+    for entity in entities:
+        people |= _owners(graph, entity)
+    seen_values, seen_keys = set(), set()
+    while True:
+        before = len(people)
+        local = _people_ids(conn, people)
+        ids = set(local.values())
+        displays = set()
+        for chunk in _chunks(ids):
+            displays.update(r[0] or r[1] for r in conn.execute(f"SELECT merged_into,id FROM people WHERE id IN ({','.join('?' * len(chunk))})", chunk))
+        for chunk in _chunks(displays):
+            marks = ",".join("?" * len(chunk))
+            people.update(r[0] for r in conn.execute(f"SELECT contact_uid FROM people WHERE id IN ({marks}) OR merged_into IN ({marks})", chunk + chunk))
+        people = {member for person in people for member in groups.get(canonical.get(person, person), [person])}
+        values, keys = _unique_values(conn, graph, people, _people_ids(conn, people).values())
+        for value in values - seen_values:
+            for entity in graph.entities_with("value", value):
+                people |= _owners(graph, entity)
+            people.update(r[0] for r in conn.execute("SELECT p.contact_uid FROM identifiers i JOIN people p ON p.id=i.person_id WHERE i.value=?", (value,)))
+        for key in keys - seen_keys:
+            for entity in graph.entities_with("key", key):
+                people |= _owners(graph, entity)
+            people.update(r[0] for r in conn.execute("SELECT p.contact_uid FROM moments m JOIN people p ON p.id=m.person_id WHERE m.key=?", (key,)))
+        seen_values |= values
+        seen_keys |= keys
+        people = {member for person in people for member in groups.get(canonical.get(person, person), [person])}
+        if len(people) == before:
+            return people
+
+
+def _project_scope(conn, graph, entities):
+    """`_project_all`, for only the contacts these changed entities can reach."""
+    groups = graph.components()["groups"]
+    canonical = {p: root for root, members in groups.items() for p in members}
+    people_uids = _scope(conn, graph, entities, groups, canonical)
+    if not people_uids:
+        return
+    roots = sorted({canonical[p] for p in people_uids if p in canonical})
+    if len(roots) != len({canonical.get(p) for p in people_uids}):
+        raise _Unscoped  # SQL holds people the graph doesn't
+    props, groups, canonical, associations = _view(graph, roots)
+    contact_cards = cards(graph, conn, roots)
+    members = [m for root in roots for m in groups[root]]
+    from .contacts import rebuild_keys
+    with suppressed(conn):
+        people = _people_ids(conn, members)
+        for person in members:
+            if person not in people:
+                people[person] = conn.execute("INSERT INTO people(name,contact_uid) VALUES (?,?)", ("Unnamed person",person)).lastrowid
+        preferred = _preferred_people(graph,canonical,props,groups,roots)
+        displayed = {root:preferred.get(root,root) for root in roots}
+        display_ids = {root:people[person] for root,person in displayed.items()}
+        for person in members:
+            root = canonical[person]
+            c = contact_cards[root]
+            own_names = [props[obj].get("display", "Unnamed person") for _,rel,obj,owner in associations[root] if rel == "has_name" and owner == person]
+            name = c["card"]["name"] if person == displayed[root] else (own_names[0] if own_names else c["card"]["name"])
+            conn.execute("UPDATE people SET name=?,contact_data=?,merged_into=?,is_me=?,trashed=? WHERE id=?", (name,encoded(c["card"]),None if person == displayed[root] else display_ids[root],int(c["is_me"]),int(c["trashed"]),people[person]))
+            if person == displayed[root]:
+                rebuild_keys(conn, display_ids[root], c["card"])
+        local_ids = sorted(people[m] for m in members)
+        # The rows these people hold now are replaced; everyone else's stay as they are.
+        replaced = defaultdict(list)
+        floor = {}
+        for table in KINDS:
+            if table == "interactions":
+                continue
+            floor[table] = conn.execute(f'SELECT COALESCE(MAX(rowid),0) FROM "{table}"').fetchone()[0]
+            for chunk in _chunks(local_ids):
+                replaced[table] += [r[0] for r in conn.execute(f'SELECT rowid FROM "{table}" WHERE person_id IN ({",".join("?" * len(chunk))})', chunk)]
+        for chunk in _chunks(local_ids):
+            marks = ",".join("?" * len(chunk))
+            replaced["distinct_people"] += [r[0] for r in conn.execute(f"SELECT rowid FROM distinct_people WHERE a IN ({marks}) OR b IN ({marks})", chunk + chunk)]
+        old_rows, photo_paths = {}, {}
+        for table, rowids in replaced.items():
+            for chunk in _chunks(rowids):
+                for r in conn.execute(f"SELECT table_name,entity,row_id FROM graph_rows WHERE table_name=? AND row_id IN ({','.join('?' * len(chunk))})", (table, *chunk)):
+                    old_rows[(r[0], r[1])] = r[2]
+                if table == "photos":
+                    photo_paths.update({r[0]: r[1] for r in conn.execute(
+                        f"SELECT g.entity,p.path FROM graph_rows g JOIN photos p ON p.id=g.row_id WHERE g.table_name='photos' AND g.row_id IN ({','.join('?' * len(chunk))})", chunk)})
+        for chunk in _chunks(members):
+            conn.execute(f"DELETE FROM graph_children WHERE person IN ({','.join('?' * len(chunk))})", chunk)
+        # A full rebuild meets contacts in the order of their first association; keep it,
+        # since SQL's cross-person unique values go to whichever row comes first.
+        ordered = sorted((root for root in roots if associations.get(root)), key=lambda root: graph.creation_order(associations[root][0][0]))
+        desired = _child_rows(conn, graph, props, [(root, associations[root]) for root in ordered], people, displayed, display_ids, photo_paths)
+        decisions = {}
+        for obj, _, _ in desired.get("profiles", []):
+            for eid, e in graph.edges_to(obj, {"targets"}):
+                if graph.active(eid) and graph.active(e["from"]):
+                    action = props[e["from"]].get("action")
+                    if action in ("confirmed", "rejected", "suggested", "reject"):
+                        decisions[obj] = "rejected" if action == "reject" else action
+        for table, rowids in replaced.items():
+            for chunk in _chunks(rowids):
+                marks = ",".join("?" * len(chunk))
+                conn.execute(f'DELETE FROM "{table}" WHERE rowid IN ({marks})', chunk)
+                conn.execute(f"DELETE FROM graph_rows WHERE table_name=? AND row_id IN ({marks})", (table, *chunk))
+        for chunk in _chunks(local_ids):
+            conn.execute(f"DELETE FROM graph_rows WHERE table_name='people' AND row_id IN ({','.join('?' * len(chunk))})", chunk)
+        for person in members:
+            local = people[person]
+            row = dict(conn.execute("SELECT * FROM people WHERE id=?", (local,)).fetchone())
+            conn.execute("INSERT INTO graph_rows VALUES (?,?,?,?,?)", ("people",local,person,None,encoded(row)))
+        _insert_rows(conn, desired, old_rows, decisions, floor)
+        identity = {eid: e for m in members for eid, e in [*graph.edges_from(m, {"distinct_person"}), *graph.edges_to(m, {"distinct_person"})]}
+        others = _people_ids(conn, {p for e in identity.values() for p in (e["from"], e["to"])} - people.keys())
+        for eid in sorted(identity, key=graph.creation_order):
+            e = identity[eid]
+            if not graph.active(eid):
+                continue
+            ends = [people.get(p, others.get(p)) for p in (e["from"], e["to"])]
+            if None in ends:
+                raise _Unscoped
+            a,b = sorted(ends)
+            cur = conn.execute("INSERT OR IGNORE INTO distinct_people VALUES (?,?)", (a,b))
+            if cur.rowcount:
+                conn.execute("INSERT INTO graph_rows VALUES (?,?,?,?,?)", ("distinct_people",cur.lastrowid,eid,None,encoded({"a":a,"b":b})))
+        from . import graph_interactions
+        graph_interactions.project(conn,graph,props=props,canonical=canonical,people=display_ids,scope=set(members))
+
+
+class _Rollback(Exception):
+    pass
+
+
+def _projection_state(conn):
+    """Everything a projection writes, independent of local row numbering."""
+    uid = {r[0]: r[1] for r in conn.execute("SELECT id, contact_uid FROM people")}
+    state = {"people": sorted((r["contact_uid"], r["name"], r["contact_data"], uid.get(r["merged_into"]), r["is_me"], r["trashed"])
+                              for r in conn.execute("SELECT * FROM people"))}
+    for table in (*KINDS, "distinct_people", "contact_keys"):
+        rows = []
+        for r in conn.execute(f'SELECT * FROM "{table}"'):
+            row = {k: r[k] for k in r.keys() if k != "id"}
+            for key in ("person_id", "a", "b"):
+                if key in row:
+                    row[key] = uid.get(row[key], row[key])
+            if table == "distinct_people":
+                row = dict(zip(("a", "b"), sorted((row["a"], row["b"]))))
+            rows.append(encoded(row))
+        state[table] = sorted(rows)
+    state["graph_rows"] = sorted((r[0], r[1] if r[0] != "people" else uid.get(r[1]), r[2], r[3]) for r in conn.execute("SELECT table_name,row_id,entity,edge FROM graph_rows")
+                                 if r[0] == "people") + sorted((r[0], r[1], r[2]) for r in conn.execute("SELECT table_name,entity,edge FROM graph_rows WHERE table_name<>'people'"))
+    state["graph_children"] = sorted(tuple(r) for r in conn.execute("SELECT * FROM graph_children"))
+    from . import graph_interactions
+    graph_interactions._schema(conn)
+    state["batches"] = sorted((r[0], r[1], r[2], r[3], uid.get(r[4])) for r in conn.execute("SELECT * FROM graph_interaction_batches"))
+    state["batch_rows"] = sorted((r[0], r[2], r[3]) for r in conn.execute("SELECT * FROM graph_interaction_rows"))
+    return state
+
+
+def _verify_projection(conn, graph):
+    scoped = _projection_state(conn)
+    full = None
+    try:
+        with transaction(conn):
+            _project_all(conn, graph)
+            full = _projection_state(conn)
+            raise _Rollback
+    except _Rollback:
+        pass
+    differing = [key for key in scoped if scoped[key] != full[key]]
+    if differing:
+        raise AssertionError(f"A partial projection differs from a full one in: {', '.join(differing)}")
+
+
 def associations(conn, person_uid):
     return _associations(conn,capture(conn),person_uid)
 
 
 def _associations(conn,graph,person_uid):
     valid_uuid(person_uid)
-    props, groups, canonical, rows = _view(graph)
-    root = canonical.get(person_uid)
+    components = graph.components()
+    root = next((r for r, members in components["groups"].items() if person_uid in members), None)
     if root is None:
         raise GraphError("Unknown person")
-    card = cards(graph, conn)[root]["card"]
-    conversations = {e["from"]: e["to"] for eid,e in graph.edges.items() if e["type"] == "in_conversation" and graph.active(eid)}
+    props, groups, canonical, rows = _view(graph, [root])
+    card = cards(graph, conn, [root])[root]["card"]
+    conversations = {}
+    for _, _, obj, _ in rows[root]:
+        for eid, e in graph.edges_from(obj, {"in_conversation"}):
+            if graph.active(eid):
+                conversations[obj] = e["to"]
     result = []
     for eid, relation, obj, owner in sorted(rows[root]):
         if relation not in ATTRIBUTIONS:
@@ -699,7 +1061,7 @@ def _associations(conn,graph,person_uid):
                        "thread": p.get("thread") or props[conversations.get(obj)].get("external_key"),
                        "conversation_id": conversations.get(obj), "channel": p.get("channel"), "at": p.get("at"), "properties": p})
     return {"uid": root, "name": card["name"], "heads": graph.heads, "members": groups[root], "associations": result,
-            "review": graph.components()["contradictions"]}
+            "review": components["contradictions"]}
 
 
 def split(conn, person_uid, name, edges, *, heads=None):
@@ -730,7 +1092,7 @@ def split(conn, person_uid, name, edges, *, heads=None):
         props = _properties(graph)
         for eid in edges:
             e = graph.edges[eid]
-            if any(graph.conflicted(eid,p) for entity,p in graph.versions if entity == eid):
+            if any(graph.conflicted(eid,p) for p in graph.registers(eid)):
                 raise GraphError("Resolve attribution conflicts before moving it")
             ops.append(graph.edit(eid,"_lifecycle","retracted"))
             moved = props[eid] | ({"preferred":False,"alias":True} if e["type"] == "has_name" else {})
@@ -750,9 +1112,10 @@ def plan_edit(graph, person_uid, card=None, *, values=None, trashed=None, links=
     """
     valid_uuid(person_uid)
     values = dict(values or {})
-    projected = cards(graph, kwargs["store"].conn if kwargs.get("store") else None)
-    props, groups, canonical, associations = _view(graph)
+    canonical = {p: root for root, members in graph.components()["groups"].items() for p in members}
     root = canonical.get(person_uid, person_uid)
+    projected = cards(graph, kwargs["store"].conn if kwargs.get("store") else None, roots=[root])
+    props, groups, canonical, associations = _view(graph, [root])
     previous = projected.get(root)
     ops = []
     def add_object(kind, p):
@@ -890,7 +1253,8 @@ def unmerge(conn, person_id):
         if row is None:
             raise GraphError("Unknown person")
         members = next((set(m) for m in graph.components()["groups"].values() if row[0] in m),set())
-        ops = [graph.edit(eid,"_lifecycle","retracted") for eid,e in graph.edges.items() if e["type"] == "same_person" and e["from"] in members and e["to"] in members and graph.active(eid)]
+        identity = dict(pair for member in members for pair in graph.edges_from(member, {"same_person"}))
+        ops = [graph.edit(eid,"_lifecycle","retracted") for eid in sorted(identity, key=graph.creation_order) if identity[eid]["to"] in members and graph.active(eid)]
         if not ops:
             raise GraphError("No merge to undo")
         result = _append(conn,graph,ops)
@@ -915,8 +1279,10 @@ def merge(conn, person_ids, preferred=None):
             preferred = max(ids,key=lambda p:conn.execute("SELECT COUNT(*) FROM interactions WHERE person_id=?",(p,)).fetchone()[0])
         preferred_uid = conn.execute("SELECT contact_uid FROM people WHERE id=?",(preferred,)).fetchone()[0]
         ops = [create_edge("same_person",people[0][0],p[0],{"origin":"explicit_merge","preferred_person":preferred_uid}) for p in people[1:] if p[0] != people[0][0]]
-        for eid,e in graph.edges.items():
-            if e["type"] == "has_name" and e["from"] in {p[0] for p in people} and graph.active(eid):
+        names = dict(pair for person in dict.fromkeys(p[0] for p in people) for pair in graph.edges_from(person, {"has_name"}))
+        for eid in sorted(names, key=graph.creation_order):
+            e = names[eid]
+            if graph.active(eid):
                 wanted = e["from"] == preferred_uid
                 if graph.value(eid,"preferred",False) != wanted:
                     ops.append(graph.edit(eid,"preferred",wanted))

@@ -7,6 +7,13 @@ from mypeople import db
 from mypeople.importers.imessage import to_apple_time
 
 
+@pytest.fixture(autouse=True)
+def verify_graph_index(monkeypatch):
+    """Every test checks the persistent index against a full replay after each write, and
+    every scoped projection against a full one. Engines started as child processes inherit it."""
+    monkeypatch.setenv("MYPEOPLE_GRAPH_VERIFY", "1")
+
+
 @pytest.fixture
 def conn():
     c = db.connect(":memory:")

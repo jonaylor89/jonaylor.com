@@ -95,36 +95,45 @@ def create_edge(kind: str, source: str, target: str, properties: dict | None = N
     return {"id": uid(), "kind": "create_edge", "target": uid(), "payload": {"type": kind, "from": source, "to": target, "properties": {} if properties is None else properties}, "replaces": []}
 
 
+def check_commit(c) -> str:
+    """A commit's own shape, independent of any history. Returns its canonical encoding."""
+    if not isinstance(c, dict) or set(c) != {"id", "collection", "peer", "recorded_at", "version", "parents", "operations"}:
+        raise GraphError("Invalid commit shape")
+    for key in ("id", "collection", "peer"):
+        valid_uuid(c[key])
+    if type(c["version"]) is not int or c["version"] != VERSION:
+        raise GraphError("Unsupported graph version")
+    if not isinstance(c["recorded_at"], str):
+        raise GraphError("Invalid recorded time")
+    try:
+        when = dt.datetime.fromisoformat(c["recorded_at"])
+        if when.utcoffset() is None:
+            raise ValueError
+    except ValueError:
+        raise GraphError("Recorded time must have a timezone") from None
+    if not isinstance(c["parents"], list) or len(c["parents"]) > MAX_COMMITS:
+        raise GraphError("Invalid commit parents")
+    for parent in c["parents"]:
+        valid_uuid(parent)
+    if len(set(c["parents"])) != len(c["parents"]):
+        raise GraphError("Duplicate commit parent")
+    if not isinstance(c["operations"], list) or not c["operations"]:
+        raise GraphError("A commit needs operations")
+    return encoded(c)
+
+
 class Graph:
-    """Pure deterministic reducer. Input order and wall clocks cannot affect the result."""
+    """Pure deterministic reducer. Input order and wall clocks cannot affect the result.
+
+    `_apply` reads and writes reducer state only through the small hooks below, so the
+    persistent IndexedGraph runs exactly the same rules against SQLite.
+    """
 
     def __init__(self, commits=(), *, copy_commits=True):
         self.commits = {}
         for original in commits:
             c = copy.deepcopy(original) if copy_commits else original
-            if not isinstance(c, dict) or set(c) != {"id", "collection", "peer", "recorded_at", "version", "parents", "operations"}:
-                raise GraphError("Invalid commit shape")
-            for key in ("id", "collection", "peer"):
-                valid_uuid(c[key])
-            if type(c["version"]) is not int or c["version"] != VERSION:
-                raise GraphError("Unsupported graph version")
-            if not isinstance(c["recorded_at"], str):
-                raise GraphError("Invalid recorded time")
-            try:
-                when = dt.datetime.fromisoformat(c["recorded_at"])
-                if when.utcoffset() is None:
-                    raise ValueError
-            except ValueError:
-                raise GraphError("Recorded time must have a timezone") from None
-            if not isinstance(c["parents"], list) or len(c["parents"]) > MAX_COMMITS:
-                raise GraphError("Invalid commit parents")
-            for parent in c["parents"]:
-                valid_uuid(parent)
-            if len(set(c["parents"])) != len(c["parents"]):
-                raise GraphError("Duplicate commit parent")
-            if not isinstance(c["operations"], list) or not c["operations"]:
-                raise GraphError("A commit needs operations")
-            encoded(c)
+            check_commit(c)
             previous = self.commits.get(c["id"])
             if previous is not None and encoded(previous) != encoded(c):
                 raise GraphError("Commit UUID reused for different content")
@@ -231,7 +240,7 @@ class Graph:
             raise GraphError("Invalid operation shape")
         valid_uuid(op["id"])
         valid_uuid(op["target"])
-        if op["id"] in self.operations:
+        if self._has_operation(op["id"]):
             raise GraphError("Operation UUID reused")
         target, payload, kind = op["target"], op["payload"], op["kind"]
         if not isinstance(payload, dict) or not isinstance(op["replaces"], list):
@@ -241,7 +250,7 @@ class Graph:
         if len(set(op["replaces"])) != len(op["replaces"]):
             raise GraphError("Duplicate replacement")
         if kind in ("create_object", "create_edge"):
-            if target in self.creation or op["replaces"]:
+            if self._created(target) is not None or op["replaces"]:
                 raise GraphError("Entity identity cannot be recreated")
             expected = {"type", "properties"} if kind == "create_object" else {"type", "from", "to", "properties"}
             if set(payload) != expected or not isinstance(payload["type"], str):
@@ -250,7 +259,7 @@ class Graph:
             if kind == "create_object":
                 if payload["type"] not in OBJECT_TYPES:
                     raise GraphError("Unknown object type")
-                self.objects[target] = {"type": payload["type"]}
+                self._create(target, {"type": payload["type"]}, False, commit)
             else:
                 if payload["type"] not in EDGE_TYPES:
                     raise GraphError("Unknown edge type")
@@ -263,8 +272,7 @@ class Graph:
                         raise GraphError("Invalid edge endpoint type")
                 if payload["type"] in ("same_person", "distinct_person") and payload["from"] == payload["to"]:
                     raise GraphError("Identity assertions need two people")
-                self.edges[target] = {k: payload[k] for k in ("type", "from", "to")}
-            self.creation[target] = commit
+                self._create(target, {k: payload[k] for k in ("type", "from", "to")}, True, commit)
             values = payload["properties"] | {"_lifecycle": "active"}
         elif kind in ("set_property", "set_lifecycle"):
             self._require_entity(target, commit)
@@ -281,20 +289,80 @@ class Graph:
                 values = {"_lifecycle": payload["value"]}
             for prop in values:
                 for old in op["replaces"]:
-                    if old not in self.operations or not self.observed(self.origins[old], commit):
+                    earlier = self._operation(old)
+                    if earlier is None or not self.observed(earlier[0], commit):
                         raise GraphError("Edit replaces an unobserved version")
-                    earlier = self.operations[old]
-                    earlier_payload = earlier["payload"]
-                    matches = (earlier["kind"].startswith("create_") and (prop == "_lifecycle" or prop in earlier_payload["properties"])) or (earlier["kind"] == "set_lifecycle" and prop == "_lifecycle") or (earlier["kind"] == "set_property" and earlier_payload["property"] == prop)
-                    if earlier["target"] != target or not matches:
+                    _, earlier_kind, earlier_target, earlier_properties = earlier
+                    matches = (earlier_kind.startswith("create_") and (prop == "_lifecycle" or prop in earlier_properties)) or (earlier_kind == "set_lifecycle" and prop == "_lifecycle") or (earlier_kind == "set_property" and earlier_properties == (prop,))
+                    if earlier_target != target or not matches:
                         raise GraphError("Replacement targets another property")
-                    self.versions[target, prop].pop(old, None)
+                    self._drop_version(target, prop, old)
         else:
             raise GraphError("Unknown operation kind")
+        self._record_operation(op, commit)
+        for prop, value in values.items():
+            self._set_version(target, prop, op["id"], value)
+
+    # --- reducer state: in memory here, in SQLite for IndexedGraph ---
+
+    def _has_operation(self, op_id):
+        return op_id in self.operations
+
+    def _created(self, target):
+        return self.creation.get(target)
+
+    def _create(self, target, base, is_edge, commit):
+        (self.edges if is_edge else self.objects)[target] = base
+        self.creation[target] = commit
+        self.__dict__.pop("_positions", None)
+
+    def _operation(self, op_id):
+        """(origin commit, kind, target, properties it wrote) or None."""
+        op = self.operations.get(op_id)
+        if op is None:
+            return None
+        payload = op["payload"]
+        written = tuple(payload["properties"]) if op["kind"].startswith("create_") else (payload["property"],) if op["kind"] == "set_property" else ("_lifecycle",)
+        return self.origins[op_id], op["kind"], op["target"], written
+
+    def _drop_version(self, target, prop, op_id):
+        self.versions[target, prop].pop(op_id, None)
+        self.__dict__.pop("_by_entity", None)
+
+    def _record_operation(self, op, commit):
         self.operations[op["id"]] = op
         self.origins[op["id"]] = commit
-        for prop, value in values.items():
-            self.versions[target, prop][op["id"]] = value
+
+    def _set_version(self, target, prop, op_id, value):
+        self.versions[target, prop][op_id] = value
+        self.__dict__.pop("_by_entity", None)
+
+    # --- scoped reads; IndexedGraph answers these from indexes ---
+
+    def registers(self, target):
+        """{property: {operation: value}} for one entity."""
+        if "_by_entity" not in self.__dict__:
+            by_entity = defaultdict(dict)
+            for (entity, prop), versions in self.versions.items():
+                if versions:
+                    by_entity[entity][prop] = versions
+            self._by_entity = by_entity
+        return self._by_entity.get(target, {})
+
+    def edges_from(self, source, types=None):
+        return [(key, edge) for key, edge in self.edges.items() if edge["from"] == source and (types is None or edge["type"] in types)]
+
+    def edges_to(self, target, types=None):
+        return [(key, edge) for key, edge in self.edges.items() if edge["to"] == target and (types is None or edge["type"] in types)]
+
+    def edges_of_type(self, types):
+        return [(key, edge) for key, edge in self.edges.items() if edge["type"] in types]
+
+    def creation_order(self, entity):
+        """Where an entity's creation falls in replay order, for orderings that must match a full scan."""
+        if not hasattr(self, "_positions"):
+            self._positions = {key: n for n, key in enumerate([*self.objects, *self.edges])}
+        return self._positions[entity]
 
     def alternatives(self, target, prop):
         return [{"operation": key, "value": value} for key, value in sorted(self.versions.get((target, prop), {}).items())]
@@ -441,6 +509,11 @@ class Store:
         return self.conn.execute("SELECT value FROM graph_meta WHERE key='collection'").fetchone()[0]
 
     def load(self):
+        """Current state from the persistent index; a full replay only when it can't be written."""
+        from . import graph_index
+        return graph_index.load(self.conn) or self.replay()
+
+    def replay(self):
         return Graph((json.loads(row[0]) for row in self.conn.execute("SELECT data FROM graph_commits")), copy_commits=False)
 
     def put_blob(self, content: bytes):
@@ -472,21 +545,36 @@ class Store:
             check(c["operations"])
 
     def receive(self, commits, blobs=None, *, adopt=False):
+        from . import graph_index
         commits = list(commits)
         with transaction(self.conn):
             current = self.load()
-            combined = Graph([*current.commits.values(), *commits])
+            indexed = isinstance(current, graph_index.IndexedGraph) and len(commits) <= graph_index.BULK
+            if indexed:
+                had_history = bool(current.heads)
+                # Validates every new commit against the indexed history, inside this savepoint.
+                current.apply_commits(commits)
+                combined = current
+            else:
+                had_history = bool(current.commits)
+                combined = Graph([*current.commits.values(), *commits])
             if combined.collection and combined.collection != self.collection:
-                if current.commits or self.conn.execute("SELECT 1 FROM graph_blobs LIMIT 1").fetchone() or not adopt:
+                if had_history or self.conn.execute("SELECT 1 FROM graph_blobs LIMIT 1").fetchone() or not adopt:
                     raise GraphError("Cannot join different collections")
                 self.conn.execute("UPDATE graph_meta SET value=? WHERE key='collection'", (combined.collection,))
             for digest, content in (blobs or {}).items():
                 if hashlib.sha256(content).hexdigest() != digest:
                     raise GraphError("Blob hash does not match content")
                 self.put_blob(content)
-            self.verify_references(combined)
+            # Commits already stored were checked when they arrived; only these need it.
+            self.verify_references(combined, commits=commits if indexed else None)
             for c in commits:
                 self.conn.execute("INSERT OR IGNORE INTO graph_commits VALUES (?, ?)", (c["id"], encoded(c)))
+            if indexed:
+                graph_index.noted(self.conn)
+            elif isinstance(current, graph_index.IndexedGraph):
+                graph_index.rebuild(self.conn, combined)
+                combined = self.load()
         return combined
 
     def write(self, operations):

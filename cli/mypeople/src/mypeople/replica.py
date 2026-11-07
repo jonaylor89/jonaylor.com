@@ -422,62 +422,144 @@ _legacy_load, _legacy_capture, _legacy_receive, _legacy_change = load, capture, 
 
 
 class GraphHistory:
+    """Contacts and their history, read from the graph as they're asked for.
+
+    A single contact costs indexed reads of that person alone. `contacts`, `by_member` and
+    `changes` cover the whole book, and `prime` builds many contacts in one pass.
+    """
+    OWNERS = ("has_name","has_contact_point","has_note","subject_of","has_asset","has_preferences")  # graph_index.OWNERSHIP
+
     def __init__(self, conn, graph):
-        from . import graph_runtime
         from .graph import Store
         self.conn, self.graph = conn, graph
         self.heads = graph.heads
         self.by_id = graph.commits
-        self.contacts = {}
-        for root, c in graph_runtime.cards(graph, conn).items():
+        self.store = Store(conn)
+        self._contacts = {}
+        self._complete = False
+        self._canonical = None
+
+    def _canonical_of(self, uid):
+        if self._canonical is None:
+            self._canonical = {p: root for root, members in self.graph.components()["groups"].items() for p in members}
+        return self._canonical.get(uid)
+
+    def _build(self, roots=None):
+        from . import graph_runtime
+        for root, c in graph_runtime.cards(self.graph, self.conn, roots).items():
+            if root in self._contacts:
+                continue
             contact = Contact(root, c["members"], card=DEFAULTS | c["card"], trashed=c["trashed"], conflicts=c["conflicts"], is_me=c["is_me"])
             contact.registers = {k:{} for k in contact.card}
-            self.contacts[root] = contact
-        self.by_member = {member:c for c in self.contacts.values() for member in c.members}
-        self.store = Store(conn)
-        # Native commits are exposed in the existing history UI as summaries, not
-        # exported as the obsolete contact-change replication protocol.
-        owner = {}
-        for eid,e in graph.edges.items():
-            if e["type"] in ("has_name","has_contact_point","has_note","subject_of","has_asset","has_preferences"):
-                owner[e["to"]] = e["from"]
-            elif e["type"] == "participant":
-                owner[e["from"]] = e["to"]
-        self.changes = []
-        for cid in graph.order:
-            commit = graph.commits[cid]
-            affected = set()
-            values = {}
-            for op in commit["operations"]:
-                target = op["target"]
-                if target in self.by_member: affected.add(target)
-                if target in owner: affected.add(owner[target])
-                edge = graph.edges.get(target)
-                if edge:
-                    affected.update(p for p in (edge["from"],edge["to"]) if p in self.by_member)
-                if op["kind"] == "set_property":
-                    field = op["payload"]["property"]
-                    value = op["payload"]["value"]
-                    if field == "card_metadata":
-                        values.update({k:v for k,v in (value or {}).items() if k not in LISTS})
-                    elif field == "body": values["notes"] = value
-                    elif field == "content": values["photo"] = "<photo>"
-                    elif field == "value":
-                        predicate = graph.value(target,"predicate")
-                        if predicate in ("birthday","organization","title"): values[predicate] = value
-                    else: values["name" if field == "display" else field] = value
-                elif op["kind"] == "create_object":
-                    p = op["payload"]["properties"]
-                    kind = op["payload"]["type"]
-                    if kind == "Name" and p.get("label") != "alias": values["name"] = p.get("display", "")
-                    elif kind == "Note" and p.get("origin") == "contact_card_notes": values["notes"] = p.get("body", "")
-                    elif kind == "Claim" and p.get("asserted_by") == "contact_card": values[p["predicate"]] = p.get("value", "")
-                    elif kind == "Asset" and p.get("role") == "contact_photo": values["photo"] = "<photo>"
-            if affected:
-                self.changes.append({"id":cid,"contact_uid":min(affected),"parents":commit["parents"],"values":values,"adds":{},"removes":{},"links":sorted(affected),"operations":commit["operations"],"graph_commit":commit})
+            self._contacts[root] = contact
+        if roots is None:
+            self._complete = True
+
+    def prime(self, uids):
+        """Build the contacts of `uids` together: by root for a few, in one full pass for many."""
+        roots = {self._canonical_of(u) for u in uids} - {None} - self._contacts.keys()
+        if len(roots) > 64:
+            self._build()
+        elif roots:
+            self._build(sorted(roots))
+
+    @property
+    def contacts(self):
+        if not self._complete:
+            self._build()
+        return self._contacts
+
+    @property
+    def by_member(self):
+        return {member:c for c in self.contacts.values() for member in c.members}
 
     def contact(self, uid):
-        return self.by_member.get(uid)
+        root = self._canonical_of(uid)
+        if root is None:
+            return None
+        if root not in self._contacts:
+            self._build([root])
+        return self._contacts.get(root)
+
+    def _owner(self, entity):
+        """The person an object is attributed to: the last attribution edge in replay order wins."""
+        edges = [*self.graph.edges_to(entity, self.OWNERS), *self.graph.edges_from(entity, {"participant"})]
+        if not edges:
+            return None
+        eid, e = max(edges, key=lambda pair: self.graph.creation_order(pair[0]))
+        return e["to"] if e["type"] == "participant" else e["from"]
+
+    def _is_person(self, entity):
+        return self.graph.objects.get(entity, {}).get("type") == "Person"
+
+    def _change(self, cid, owner, is_person):
+        graph = self.graph
+        commit = graph.commits[cid]
+        affected = set() if owner is not None else graph.affected_people(cid, self.OWNERS)
+        values = {}
+        for op in commit["operations"]:
+            target = op["target"]
+            if owner is not None:
+                if is_person(target): affected.add(target)
+                who = owner(target)
+                if who is not None: affected.add(who)
+                edge = graph.edges.get(target)
+                if edge:
+                    affected.update(p for p in (edge["from"],edge["to"]) if is_person(p))
+            if op["kind"] == "set_property":
+                field = op["payload"]["property"]
+                value = op["payload"]["value"]
+                if field == "card_metadata":
+                    values.update({k:v for k,v in (value or {}).items() if k not in LISTS})
+                elif field == "body": values["notes"] = value
+                elif field == "content": values["photo"] = "<photo>"
+                elif field == "value":
+                    predicate = graph.value(target,"predicate")
+                    if predicate in ("birthday","organization","title"): values[predicate] = value
+                else: values["name" if field == "display" else field] = value
+            elif op["kind"] == "create_object":
+                p = op["payload"]["properties"]
+                kind = op["payload"]["type"]
+                if kind == "Name" and p.get("label") != "alias": values["name"] = p.get("display", "")
+                elif kind == "Note" and p.get("origin") == "contact_card_notes": values["notes"] = p.get("body", "")
+                elif kind == "Claim" and p.get("asserted_by") == "contact_card": values[p["predicate"]] = p.get("value", "")
+                elif kind == "Asset" and p.get("role") == "contact_photo": values["photo"] = "<photo>"
+        if not affected:
+            return None
+        return {"id":cid,"contact_uid":min(affected),"parents":commit["parents"],"values":values,"adds":{},"removes":{},"links":sorted(affected),"operations":commit["operations"],"graph_commit":commit}
+
+    @property
+    def changes(self):
+        """Native commits shown in the history UI as summaries, oldest first. Not exported as
+        the obsolete contact-change replication protocol."""
+        if "_changes" not in self.__dict__:
+            owner = {}
+            for eid,e in self.graph.edges.items():
+                if e["type"] in self.OWNERS:
+                    owner[e["to"]] = e["from"]
+                elif e["type"] == "participant":
+                    owner[e["from"]] = e["to"]
+            people = {key for key, base in self.graph.objects.items() if base["type"] == "Person"}
+            self._changes = [c for cid in self.graph.order if (c := self._change(cid, owner.get, people.__contains__))]
+        return self._changes
+
+    def changes_for(self, members):
+        """`changes` that involve any of `members`, reading only the commits that touch them."""
+        members = set(members)
+        graph = self.graph
+        if not hasattr(graph, "commits_touching"):  # a replayed graph: filter the full history
+            return [c for c in self.changes if c["contact_uid"] in members or members & set(c["links"])]
+        targets = set(members)
+        for member in members:
+            for eid, e in [*graph.edges_from(member), *graph.edges_to(member)]:
+                targets.add(eid)
+                if e["type"] in self.OWNERS and e["from"] == member or e["type"] == "participant" and e["to"] == member:
+                    obj = e["to"] if e["type"] in self.OWNERS else e["from"]
+                    if self._owner(obj) in members:
+                        targets.add(obj)
+        found = [cid for cid in sorted(graph.commits_touching(targets), key=graph._rank)]
+        changes = [c for cid in found if (c := self._change(cid, None, None))]
+        return [c for c in changes if c["contact_uid"] in members or members & set(c["links"])]
 
     def past(self, heads):
         return self.graph.past(heads)

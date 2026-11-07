@@ -35,7 +35,7 @@ import uuid
 from pathlib import Path
 from typing import Callable
 
-from . import appjobs, contacts, db, identity, llm, moments, ops, publish, replica
+from . import appjobs, contacts, db, graph_runtime, identity, llm, moments, ops, publish, replica
 
 PROTOCOL = 4
 POLL_SECONDS = 2.0
@@ -319,6 +319,12 @@ class Engine:
             self.initialization_error = failure
         finally:
             self.connected.set()  # others connect after this, so only one of us runs migrations
+        if failure is None:
+            try:
+                graph_runtime.warm(self.conn)  # before the first request, not during the first edit
+            except Exception:
+                traceback.print_exc()  # every graph read still works without it, just slower
+                self.conn.rollback()
         while (frame := self.requests.get()) is not None:
             if failure:
                 self.send({"id": frame.get("id"), "error": _error(failure)})
@@ -687,8 +693,7 @@ def _summarize_change(change: dict) -> dict:
 def contact_history(self: Engine, conn, p: dict) -> dict:
     history = replica.load(conn)
     contact = _contact(history, _text(p, "uid"))
-    members = set(contact.members)
-    changes = [c for c in history.changes if c["contact_uid"] in members or members & set(c.get("links", []))]
+    changes = history.changes_for(contact.members)
     return {"changes": [_summarize_change(c) for c in changes[-HISTORY_LIMIT:]][::-1], "total": len(changes)}
 
 
