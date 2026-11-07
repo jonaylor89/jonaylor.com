@@ -12,10 +12,20 @@ import java.security.MessageDigest
  * The old store.json is read once for migration and retained untouched for recovery.
  * Only an incomplete final frame is recoverable; a damaged complete frame is never discarded.
  */
-internal class StoreJournal(private val directory: File) {
+internal class StoreJournal(private val directory: File, private val timing: (String,Long)->Unit = {_,_->}) {
     private val checkpoint = File(directory, "store.json")
     private val journal = File(directory, "store.journal")
     private val binary = File(directory, "store.bin")
+    internal var indexed: IndexedGraphDatabase? = null
+        private set
+    internal val hasIndex get() = IndexedGraphFiles.supported() && IndexedGraphFiles.exists(directory)
+    internal fun createIndex(state: DiskState, view: Records): DiskState {
+        preserveRecovery("pre-index-${fingerprint().take(16)}")
+        indexed = IndexedGraphFiles.create(directory,state,view)
+        cachedRecords = indexed!!.readRecords("view")
+        return indexed!!.readState()
+    }
+    internal fun saveIndexed(previous: DiskState, next: DiskState, view: Records): Records = indexed!!.save(previous,next,view,cachedRecords).also { cachedRecords=it }
     private var sequence = 0L
     private var frames = 0
     var cachedRecords: Records? = null
@@ -26,6 +36,14 @@ internal class StoreJournal(private val directory: File) {
     private fun hash(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes)
 
     fun load(): DiskState {
+        if (hasIndex) {
+            var start=System.nanoTime()
+            val db = indexed ?: IndexedGraphFiles.open(directory).also { indexed=it }
+            timing("index_open",(System.nanoTime()-start)/1000000); start=System.nanoTime()
+            cachedRecords=db.readRecords("view")
+            timing("index_view",(System.nanoTime()-start)/1000000); start=System.nanoTime()
+            return db.readState().also { timing("index_state",(System.nanoTime()-start)/1000000) }
+        }
         supportsBlobRefs = binary.isFile && java.io.DataInputStream(binary.inputStream()).use { it.skipBytes(8); it.readInt() >= 8 }
         val migrate = !binary.exists() && checkpoint.exists()
         var state = when {
@@ -95,6 +113,7 @@ internal class StoreJournal(private val directory: File) {
     }
 
     fun cacheView(state: DiskState, view: Records) {
+        if (indexed != null) return
         if (!binary.exists() && !checkpoint.exists() && journal.length() == 0L) return
         checkpoint(state, view)
         cachedRecords = view; checkpointWritten = false
@@ -115,6 +134,7 @@ internal class StoreJournal(private val directory: File) {
     /** Maintenance-only commit while the app is stopped. Reject any intervening
      * store write both before encoding and immediately before atomic rename. */
     fun commitMigration(next: DiskState, view: Records, previousSequence: Long, expected: String) {
+        require(!hasIndex) { "Indexed authority is already active. Legacy maintenance cannot replace it." }
         require(fingerprint() == expected) { "Phone changed during migration; nothing was replaced." }
         preserveMigration()
         sequence = previousSequence + 1

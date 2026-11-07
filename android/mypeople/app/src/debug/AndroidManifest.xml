@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Explicit operator maintenance, not a test runner and never auto-started. -->
+    <instrumentation android:name="app.mypeople.data.IndexedMaintenance"
+        android:targetPackage="app.sherloq" android:label="MyPeople indexed-store maintenance" />
+</manifest>

@@ -38,7 +38,10 @@ class StreamingGraphLoadTest {
         assertEquals(272L * 1024 * 1024, File(directory, "graph-blobs").listFiles()!!.sumOf { it.length() })
         // Even an original asset larger than the old card-size limit is kept
         // as a hash; an unrelated favorite edit must not read/Base64 the asset.
-        val gs = GraphStore(store.snapshot().graph!!)
+        val snapshot = store.snapshot().graph!!
+        // Simulate a different peer, not a write through this Store's read snapshot.
+        val peer = snapshot.bundle.copy().also { it.reducer = VersionedGraph(it.commits); it.blobsVerified = true }
+        val gs = GraphStore(snapshot.copy(bundle = peer))
         val uid = store.state.value.records.people.values.single().contact_uid
         val hash = gs.state.bundle.blobs.keys.first()
         val asset = VersionedGraph.createObject("Asset", buildJsonObject { put("role", "contact_photo"); put("content", buildJsonObject { put("blob_hash", hash) }) })

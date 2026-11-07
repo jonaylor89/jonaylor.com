@@ -12,6 +12,13 @@ import java.security.MessageDigest
 
 class StoreCheckpointTest {
     @get:Rule val temp = TemporaryFolder()
+    @Test fun `indexed person rows retain every field and reject trailing bytes`() {
+        for (person in fullState().records.people.values) {
+            val bytes=StoreCheckpoint.encodePerson(person)
+            assertEquals(person,StoreCheckpoint.decodePerson(bytes))
+            try { StoreCheckpoint.decodePerson(bytes+byteArrayOf(1)); fail("Trailing row bytes") } catch (_: IllegalArgumentException) { }
+        }
+    }
     @Test fun `streamed inode reader matches all byte codecs and rejects corruption without writes`() {
         for (version in 1..8) {
             val state = if (version >= 7) fullState() else DiskState(records = Records(people = mapOf(1 to Person("Synthetic 🌱", card = ContactCard("Synthetic 🌱")))))

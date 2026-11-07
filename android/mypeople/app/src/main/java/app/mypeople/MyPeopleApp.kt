@@ -14,7 +14,8 @@ class MyPeopleApp : Application() {
         private set
     override fun onCreate() {
         super.onCreate()
-        graph = AppGraph(this)
+        val maintenance = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0 && File(cacheDir,"index-maintenance").isFile
+        graph = AppGraph(this,startMemoryImmediately = !maintenance)
     }
 }
 
@@ -22,10 +23,11 @@ class AppGraph(context: Application, startMemoryImmediately: Boolean = true) {
     val incoming = kotlinx.coroutines.flow.MutableStateFlow<android.content.Intent?>(null)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val settings = Settings(context)
-    val store = Store(File(context.filesDir, "memory")) { stage, milliseconds ->
-        if (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0)
-            android.util.Log.i("MyPeopleStartup", "$stage=${milliseconds}ms")
-    }
+    private val debug = context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+    private fun timing(tag: String, stage: String, start: Long) { if (debug) android.util.Log.i(tag,"$stage=${(System.nanoTime()-start)/1000000}ms") }
+    val store = Store(File(context.filesDir, "memory"),
+        saveTiming = { stage, ms -> if (debug) android.util.Log.i("MyPeopleSave","$stage=${ms}ms") },
+        startupTiming = { stage, ms -> if (debug) android.util.Log.i("MyPeopleStartup","$stage=${ms}ms") })
     val imports = MemoryImports(store)
     val offline = OfflineFiles(context, store, imports, settings)
     val bluetooth = BluetoothMemory(context, offline)
@@ -68,16 +70,22 @@ class AppGraph(context: Application, startMemoryImmediately: Boolean = true) {
     }
     /** The application-owned job finishes its durable save even if the edited row disappears. */
     suspend fun submitEdit(kind: String, payload: JsonObject) = scope.async {
+        val start=System.nanoTime()
         store.initialize()
         if (kind == "merge") {
             val ids = mergePeople(payload, store.state.value.records)
             if (!store.state.value.replicatedContacts && ids.any { it < 0 }) throw EditRejected("Sync once with the updated CLI to upgrade legacy contacts before merging them.")
+            val provider=System.nanoTime()
             if (settings.contactsEnabled) deviceContacts.prepareMerge(ids)
+            timing("MyPeopleEdit","merge_provider",provider)
             mergePeople(payload, store.state.value.records) // reconciliation can change the view
         }
         val person = store.state.value.records.people[payload.int("person_id")]
         val addressed = if (payload.text("contact_uid").isEmpty() && person?.contact_uid?.isNotEmpty() == true) JsonObject(payload + ("contact_uid" to JsonPrimitive(person.contact_uid))) else payload
+        val durable=System.nanoTime()
         store.enqueue(kind, addressed)
+        timing("MyPeopleEdit","durable",durable)
+        timing("MyPeopleEdit",if (kind in opKinds) kind else "unsupported",start)
         if (kind == "merge") messages.send(if (store.state.value.replicatedContacts) "Contacts merged on this phone." else "Merge saved on this phone. Sync with your Mac to finish.")
     }.await()
 
@@ -100,6 +108,7 @@ class AppGraph(context: Application, startMemoryImmediately: Boolean = true) {
         store.retryFailed(clientId)
     }
     suspend fun saveContact(card: ContactCard, id: Int? = null, contactUid: String? = null, expectedPerson: Person? = null): Int {
-        return store.saveContact(card, id, contactUid, expectedPerson = expectedPerson)
+        val start=System.nanoTime()
+        return store.saveContact(card, id, contactUid, expectedPerson = expectedPerson).also { timing("MyPeopleEdit","contact_save",start) }
     }
 }

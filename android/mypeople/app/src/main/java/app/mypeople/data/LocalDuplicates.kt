@@ -67,6 +67,16 @@ internal class GraphDuplicateIndex private constructor(
     private val buckets: PersistentMap<Pair<Int, String>, PersistentSet<Int>>,
 ) {
     constructor() : this(persistentHashMapOf(), persistentHashMapOf())
+    internal fun persistedKeys(): Map<Int,List<List<String>>> = keys
+    companion object {
+        internal fun restore(keys: Map<Int,List<List<String>>>): GraphDuplicateIndex {
+            val buckets = persistentHashMapOf<Pair<Int,String>,PersistentSet<Int>>().builder()
+            for ((id,kinds) in keys) kinds.forEachIndexed { kind,values -> values.forEach { value ->
+                val key = kind to value; buckets[key] = (buckets[key] ?: persistentHashSetOf()).add(id)
+            } }
+            return GraphDuplicateIndex(keys.toPersistentHashMap(),buckets.build())
+        }
+    }
 
     fun updated(people: Map<Int, Person>, dirty: Set<Int>): GraphDuplicateIndex {
         val nextKeys = keys.builder(); val nextBuckets = buckets.builder()

@@ -57,6 +57,7 @@ dependencies {
     implementation(libs.serialization)
     implementation(libs.coil.compose)
     testImplementation(libs.junit)
+    testImplementation("org.xerial:sqlite-jdbc:3.50.3.0")
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

@@ -64,6 +64,12 @@ internal object StoreCheckpoint {
         output.flush()
     }
 
+    /** Per-row materialized screen cache; SQLite supplies the transaction/checksum boundary. */
+    internal fun encodePerson(person: Person): ByteArray = ByteArrayOutputStream().also { Writer(DataOutputStream(it),8,null).person(person) }.toByteArray()
+    internal fun decodePerson(bytes: ByteArray): Person {
+        val input=DataInputStream(ByteArrayInputStream(bytes))
+        return Reader(input,8,null).person().also { require(input.available()==0) }
+    }
     fun decode(bytes: ByteArray): DiskState = snapshot(bytes).state
 
     fun snapshot(bytes: ByteArray, blobDirectory: File? = null): Snapshot {
@@ -222,6 +228,7 @@ internal object StoreCheckpoint {
         fun string(): String {
             val size = input.readInt()
             require(size in 0..(32 * 1024 * 1024) && size <= input.available()) { "Invalid checkpoint string." }
+            if (size == 0) return ""
             val bytes = ByteArray(size); input.readFully(bytes)
             val value = bytes.toString(Charsets.UTF_8)
             // The cached projection repeats long notes/originals as well as IDs.

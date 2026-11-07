@@ -39,7 +39,11 @@ internal class GraphBlobs private constructor(private val sources: PersistentMap
     companion object {
         private val hashPattern = Regex("[0-9a-f]{64}")
         private fun refs(blobs: Map<String, String>): PersistentMap<String, Source> =
-            if (blobs is GraphBlobs) blobs.sources else blobs.mapValues { Source.Inline(it.value) }.toPersistentHashMap()
+            when (blobs) {
+                is GraphBlobs -> blobs.sources
+                is StoredBlobs -> blobs.keys.associateWith { Source.Stored(File(blobs.blobDirectory,it)) }.toPersistentHashMap()
+                else -> blobs.mapValues { Source.Inline(it.value) }.toPersistentHashMap()
+            }
         fun files(directory: File, hashes: Collection<String>): Map<String, String> {
             require(hashes.size <= 1_000_000 && hashes.toSet().size == hashes.size)
             return GraphBlobs(hashes.associateWith { hash ->
@@ -55,10 +59,16 @@ internal class GraphBlobs private constructor(private val sources: PersistentMap
             val root = (left as? GraphBlobs)?.directory?.takeIf { it == (right as? GraphBlobs)?.directory }
             return GraphBlobs(refs(left).putAll(refs(right)), root)
         }
-        fun filter(blobs: Map<String, String>, keep: (String) -> Boolean): Map<String, String> =
-            GraphBlobs(refs(blobs).filterKeys(keep).toPersistentHashMap(), (blobs as? GraphBlobs)?.directory)
+        fun filter(blobs: Map<String, String>, keep: (String) -> Boolean): Map<String, String> {
+            val keys = blobs.keys.filter(keep)
+            if (keys.isEmpty()) return emptyMap()
+            val kept = keys.toSet()
+            return if (blobs is StoredBlobs) files(blobs.blobDirectory,keys)
+            else GraphBlobs(refs(blobs).filterKeys { it in kept }.toPersistentHashMap(), (blobs as? GraphBlobs)?.directory)
+        }
         fun open(blobs: Map<String, String>, hash: String): InputStream =
             if (blobs is GraphBlobs) requireNotNull(blobs.sources[hash]).open()
+            else if (blobs is StoredBlobs) { require(hash in blobs); File(blobs.blobDirectory,hash).inputStream() }
             else Base64.getDecoder().wrap(requireNotNull(blobs[hash]).byteInputStream())
         private fun hex(bytes: ByteArray): String {
             val alphabet = "0123456789abcdef"
@@ -106,12 +116,12 @@ internal class GraphBlobs private constructor(private val sources: PersistentMap
                 return total
             } finally { temporary.delete() }
         }
-        fun storedIn(blobs: Map<String, String>, directory: File) = blobs is GraphBlobs && blobs.directory == directory.absoluteFile
+        fun storedIn(blobs: Map<String, String>, directory: File) = (blobs is GraphBlobs && blobs.directory == directory.absoluteFile) || (blobs is StoredBlobs && blobs.blobDirectory.absoluteFile == directory.absoluteFile)
         fun syncDirectory(directory: File) {
             if (directory.isDirectory) java.nio.channels.FileChannel.open(directory.toPath(), java.nio.file.StandardOpenOption.READ).use { it.force(true) }
         }
         fun persist(blobs: Map<String, String>, directory: File): Map<String, String> {
-            if (blobs is GraphBlobs && blobs.directory == directory.absoluteFile) return blobs
+            if (storedIn(blobs,directory)) return blobs
             for (hash in blobs.keys) {
                 val source = (blobs as? GraphBlobs)?.sources?.get(hash)
                 if (source is Source.Stored && source.file.absoluteFile == File(directory, hash).absoluteFile) continue

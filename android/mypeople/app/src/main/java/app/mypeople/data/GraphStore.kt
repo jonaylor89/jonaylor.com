@@ -52,7 +52,7 @@ class GraphStore(val state: GraphState, private val timing: (String, Long) -> Un
     init {
         require(UUID.fromString(state.peer).toString() == state.peer)
         require(state.localIds.values.distinct().size == state.localIds.size) { "Invalid local graph identity map" }
-        require(state.localIds.keys.all { graph.objects[it]?.type == "Person" }) { "Unknown local graph person" }
+        if (graph !is IndexedGraph) require(state.localIds.keys.all { graph.objects[it]?.type == "Person" }) { "Unknown local graph person" }
         require(UUID.fromString(state.bundle.collection).toString() == state.bundle.collection)
         require(graph.collection == null || graph.collection == state.bundle.collection)
         require(state.bundle.heads.toSet() == graph.heads.toSet()) { "Invalid graph frontier" }
@@ -198,7 +198,8 @@ class GraphStore(val state: GraphState, private val timing: (String, Long) -> Un
                 else -> Unit
             }
         }
-        known.forEach { graph.commits.getValue(it).operations.forEach { op -> references(op.payload) } }
+        if (graph is IndexedGraph) knownBlobs.addAll(graph.knownBlobs(known))
+        else known.forEach { graph.commits.getValue(it).operations.forEach { op -> references(op.payload) } }
         return state.bundle.copy(commits = graph.ordered.filterNot { it.id in known }, blobs = GraphBlobs.filter(state.bundle.blobs) { it !in knownBlobs })
     }
     fun indexed(): GraphState {
@@ -216,14 +217,21 @@ class GraphStore(val state: GraphState, private val timing: (String, Long) -> Un
         val roots = if (incremental) changedTargets!!.flatMap { target ->
             // Include inactive edges: removing an attribution must invalidate its
             // old owner too. Shared objects can invalidate more than one person.
-            listOfNotNull(components.rootByPerson[target]) + graph.incoming(target).filter { it.second.type in VersionedGraph.attributions }.mapNotNull { components.rootByPerson[it.second.from] }
-        }.toSet() else components.groups.keys
+            listOfNotNull(components.rootByPerson[target]) +
+                graph.incoming(target).filter { it.second.type in VersionedGraph.attributions }.mapNotNull { components.rootByPerson[it.second.from] } +
+                graph.outgoing(target).filter { it.second.type == "about" }.mapNotNull { components.rootByPerson[it.second.to] }
+        }.toMutableSet() else components.groups.keys.toMutableSet()
+        // An identity edit can retire an old root or split it into several roots.
+        // Include every old member's new component, not the rest of the book.
+        val touchedMembers = roots.flatMap { components.groups.getValue(it) }.toMutableSet()
+        val oldPeople = if (incremental) previous!!.people.filterValues { p -> (listOf(p.contact_uid)+p.contact_aliases).any { it in touchedMembers } } else emptyMap()
+        oldPeople.values.flatMap { listOf(it.contact_uid)+it.contact_aliases }.mapNotNullTo(roots) { components.rootByPerson[it] }
         val groups = roots.sorted().associateWith { components.groups.getValue(it) }
-        val dirtyIds = roots.map { ids.getValue(it) }.toSet()
+        val dirtyIds = roots.map { ids.getValue(it) }.toSet() + oldPeople.keys
         val people = (if (incremental) previous!!.people.toPersistentHashMap() else persistentHashMapOf()).builder()
         val events = persistentHashMapOf<String, Event>().builder()
         val profiles = persistentHashMapOf<String, Profile>().builder()
-        val moments = (if (incremental) previous!!.moments.toPersistentHashMap() else persistentHashMapOf()).builder()
+        val moments = (if (incremental) previous!!.moments.filterValues { it.person_id !in dirtyIds }.toPersistentHashMap() else persistentHashMapOf()).builder()
         dirtyIds.forEach(people::remove)
         val personIds by lazy { components.rootByPerson.mapValues { (_, root) -> ids.getValue(root) } }
         groups.forEach { (uid, members) ->
@@ -292,17 +300,15 @@ class GraphStore(val state: GraphState, private val timing: (String, Long) -> Un
                 }
             }
         }
-        if (incremental) {
-            // A shared memory object keeps the full projection's owner when that
-            // owner's component did not change (full projection is root-ordered).
-            events.putAll(previous!!.events.filterValues { it.person_id !in dirtyIds })
-            profiles.putAll(previous.profiles.filterValues { it.person_id !in dirtyIds })
-        }
-        if (!incremental) graph.edgesOfType("about").forEach { (id, e) -> if (graph.active(id) && graph.objects[e.from]?.type == "Moment" && graph.active(e.from!!)) {
-            val pid = personIds[e.to] ?: return@forEach; val p = properties(e.from)
+        val projectedEvents = if (incremental) replaceProjected(previous!!.events,dirtyIds,events.build()) { it.person_id } else events.build()
+        val projectedProfiles = if (incremental) replaceProjected(previous!!.profiles,dirtyIds,profiles.build()) { it.person_id } else profiles.build()
+        graph.edgesOfType("about").forEach { (id, e) -> if (graph.active(id) && graph.objects[e.from]?.type == "Moment" && graph.active(e.from!!)) {
+            val pid = personIds[e.to] ?: return@forEach
+            if (incremental && pid !in dirtyIds) return@forEach
+            val p = properties(e.from)
             moments[e.from] = Moment(pid, p.text("kind"), p.text("reason"), p.text("context").ifBlank { null }, p["score"]?.jsonPrimitive?.doubleOrNull ?: 0.0, p.text("surfaced_on"), p.text("status").ifBlank { "new" })
         } }
-        val records = Records(people.build(), events.build(), profiles.build(), moments.build())
+        val records = Records(people.build(), projectedEvents, projectedProfiles, moments.build())
         val distinct = graph.edgesOfType("distinct_person").filter { (id, _) -> graph.active(id) }.mapNotNull { (_, e) ->
             val a = personIds[e.from]; val b = personIds[e.to]
             if (a != null && b != null) setOf(a, b) else null

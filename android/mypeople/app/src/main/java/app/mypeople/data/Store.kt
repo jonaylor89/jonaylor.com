@@ -84,7 +84,7 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
         return block().also { saveTiming(stage, (System.nanoTime() - start) / 1_000_000) }
     }
     private val mutex = Mutex()
-    private val journal = StoreJournal(directory)
+    private val journal = StoreJournal(directory,startupTiming)
     private val startupIndex = StartupIndex(directory)
     private var historySource: List<ContactChange>? = null
     private var history = ContactHistory()
@@ -124,7 +124,7 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
                 // Merges/splits, evidence/reviews, non-card graph deltas and
                 // changed derived inputs keep the full projection path.
                 val edits = next.bundle.commits.filterNot { it.id in oldIds }.flatMap { it.operations }
-                val cardTypes = setOf("Person", "Name", "ContactPoint", "Note", "Claim", "Asset", "RelationshipPreferences", "has_name", "has_contact_point", "has_note", "subject_of", "has_asset", "has_preferences")
+                val cardTypes = setOf("Person", "Name", "ContactPoint", "Note", "Claim", "Asset", "RelationshipPreferences", "has_name", "has_contact_point", "has_note", "subject_of", "has_asset", "has_preferences", "same_person", "distinct_person", "Decision", "targets", "Moment", "about")
                 val incremental = previous != null && !replaced && previous.bundle.collection == next.bundle.collection &&
                     previous.localIds.all { (uid, id) -> next.localIds[uid] == id } &&
                     viewRecords === disk.records && viewPending === disk.pending && viewReplica === disk.replica &&
@@ -170,13 +170,14 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
         else -> false
     }
     private fun publish() {
+        if (journal.indexed?.sql?.inTransaction == true) return // Never expose an uncommitted edit.
         mutable.value = StoreState(records = shown(), pending = disk.pending, failedEdits = disk.failedEdits, lastSync = disk.lastSync, lastError = disk.lastError, notices = disk.notices, ready = loaded, offlineSource = disk.offlineSource, offlineRevision = disk.offlineRevision, replicatedContacts = disk.graph != null || disk.replica.enabled)
     }
     private fun load() {
         if (loaded) return
         // A corrupt cache must not silently erase a durable outbox.
         val start = System.nanoTime()
-        startupIndex.read()?.let { mutable.value = StoreState(records = it) }
+        if (!journal.hasIndex) startupIndex.read()?.let { mutable.value = StoreState(records = it) }
         startupTiming("address_book", (System.nanoTime() - start) / 1_000_000)
         disk = journal.load()
         startupTiming("disk", (System.nanoTime() - start) / 1_000_000)
@@ -192,18 +193,29 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
             }))
         }
         journal.cachedRecords?.let {
-            if (disk.graph != null) it.duplicateIndex = GraphDuplicateIndex().updated(it.people, it.people.keys)
+            if (disk.graph != null && it.duplicateIndex == null) it.duplicateIndex = GraphDuplicateIndex().updated(it.people, it.people.keys)
             view = it; viewRecords = disk.records; viewPending = disk.pending; viewReplica = disk.replica; viewGraph = disk.graph
         }
         startupTiming("graph_indexes", (System.nanoTime() - graphStart) / 1_000_000)
         loaded = true
         val projectStart = System.nanoTime()
+        if (journal.indexed == null && IndexedGraphFiles.supported() && disk.graph != null) {
+            disk = journal.createIndex(disk,shown())
+            view = journal.cachedRecords!!; viewRecords=disk.records; viewPending=disk.pending; viewReplica=disk.replica; viewGraph=disk.graph
+            dupesView=null
+        }
         publish()
         startupTiming("projection", (System.nanoTime() - projectStart) / 1_000_000)
-        if (journal.cachedRecords == null) runCatching { journal.cacheView(disk, current()) }
-        runCatching { startupIndex.save(current()) }
+        if (journal.indexed == null) {
+            if (journal.cachedRecords == null) runCatching { journal.cacheView(disk, current()) }
+            runCatching { startupIndex.save(current()) }
+        }
     }
     private fun save(next: DiskState) {
+        val database = journal.indexed
+        if (database != null && !database.sql.inTransaction) {
+            database.transaction { save(next) }; publish(); return
+        }
         val graph = next.graph?.let { state ->
             val blobs = GraphBlobs.persist(state.bundle.blobs, File(directory, "graph-blobs"))
             if (blobs === state.bundle.blobs) state else state.copy(bundle = state.bundle.copy(blobs = blobs).also {
@@ -211,6 +223,22 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
             })
         }
         val prepared = if (graph === next.graph) next else next.copy(graph = graph)
+        if (database != null) {
+            val previous=disk; disk=prepared
+            val projected=timedSave("projection") { shown() }
+            view=timedSave("indexed_transaction") { journal.saveIndexed(previous,prepared,projected) }
+            val reduced=database.graph()
+            val gs=prepared.graph!!
+            disk=prepared.copy(graph=gs.copy(bundle=GraphBundle(gs.bundle.collection,reduced.heads,reduced.ordered,DatabaseBlobs(database,database.latest)).also { it.reducer=reduced; it.blobsVerified=true }))
+            viewRecords=disk.records; viewPending=disk.pending; viewReplica=disk.replica; viewGraph=disk.graph; dupesView=null
+            return
+        }
+        if (prepared.graph != null && IndexedGraphFiles.supported()) {
+            disk=prepared
+            disk=journal.createIndex(prepared,shown())
+            view=journal.cachedRecords!!; viewRecords=disk.records; viewPending=disk.pending; viewReplica=disk.replica; viewGraph=disk.graph; dupesView=null
+            publish(); return
+        }
         timedSave("journal") { journal.save(disk, prepared) }
         disk = prepared
         timedSave("publish") { publish() }
@@ -218,7 +246,25 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
         timedSave("startup_index") { runCatching { startupIndex.save(current()) } }
     }
     private suspend fun <T> locked(block: () -> T): T = withContext(Dispatchers.IO) {
-        mutex.withLock { load(); block() }
+        mutex.withLock {
+            load()
+            val database=journal.indexed
+            if (database == null) {
+                val before=disk
+                try { block() } catch (error: Throwable) {
+                    disk=journal.indexed?.readState() ?: before
+                    viewRecords=null; viewGraph=null; dupesView=null
+                    throw error
+                }
+            } else {
+                val before=disk
+                try { database.transaction(block).also { publish() } }
+                catch (error: Throwable) {
+                    disk=before; view=database.readRecords("view"); viewRecords=disk.records; viewPending=disk.pending; viewReplica=disk.replica; viewGraph=disk.graph; dupesView=null
+                    throw error
+                }
+            }
+        }
     }
     suspend fun initialize() = locked { Unit }
     suspend fun cursor(): Long = locked { disk.cursor }
