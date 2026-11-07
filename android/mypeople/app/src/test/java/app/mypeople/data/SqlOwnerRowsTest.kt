@@ -27,6 +27,7 @@ class SqlOwnerRowsTest {
                     insert(db, "event", "noise-$i", owner, json.encodeToString(Event(owner, "note", "Unrelated synthetic note")))
                     insert(db, "profile", "noise-$i", owner, json.encodeToString(Profile(owner, "test", "https://example.test/$i")))
                 }
+                insert(db, "event", "blank-placeholder", 42, json.encodeToString(Event(42, "note", "")))
                 insert(db, "event", "a-old", 42, json.encodeToString(Event(42, "note", "Older", date = "2025-01-01")))
                 insert(db, "event", "b-new", 42, json.encodeToString(Event(42, "job", "Newer", date = "2026-01-01")))
                 insert(db, "profile", "confirmed", 42, json.encodeToString(Profile(42, "test", "https://example.test/confirmed", status = "confirmed")))
@@ -40,7 +41,7 @@ class SqlOwnerRowsTest {
             assertEquals(listOf("Newer", "Older"), records.eventsFor(42).values.map { it.value })
             assertEquals(setOf("confirmed", "suggested"), records.profilesFor(42).keys)
             assertTrue(records.eventsFor(-1).isEmpty())
-            assertEquals(4, decoded)
+            assertEquals(5, decoded)
             assertTrue(reads.isNotEmpty())
             assertTrue("Every detail query must be owner-scoped", reads.all { "owner=?" in it })
             val selectedQuery = reads.first { it.startsWith("SELECT id,data") }

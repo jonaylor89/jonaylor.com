@@ -74,7 +74,7 @@ fun ReviewScreen(records: Records, graph: AppGraph, scrollToTopRequest: Long = 0
                             MetaLabel("Assessment · ${profile.assessment}")
                             Text(profile.reason, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                fun status(value: String) = graph.edit("profile_status", buildJsonObject { put("profile_id", id.toInt()); put("status", value) })
+                                fun status(value: String) = graph.edit("profile_status", buildJsonObject { put("profile_id", id.toIntOrNull()?.let(::JsonPrimitive) ?: JsonPrimitive(id)); put("status", value) })
                                 FilledTonalButton(onClick = { status("confirmed") }) { Text("Confirm identity") }
                                 TextButton(onClick = { status("rejected") }) { Text("Reject") }
                             }

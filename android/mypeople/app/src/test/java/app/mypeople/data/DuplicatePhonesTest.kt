@@ -54,6 +54,27 @@ class DuplicatePhonesTest {
         assertSame(card, card.withoutDuplicatePhones().card)
     }
 
+    @Test fun sharedMetadataChangesAreRefusedWithoutAnyPartialGraphCommit() = runBlocking {
+        val a = UUID.randomUUID().toString(); val b = UUID.randomUUID().toString()
+        var state = GraphStore(GraphStore.empty()).saveCard(a, ContactCard("A", fields = listOf(
+            ContactField("phone", "+12025550101", "Work"), ContactField("phone", "+1 (202) 555-0101", "Mobile"))))
+        state = GraphStore(state).saveCard(b, ContactCard("B"))
+        val selected = GraphStore(state).project().people.values.first { it.contact_uid == a }.contactFields().first().object_id
+        state = GraphStore(state).commit(listOf(VersionedGraph.createEdge("has_contact_point", b, selected)))
+        val store = Store(temp.newFolder()); store.initialize()
+        store.installOffline(TransferManifest(type = "snapshot", source = state.bundle.collection, revision = 1, graph = state.bundle))
+        val before = store.snapshot().graph!!
+        val person = store.state.value.records.people.entries.first { it.value.contact_uid == a }
+        val other = store.state.value.records.people.values.first { it.contact_uid == b }
+        try {
+            store.cleanDuplicatePhoneFields(person.key, person.value)
+            fail("Must not change another person's shared labels")
+        } catch (_: IllegalArgumentException) { }
+        assertEquals(before.bundle.heads, store.snapshot().graph!!.bundle.heads)
+        assertEquals(other, store.state.value.records.people.values.first { it.contact_uid == b })
+        assertEquals(2, store.state.value.records.people.getValue(person.key).contactFields().size)
+    }
+
     @Test fun durableCleanupRetainsOriginalsOtherPeopleAndHistoricalGraph() = runBlocking {
         val dir = temp.newFolder()
         val store = Store(dir)
@@ -63,7 +84,7 @@ class DuplicatePhonesTest {
         val before = store.state.value.records.people.getValue(first)
         val other = store.state.value.records.people.getValue(second)
         val cleanup = before.contactCard().withoutDuplicatePhones()
-        store.saveContact(cleanup.card, first, before.contact_uid, expectedPerson = before)
+        assertEquals(cleanup.removed, store.cleanDuplicatePhoneFields(first, before))
         val restarted = Store(dir); restarted.initialize()
         val after = restarted.state.value.records.people.getValue(first).contactCard()
         assertEquals(cleanup.card.fields, after.fields)

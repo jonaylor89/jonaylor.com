@@ -5,4 +5,6 @@
         android:targetPackage="app.sherloq" android:label="MyPeople indexed-store maintenance" />
     <instrumentation android:name="app.mypeople.data.PhoneDuplicateMaintenance"
         android:targetPackage="app.sherloq" android:label="MyPeople duplicate phone cleanup" />
+    <instrumentation android:name="app.mypeople.data.FactRepairMaintenance"
+        android:targetPackage="app.sherloq" android:label="MyPeople fact attribution recovery" />
 </manifest>

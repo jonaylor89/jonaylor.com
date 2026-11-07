@@ -54,6 +54,7 @@ class ContactDetailIndexTest {
                 insert(db, "event", "noise-$i", 100, event)
                 insert(db, "profile", "noise-$i", 100, profile)
             }
+            repeat(50) { i -> insert(db, "event", "blank-placeholder-$i", 42, json.encodeToString(Event(42, "note", ""))) }
             insert(db, "event", "selected-note", 42, json.encodeToString(Event(42, "note", "Selected person's note")))
             insert(db, "event", "other-note", 43, json.encodeToString(Event(43, "note", "Other person's note")))
             insert(db, "profile", "selected-link", 42, json.encodeToString(Profile(42, "Selected site", "https://example.test/selected", status = "confirmed")))
@@ -76,7 +77,7 @@ class ContactDetailIndexTest {
         compose.onNodeWithTag("person-list").performScrollToNode(hasText("Selected site"))
         compose.onNodeWithText("Selected site").assertIsDisplayed()
         assertTrue("Must read only a bounded owner slice", reads.get() in 2..6)
-        println("Synthetic 40003-row contact page including Compose/scroll assertions: ${(System.nanoTime() - start) / 1000000}ms; owner queries=${reads.get()}")
+        println("Synthetic 40053-row contact page including Compose/scroll assertions: ${(System.nanoTime() - start) / 1000000}ms; owner queries=${reads.get()}")
 
         // A committed new version refreshes the same person without comparing lazy maps.
         db.transaction {

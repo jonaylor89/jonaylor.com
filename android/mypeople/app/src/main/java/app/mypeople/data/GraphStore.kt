@@ -252,7 +252,7 @@ class GraphStore(val state: GraphState, private val timing: (String, Long) -> Un
             }.distinctBy { it.object_id }
             val preferences = objects("has_preferences").map(::properties).fold(JsonObject(emptyMap())) { a, b -> JsonObject(a + b) }
             fun decision(action: String): JsonElement? = decisions.lastOrNull { text(it, "action") == action }?.let { graph.value(it, "value") } ?: preferences[action]
-            fun claim(key: String) = claims.firstOrNull { text(it, "predicate") == key }?.let { text(it, "value") }.orEmpty()
+            fun claim(key: String) = claims.firstOrNull { text(it, "predicate") == key && text(it, "asserted_by") in setOf("contact_card", "legacy_contact_card") }?.let { text(it, "value") }.orEmpty()
             val photoHash = objects("has_asset").firstNotNullOfOrNull { asset -> (graph.value(asset, "content") as? JsonObject)?.text("blob_hash")?.takeIf { it in state.bundle.blobs } }.orEmpty()
             val card = ContactCard(name, given = primary?.let { text(it, "given") }.orEmpty(), family = primary?.let { text(it, "family") }.orEmpty(), middle = primary?.let { text(it, "middle") }.orEmpty(), prefix = primary?.let { text(it, "prefix") }.orEmpty(), suffix = primary?.let { text(it, "suffix") }.orEmpty(), phonetic = primary?.let { text(it, "phonetic") }.orEmpty(), fields = fields, birthday = claim("birthday"), organization = claim("organization"), title = claim("title"), notes = notes.filter { text(it, "origin") in setOf("contact_card_notes", "legacy_card_notes") }.joinToString("\n\n") { text(it, "body") }, photo_hash = photoHash,
                 favorite = (decision("favorite") as? JsonPrimitive)?.booleanOrNull ?: false, preferred_channel = (decision("preferred_channel") as? JsonPrimitive)?.contentOrNull.orEmpty(), region = (decision("region") as? JsonPrimitive)?.contentOrNull ?: "US", user_edited = members.any { (graph.value(it, "card_metadata") as? JsonObject)?.get("user_edited") == JsonPrimitive(true) }, legacy_unverified = legacyPhones(uid),
@@ -289,14 +289,18 @@ class GraphStore(val state: GraphState, private val timing: (String, Long) -> Un
                 channels = interactions.groupBy { text(it, "channel") }.map { ChannelCount(it.key, it.value.sumOf(::interactionCount)) }, first_contact = firstContact, last_contact = lastContact)
             (claims + notes).forEach memory@{ obj ->
                 val p = properties(obj); val predicate = p.text("predicate")
+                // Empty registers are intentional peer-fork placeholders, not visible
+                // facts. Only suppress their screen rows; never retract graph objects.
+                val eventText = if (obj in notes) p.text("body").ifBlank { p.text("value") } else p.text("value")
                 val reviews = incoming(obj).filter { (_, e) -> e.type == "targets" && graph.active(e.from!!) }.map { text(it.second.from!!, "action") }
                 if (predicate != "public_profile" && (p.text("status") in setOf("rejected", "forgotten") || reviews.any { it in setOf("reject", "rejected", "forget", "forgotten") })) return@memory
                 if (predicate == "public_profile") {
                     val statuses = incoming(obj).filter { (_, e) -> e.type == "targets" && graph.active(e.from!!) }.map { text(it.second.from!!, "action") }.filter { it in setOf("confirmed", "rejected", "suggested") }
                     profiles[obj] = Profile(pid, p.text("site"), p.text("url").ifBlank { p.text("value") }, p.text("title"), statuses.lastOrNull() ?: p.text("status").ifBlank { "suggested" }, p.text("assessment").ifBlank { "possible" }, p.text("reason"), p["confidence"]?.jsonPrimitive?.doubleOrNull ?: 0.0)
                 } else {
+                    if (eventText.isBlank()) return@memory
                     val evidence = outgoing(obj).firstOrNull { it.second.type == "supported_by" }?.second?.to?.let { text(it, "quote") }
-                    events[obj] = Event(pid, if (obj in notes) "note" else predicate.ifBlank { p.text("type") }, if (obj in notes) p.text("body").ifBlank { p.text("value") } else p.text("value"), p.text("date"), p["confidence"]?.jsonPrimitive?.doubleOrNull ?: 1.0, p.text("source").ifBlank { "manual" }, evidence ?: p.text("evidence").ifBlank { null }, p.text("said_at").ifBlank { null }, p.text("created_at"))
+                    events[obj] = Event(pid, if (obj in notes) "note" else predicate.ifBlank { p.text("type") }, eventText, p.text("date"), p["confidence"]?.jsonPrimitive?.doubleOrNull ?: 1.0, p.text("source").ifBlank { "manual" }, evidence ?: p.text("evidence").ifBlank { null }, p.text("said_at").ifBlank { null }, p.text("created_at"))
                 }
             }
         }
@@ -362,7 +366,7 @@ class GraphStore(val state: GraphState, private val timing: (String, Long) -> Un
             }
         }
         mapOf("birthday" to card.birthday, "organization" to card.organization, "title" to card.title).forEach { (k, v) ->
-            val old = editable("subject_of") { text(it, "predicate") == k }
+            val old = editable("subject_of") { text(it, "predicate") == k && text(it, "asserted_by") in setOf("contact_card", "legacy_contact_card") }
             if (v.isBlank()) old.forEach { ops += graph.edit(it.first, "_lifecycle", JsonPrimitive("retracted")) }
             else if (old.isNotEmpty()) update(old.first().second.to!!, "value", JsonPrimitive(v))
             else attach("Claim", "subject_of", buildJsonObject { put("predicate", k); put("value", v); put("asserted_by", "contact_card"); put("source", "manual") })

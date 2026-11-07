@@ -37,6 +37,42 @@ commit. Original history/blobs remain authoritative and complete; indexes and
 screen rows do not replace or discard them. Old snapshots use sequence-bounded
 register/view rows rather than accidentally observing later edits during backup.
 
+## Fact rows and targeted maintenance
+
+Empty contact-note and birthday/organization/title registers intentionally exist
+for peer conflict tracking. They are not facts with erased text: Android excludes
+blank event rows when projecting and when reading older materialized rows.
+Saving contact scalars reads/updates only claims asserted by `contact_card` or
+`legacy_contact_card`, never independent inferred facts with the same predicate.
+
+Debug-only `FactAudit` opens SQLite READONLY and compares aggregate display,
+graph and hash-verified source-original counts without printing contact payloads.
+`FactRepairMaintenance` previews only the old save bug's paired retractions:
+an active source-event claim's attribution was retracted in the same commit as
+the same owner's matching card-scalar attribution. Rejected/forgotten facts,
+self contacts, attribution-lifecycle conflicts and unrelated explicit retractions
+are not restored.
+Apply requires an exact-frontier preview token, verifies a complete encrypted
+backup first, then restores only those edge lifecycles in one Store transaction.
+Prior history and fact text remain unchanged.
+
+`PhoneDuplicateMaintenance` previews within-card duplicates, not duplicate people.
+Equivalence retains countries, leading zeroes, extensions and uncertain-region
+boundaries. Cleanup retracts redundant phone links and combines necessary
+label/default metadata only; it does not resave whole cards. Offline conflicts,
+incompatible structured metadata and shared metadata changes are left alone.
+Every contact's edit uses Store transactions and version checks.
+
+These operator commands require stopping the app and explicitly preparing the
+same app-private `cache/index-maintenance` marker as indexed maintenance.
+Normal loading and scheduled Contacts sync stay paused while it exists. Always
+remove the marker and restart normal app mode after maintenance. Complete,
+verified encrypted backups, private keys, plans and progress are retained under
+app-private `files/maintenance-recovery/`; never copy them into the repo or log
+their keys. On large books, backup verification can take several minutes; a host
+timeout is not evidence that the operation rolled back. Check its result and
+audit the durable Store before considering another apply.
+
 ## Migration and recovery
 
 Existing checkpoint-v1–v8/journal stores remain readable. Conversion is one-time:
@@ -75,7 +111,7 @@ never pass their contents in command arguments or logs.
   192 MiB heap. This fixture must never be installed on a personal device.
 - Owner-query regression tests verify bounded decoding, actual query plans,
   historical ownership, projection exclusions and in-memory compatibility. A
-  40,003-row synthetic Compose test rejects unscoped/main-thread detail reads
+  40,053-row synthetic Compose test, including empty placeholders, rejects unscoped/main-thread detail reads
   and checks refresh and person switching without leaking another person's rows.
 - Additional emulator checks cover 329,000 messages, 272 MiB streaming blobs,
   encrypted backup/fresh restore, actual Provider field UUIDs, photo lifecycle

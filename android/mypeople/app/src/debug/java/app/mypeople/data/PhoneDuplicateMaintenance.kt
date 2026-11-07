@@ -72,22 +72,10 @@ class PhoneDuplicateMaintenance : Instrumentation() {
                         if (plan.edits.isEmpty()) {
                             output.putString("stream", "PHONE CLEANUP APPLIED contacts=0 extraFields=0")
                         } else {
-                            val recovery = File(context.filesDir, "phone-cleanup/${System.currentTimeMillis()}-${plan.token}").apply { check(mkdirs()) }
-                            val key = java.util.Base64.getEncoder().encodeToString(ByteArray(32).also { java.security.SecureRandom().nextBytes(it) })
-                            durable(File(recovery, "key"), key)
-                            durable(File(recovery, "plan.json"), json.encodeToString(plan))
-                            val archive = File(recovery, "before.sherloq")
-                            val photos = File(context.filesDir, "offline-photos").listFiles().orEmpty()
-                                .filter { it.isFile && Regex("[0-9a-f]{64}").matches(it.name) }.associateBy { it.name }
-                            FileOutputStream(archive).use { file ->
-                                LargeArchive.writeBackup(ContactBackup(state = state, peopleFirst = Settings(context).peopleFirst), photos, file, key, context.cacheDir, File(context.filesDir, "memory/graph-blobs"))
-                                file.fd.sync()
-                            }
-                            val verified = LargeArchive.read(archive, key, context.cacheDir, File(context.filesDir, "memory/graph-blobs")).backup!!
-                            require(verified.state.graph!!.bundle.heads == plan.heads && verified.state.graph.bundle.collection == plan.collection && verified.state.pending == state.pending) { "Recovery backup verification failed" }
+                            val recovery = verifiedMaintenanceRecovery(context, state, "phone-cleanup", json.encodeToString(plan))
                             var changed = 0; var removed = 0
                             for (edit in plan.edits) {
-                                store.saveContact(edit.after, edit.id, edit.before.contact_uid, expectedPerson = edit.before)
+                                require(store.cleanDuplicatePhoneFields(edit.id, edit.before) == edit.removed)
                                 changed++; removed += edit.removed
                                 durable(File(recovery, "progress.txt"), "contacts=$changed extraFields=$removed\n")
                             }

@@ -342,6 +342,53 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
         val indexed = timedSave("graph_index") { GraphStore(next).indexed() }
         save(disk.copy(graph = indexed, nextLocalId = minOf(disk.nextLocalId, (indexed.localIds.values.minOrNull() ?: 0) - 1)))
     }
+    /** A phone-only cleanup must not run the full card-save path or modify shared
+     * contact-point metadata belonging to another identity. History remains append-only. */
+    internal suspend fun cleanDuplicatePhoneFields(id: Int, expectedPerson: Person): Int = locked {
+        val person = current().people[id]
+        require(sameContactVersion(person, expectedPerson) && person != null && !person.trashed && person.contact_conflicts.isEmpty()) { "Contact changed; preview again." }
+        val before = person.contactCard()
+        val cleanup = before.withoutDuplicatePhones()
+        if (cleanup.removed == 0) return@locked 0
+        val gs = GraphStore(requireNotNull(disk.graph))
+        val members = gs.graph.components().groups.values.first { person.contact_uid in it }.toSet()
+        val retained = cleanup.card.fields.map { it.object_id }.toSet()
+        val removed = before.fields.filter { it.kind == "phone" && it.object_id !in retained }.map { it.object_id }.toSet()
+        require(removed.size == cleanup.removed && removed.none { it.isEmpty() })
+        val ops = mutableListOf<GraphOperation>()
+        for (owner in members) gs.graph.outgoing(owner).filter { (edge, entity) ->
+            entity.type == "has_contact_point" && entity.to in removed && gs.graph.active(edge)
+        }.forEach { (edge, _) -> ops += gs.graph.edit(edge, "_lifecycle", JsonPrimitive("retracted")) }
+        for (field in cleanup.card.fields.filter { it.kind == "phone" }) {
+            val previous = before.fields.first { it.object_id == field.object_id }
+            val updates = buildMap<String, JsonElement> {
+                if (previous.label != field.label) put("label", JsonPrimitive(field.label))
+                if (previous.preferred != field.preferred) put("preferred", JsonPrimitive(field.preferred))
+                if (previous.user_added != field.user_added) put("user_added", JsonPrimitive(field.user_added))
+                if (previous.structured != field.structured) put("structured", JsonPrimitive(field.structured))
+            }
+            if (updates.isNotEmpty()) {
+                require(gs.graph.incoming(field.object_id).none { (edge, entity) ->
+                    entity.type == "has_contact_point" && entity.from !in members && gs.graph.active(edge)
+                }) { "Shared contact-point metadata needs review." }
+                updates.forEach { (key, value) -> ops += gs.graph.edit(field.object_id, key, value) }
+            }
+        }
+        require(ops.isNotEmpty())
+        saveGraph(gs.commit(ops))
+        cleanup.removed
+    }
+
+    /** Explicit maintenance only: restore proven misclassified fact edges in one normal
+     * Store transaction. Never modifies fact text, cards, identities or prior operations. */
+    internal suspend fun repairCardFactAttributions(expectedHeads: List<String>, edges: List<String>) = locked {
+        val state = requireNotNull(disk.graph)
+        require(state.bundle.heads == expectedHeads) { "The graph changed; preview again." }
+        val gs = GraphStore(state)
+        val repairable = gs.repairableCardFactAttributions().toSet()
+        require(edges.isNotEmpty() && edges.distinct().size == edges.size && edges.all { it in repairable }) { "The repair no longer matches." }
+        saveGraph(gs.commit(edges.map { gs.graph.edit(it, "_lifecycle", JsonPrimitive("active")) }))
+    }
     suspend fun associations(uid: String): GraphSelection = locked {
         GraphStore(requireNotNull(disk.graph) { "Sync with the graph-enabled CLI first." }).selection(uid)
     }
