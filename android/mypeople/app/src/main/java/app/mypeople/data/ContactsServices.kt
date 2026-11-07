@@ -31,6 +31,10 @@ class ContactsSyncService : Service() {
         super.onCreate()
         adapter = object : AbstractThreadedSyncAdapter(this, true) {
             override fun onPerformSync(account: Account, extras: Bundle, authority: String, provider: ContentProviderClient, result: SyncResult) {
+                // Operator maintenance opens the existing Store with normal orchestration
+                // paused. A scheduled sync must not start a second writer/provider pass.
+                if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
+                    java.io.File(cacheDir, "index-maintenance").isFile) return
                 val graph = (application as app.mypeople.MyPeopleApp).graph
                 runContactsSyncTask({ result.stats.numAuthExceptions++ }, { result.stats.numIoExceptions++ }) {
                     graph.store.initialize()

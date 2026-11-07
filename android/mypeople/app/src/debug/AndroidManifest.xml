@@ -3,4 +3,6 @@
     <!-- Explicit operator maintenance, not a test runner and never auto-started. -->
     <instrumentation android:name="app.mypeople.data.IndexedMaintenance"
         android:targetPackage="app.sherloq" android:label="MyPeople indexed-store maintenance" />
+    <instrumentation android:name="app.mypeople.data.PhoneDuplicateMaintenance"
+        android:targetPackage="app.sherloq" android:label="MyPeople duplicate phone cleanup" />
 </manifest>
