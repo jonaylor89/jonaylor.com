@@ -107,6 +107,16 @@ class AppGraph(context: Application, startMemoryImmediately: Boolean = true) {
     suspend fun retryFailed(clientId: String) {
         store.retryFailed(clientId)
     }
+    suspend fun resolveMergeDecision(person: Person, keepMerged: Boolean, cleanPhones: Boolean): Int = scope.async {
+        val removed = store.resolveMergeDecision(person, keepMerged, cleanPhones)
+        messages.trySend(if (keepMerged) "Merge confirmed." + if (removed > 0) " Removed $removed duplicate phone fields." else "" else "Separate contact records restored. No facts or history were deleted.")
+        removed
+    }.await()
+    suspend fun cleanDuplicatePhones(id: Int, person: Person): Int = scope.async {
+        val removed = store.cleanDuplicatePhoneFields(id, person)
+        messages.trySend("Removed $removed duplicate phone fields. Original details remain in history.")
+        removed
+    }.await()
     suspend fun saveContact(card: ContactCard, id: Int? = null, contactUid: String? = null, expectedPerson: Person? = null): Int {
         val start=System.nanoTime()
         return store.saveContact(card, id, contactUid, expectedPerson = expectedPerson).also { timing("MyPeopleEdit","contact_save",start) }

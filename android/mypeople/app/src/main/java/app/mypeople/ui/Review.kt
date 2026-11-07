@@ -49,13 +49,13 @@ fun ReviewScreen(records: Records, graph: AppGraph, scrollToTopRequest: Long = 0
             item { Heading("A second look", "Good memory starts with getting people right.", onAccount = openSettings) }
             stickyHeader {
                 Surface(color = MaterialTheme.colorScheme.surface) {
-                    Box(Modifier.padding(vertical = 8.dp)) { JournalTabs(tab, listOf("Profiles", "Duplicates", "Versions")) { tab = it } }
+                    Box(Modifier.padding(vertical = 8.dp)) { JournalTabs(tab, listOf("Profiles", "Duplicates", if (versions.isEmpty()) "Conflicts" else "Conflicts (${versions.size})")) { tab = it } }
                 }
             }
             item {
                 Column(Modifier.padding(horizontal = KinSpace.s4, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(if (tab == 2) "${versions.size} contacts with two versions" else if (tab == 0) "${profiles.size} suggested profiles" else "${groups.size} groups to review" + if (fresh > 0) " · $fresh new" else "", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(if (tab == 2) "These changed on two devices before they synced. Both are kept until you choose." else if (tab == 0) "A suggestion is never a confirmed identity. Even a supported assessment needs your confirmation." else "Compare the details before combining records. Similar names don’t always mean the same person.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (tab == 2) "${versions.size} contacts need a decision" else if (tab == 0) "${profiles.size} suggested profiles" else "${groups.size} groups to review" + if (fresh > 0) " · $fresh new" else "", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (tab == 2) "Review merge decisions or independently edited details here. Nothing is chosen for you, and previous values stay in history." else if (tab == 0) "A suggestion is never a confirmed identity. Even a supported assessment needs your confirmation." else "Compare the details before combining records. Similar names don’t always mean the same person.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             if (tab == 0) {
@@ -86,7 +86,8 @@ fun ReviewScreen(records: Records, graph: AppGraph, scrollToTopRequest: Long = 0
                 else if (versions.isEmpty()) item { EmptyState("Nothing to reconcile", "Your devices agree. Edits to the same detail on two devices will appear here.") }
                 items(versions, key = { it.key }) { (id, person) ->
                     JournalCard(Modifier.padding(horizontal = KinSpace.s4)) {
-                        PersonRow(person, graph, person.contact_conflicts.keys.joinToString { if (it == "_trashed") "Trash status" else it.replace('_', ' ') }) { openPerson(id) }
+                        PersonRow(person, graph, person.contactConflictSummary()) { openPerson(id) }
+                        if (person.mergeDecisionConflicts().isNotEmpty()) Box(Modifier.padding(KinSpace.s4)) { MergeDecisionPrompt(person, graph) }
                     }
                 }
             } else {

@@ -351,32 +351,38 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
         val cleanup = before.withoutDuplicatePhones()
         if (cleanup.removed == 0) return@locked 0
         val gs = GraphStore(requireNotNull(disk.graph))
-        val members = gs.graph.components().groups.values.first { person.contact_uid in it }.toSet()
-        val retained = cleanup.card.fields.map { it.object_id }.toSet()
-        val removed = before.fields.filter { it.kind == "phone" && it.object_id !in retained }.map { it.object_id }.toSet()
-        require(removed.size == cleanup.removed && removed.none { it.isEmpty() })
-        val ops = mutableListOf<GraphOperation>()
-        for (owner in members) gs.graph.outgoing(owner).filter { (edge, entity) ->
-            entity.type == "has_contact_point" && entity.to in removed && gs.graph.active(edge)
-        }.forEach { (edge, _) -> ops += gs.graph.edit(edge, "_lifecycle", JsonPrimitive("retracted")) }
-        for (field in cleanup.card.fields.filter { it.kind == "phone" }) {
-            val previous = before.fields.first { it.object_id == field.object_id }
-            val updates = buildMap<String, JsonElement> {
-                if (previous.label != field.label) put("label", JsonPrimitive(field.label))
-                if (previous.preferred != field.preferred) put("preferred", JsonPrimitive(field.preferred))
-                if (previous.user_added != field.user_added) put("user_added", JsonPrimitive(field.user_added))
-                if (previous.structured != field.structured) put("structured", JsonPrimitive(field.structured))
-            }
-            if (updates.isNotEmpty()) {
-                require(gs.graph.incoming(field.object_id).none { (edge, entity) ->
-                    entity.type == "has_contact_point" && entity.from !in members && gs.graph.active(edge)
-                }) { "Shared contact-point metadata needs review." }
-                updates.forEach { (key, value) -> ops += gs.graph.edit(field.object_id, key, value) }
-            }
-        }
-        require(ops.isNotEmpty())
+        val ops = gs.duplicatePhoneOperations(person, cleanup)
         saveGraph(gs.commit(ops))
         cleanup.removed
+    }
+
+    /** Explicit identity choice. Optional phone cleanup shares the same single commit:
+     * a stale choice or shared metadata failure leaves both decisions unapplied. */
+    internal suspend fun resolveMergeDecision(expected: Person, keepMerged: Boolean, cleanPhones: Boolean): Int = locked {
+        val person = current().people.values.firstOrNull { it.contact_uid == expected.contact_uid }
+        if (!sameContactVersion(person, expected) || person == null || person.contact_aliases != expected.contact_aliases || person.contact_conflicts != expected.contact_conflicts)
+            throw EditRejected("This contact changed. Close this review and reopen it before choosing.")
+        val conflicts = person.mergeDecisionConflicts()
+        require(conflicts.isNotEmpty()) { "This merge decision has already been resolved." }
+        val gs = GraphStore(requireNotNull(disk.graph))
+        val components = gs.graph.components()
+        val members = components.groups.values.first { person.contact_uid in it }.toSet()
+        val separateEdges = conflicts.keys.map { it.substringBefore('/') }
+        require(separateEdges.all { it in components.contradictions && gs.graph.edges[it]?.type == "distinct_person" }) { "This merge decision changed. Reopen the review." }
+        val targets = if (keepMerged) separateEdges else gs.graph.edgesOfType("same_person").filter { (edge, entity) ->
+            entity.from in members && entity.to in members && gs.graph.active(edge)
+        }.map { it.first }
+        require(targets.isNotEmpty())
+        val ops = targets.map { gs.graph.edit(it, "_lifecycle", JsonPrimitive("retracted")) }.toMutableList()
+        var removed = 0
+        if (cleanPhones) {
+            require(keepMerged && !person.trashed && conflicts.size == person.contact_conflicts.size) { "Resolve the other conflicting details before removing duplicate phone fields." }
+            val cleanup = person.contactCard().withoutDuplicatePhones()
+            ops += gs.duplicatePhoneOperations(person, cleanup)
+            removed = cleanup.removed
+        }
+        saveGraph(gs.commit(ops))
+        removed
     }
 
     /** Explicit maintenance only: restore proven misclassified fact edges in one normal
@@ -423,7 +429,7 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
     suspend fun resolveContact(uid: String, field: String, changeId: String) = locked {
         if (disk.graph != null) {
             val gs = GraphStore(disk.graph!!)
-            val conflict = gs.project().people.values.firstOrNull { it.contact_uid == uid }?.contact_conflicts?.get(field)?.firstOrNull { it.change == changeId }
+            val conflict = current().people.values.firstOrNull { it.contact_uid == uid || uid in it.contact_aliases }?.contact_conflicts?.get(field)?.firstOrNull { it.change == changeId }
                 ?: throw EditRejected("This conflict changed. Reopen it.")
             val target = field.substringBefore('/'); val property = field.substringAfter('/')
             saveGraph(gs.commit(listOf(gs.graph.edit(target, property, conflict.value))))

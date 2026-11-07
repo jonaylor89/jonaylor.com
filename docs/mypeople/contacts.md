@@ -65,6 +65,30 @@ A persisted baseline and Provider version checks distinguish our callbacks from 
 
 Legacy/unverified phone details are not exported to Android until re-imported or explicitly verified. Photos sent to the Provider are bounded thumbnails; full manual JPEG/PNG images remain in the card and encrypted backup. Extremely large contacts may exceed Android's IPC limits and are refused by the bridge without discarding the originals.
 
+## Resolve a contact decision
+
+Open **Review → Conflicts**. The tab shows how many contacts need attention.
+
+- **Merge decision needs review** is an older “different people” assertion
+  conflicting with a merge, not competing phone-number values. Tap **Resolve
+  merge decision**, explicitly choose **Keep one merged contact** or **Restore
+  N separate contact records**, then confirm. Keeping the merge clears only the
+  older separate-person assertion. Restoring separation preserves existing
+  record/field ownership and can bring back duplicate-looking contacts.
+- If the merged person has duplicate phone fields and no other conflicts, the
+  confirmation offers **Also remove … duplicate phone fields**. You can turn it
+  off. The identity decision and selected cleanup commit together; a stale view
+  or shared-metadata error leaves both unapplied.
+- Actual independently edited values still appear on the contact under **Two
+  versions, safely kept**, with human-readable field labels rather than graph
+  UUID paths. Choose a value there; no version is selected automatically.
+- After conflicts are resolved, **Remove … duplicate phone fields** is available
+  in Contact info. This no longer requires operator maintenance. Originals and
+  complete edit history remain available in the graph.
+
+Canceling a review does nothing. Decisions save on this phone and travel to peers
+on the next sync. Android copies follow the resulting MyPeople contact.
+
 ## Backup and restore
 
 **Encrypted phone backup** is a versioned, authenticated AES-GCM archive using the existing PBKDF2 transfer encryption. It contains the authoritative phone cache, unsynced and failed operation payloads, cursor/source metadata, trash, facts/evidence, and all referenced photos. It fails rather than claim success when a referenced photo cannot be obtained. Photos previously fetched over HTTP must be available locally or from the server during backup.

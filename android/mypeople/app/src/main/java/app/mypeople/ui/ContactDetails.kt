@@ -144,18 +144,20 @@ fun ContactDetails(person: Person, id: Int, graph: AppGraph, edit: () -> Unit) {
     var undo by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(KinSpace.s3)) {
         Section("Contact info")
-        if (person.contact_conflicts.isNotEmpty()) {
+        if (person.mergeDecisionConflicts().isNotEmpty()) MergeDecisionPrompt(person, graph)
+        val detailConflicts = person.contact_conflicts.filter { (field, choices) -> !isMergeDecisionConflict(field, choices) }
+        if (detailConflicts.isNotEmpty()) {
             Surface(shape = RoundedCornerShape(KinRadius.xl), color = MaterialTheme.colorScheme.errorContainer) {
                 Column(Modifier.fillMaxWidth().padding(KinSpace.s5), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("Two versions, safely kept", style = MaterialTheme.typography.titleMedium)
                     Text("These details changed independently on different devices. Choose a version to share; neither edit has been lost.", style = MaterialTheme.typography.bodySmall)
-                    person.contact_conflicts.forEach { (field, choices) ->
-                        Text(if (field == "_trashed") "Trash status" else field.replace('_', ' '), style = MaterialTheme.typography.labelLarge)
+                    detailConflicts.forEach { (field, choices) ->
+                        Text(conflictFieldTitle(field, person), style = MaterialTheme.typography.labelLarge)
                         choices.forEach { choice ->
                             val value = when (field) {
                                 "photo" -> "Photo · ${choice.change.take(8)}"
                                 "_trashed" -> if ((choice.value as? JsonPrimitive)?.booleanOrNull == true) "In trash" else "Active contact"
-                                else -> (choice.value as? JsonPrimitive)?.contentOrNull.orEmpty().ifEmpty { "(empty)" }.take(160)
+                                else -> ((choice.value as? JsonPrimitive)?.contentOrNull ?: choice.value.toString()).ifEmpty { "(empty)" }.take(160)
                             }
                             OutlinedButton(onClick = { scope.launch {
                                 try { graph.store.resolveContact(person.contact_uid, field, choice.change) }
@@ -185,6 +187,7 @@ fun ContactDetails(person: Person, id: Int, graph: AppGraph, edit: () -> Unit) {
         }
         if (rows.isEmpty()) Text("No details yet. Add a number or email in Edit contact.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         else Column(verticalArrangement = Arrangement.spacedBy(KinSpace.half)) { rows.forEachIndexed { index, row -> row(segmentShape(index, rows.size)) } }
+        if (!person.trashed) DuplicatePhoneAction(person, id, graph)
         if (person.trashed) MetaLabel("In trash · kept until you restore it")
         FlowRow(horizontalArrangement = Arrangement.spacedBy(KinSpace.s2)) {
             TextButton(onClick = { scope.launch { runCatching { shareContacts(context, listOf(card)) }.onFailure { Toast.makeText(context, "Could not share ${person.name}", Toast.LENGTH_SHORT).show() } } }) { Text("Share vCard") }

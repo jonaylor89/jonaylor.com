@@ -1,6 +1,7 @@
 package app.mypeople.data
 
 import java.util.Locale
+import kotlinx.serialization.json.*
 
 /** A within-card cleanup only: never infer identity or change the surviving number's spelling. */
 internal data class DuplicatePhoneCleanup(val card: ContactCard, val removed: Int, val groups: Int)
@@ -42,4 +43,35 @@ internal fun ContactCard.withoutDuplicatePhones(): DuplicatePhoneCleanup {
     }
     if (removed.isEmpty()) return DuplicatePhoneCleanup(this, 0, 0)
     return DuplicatePhoneCleanup(copy(fields = fields.indices.filterNot { it in removed }.map { replacements[it] ?: fields[it] }), removed.size, cleanedGroups)
+}
+
+/** Plan only phone-link/metadata operations, so a merge decision and cleanup can commit together. */
+internal fun GraphStore.duplicatePhoneOperations(person: Person, cleanup: DuplicatePhoneCleanup): List<GraphOperation> {
+    if (cleanup.removed == 0) return emptyList()
+    val before = person.contactCard()
+    val members = graph.components().groups.values.first { person.contact_uid in it }.toSet()
+    val retained = cleanup.card.fields.map { it.object_id }.toSet()
+    val removed = before.fields.filter { it.kind == "phone" && it.object_id !in retained }.map { it.object_id }.toSet()
+    require(removed.size == cleanup.removed && removed.none { it.isEmpty() })
+    val ops = mutableListOf<GraphOperation>()
+    for (owner in members) graph.outgoing(owner).filter { (edge, entity) ->
+        entity.type == "has_contact_point" && entity.to in removed && graph.active(edge)
+    }.forEach { (edge, _) -> ops += graph.edit(edge, "_lifecycle", JsonPrimitive("retracted")) }
+    for (field in cleanup.card.fields.filter { it.kind == "phone" }) {
+        val previous = before.fields.first { it.object_id == field.object_id }
+        val updates = buildMap<String, JsonElement> {
+            if (previous.label != field.label) put("label", JsonPrimitive(field.label))
+            if (previous.preferred != field.preferred) put("preferred", JsonPrimitive(field.preferred))
+            if (previous.user_added != field.user_added) put("user_added", JsonPrimitive(field.user_added))
+            if (previous.structured != field.structured) put("structured", JsonPrimitive(field.structured))
+        }
+        if (updates.isNotEmpty()) {
+            require(graph.incoming(field.object_id).none { (edge, entity) ->
+                entity.type == "has_contact_point" && entity.from !in members && graph.active(edge)
+            }) { "Shared contact-point metadata needs review. Turn off phone cleanup to save only the merge decision." }
+            updates.forEach { (key, value) -> ops += graph.edit(field.object_id, key, value) }
+        }
+    }
+    require(ops.isNotEmpty())
+    return ops
 }
