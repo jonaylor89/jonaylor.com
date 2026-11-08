@@ -250,6 +250,38 @@ class GraphStoreTest {
         assertTrue(right.state.value.records.people.values.single().contactCard().favorite)
     }
 
+    @Test fun `split suggestions follow exclusive evidence and leave shared unknown and retracted data alone`() {
+        val initial = GraphStore(base())
+        val uid = initial.graph.people.single()
+        val points = initial.selection(uid).associations.filter { it.kind == "has_contact_point" }
+        val sources = List(3) { VersionedGraph.createObject("SourceRecord") }
+        val ops = sources.toMutableList()
+        points.forEachIndexed { index, point -> ops += VersionedGraph.createEdge("originated_from", point.objectId, sources[index].target) }
+        fun fact(label: String, roots: List<String>): String {
+            val claim = VersionedGraph.createObject("Claim", buildJsonObject { put("predicate", "test"); put("value", label) })
+            val evidence = VersionedGraph.createObject("Evidence")
+            ops += claim; ops += evidence
+            ops += VersionedGraph.createEdge("subject_of", uid, claim.target)
+            ops += VersionedGraph.createEdge("supported_by", claim.target, evidence.target)
+            roots.forEach { ops += VersionedGraph.createEdge("drawn_from", evidence.target, it) }
+            return claim.target
+        }
+        val exclusive = fact("Exclusive", listOf(sources[0].target))
+        val shared = fact("Shared", sources.take(2).map { it.target })
+        fact("Unknown", listOf(sources[2].target))
+        fact("Mixed", listOf(sources[0].target, sources[2].target))
+        val retired = fact("Retired source", listOf(sources[1].target))
+        var state = initial.commit(ops)
+        val reducer = GraphStore(state)
+        val edge = reducer.graph.outgoing(retired).single { it.second.type == "supported_by" }.first
+        state = reducer.commit(listOf(reducer.graph.edit(edge, "_lifecycle", JsonPrimitive("retracted"))))
+        val selection = GraphStore(state).selection(uid)
+        fun ids(vararg objects: String) = selection.associations.filter { it.objectId in objects }.map { it.id }.toSet()
+        assertEquals(ids(exclusive), selection.suggested(setOf(points[0].id)))
+        assertEquals(ids(exclusive, shared), selection.suggested(points.map { it.id }.toSet()))
+        assertTrue(selection.suggested(emptySet()).isEmpty())
+    }
+
     @Test fun `split selected message phone note and profile associations retains all original objects`() = runBlocking {
         var s = base(); val uid = GraphStore(s).graph.objects.entries.single { it.value.type == "Person" }.key
         val gs = GraphStore(s)

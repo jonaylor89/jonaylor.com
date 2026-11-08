@@ -369,31 +369,57 @@ open class VersionedGraph private constructor(input: List<GraphCommit>, base: Ve
         return GraphComponents(groups, contradictions).also { componentCache = it }
     }
 
-    fun split(person: String, name: String, attributions: List<String>): GraphSplit {
+    fun split(person: String, name: String, attributions: List<String>): GraphSplit = move(person, attributions, name = name)
+
+    /** Reattribute original objects; moving to an existing contact is not an identity merge. */
+    fun move(person: String, attributions: List<String>, destination: String? = null, name: String = ""): GraphSplit {
         require(objects[person]?.type == "Person" && active(person)) { "Choose an active person" }
-        require(name.isNotBlank()) { "The new person needs a name" }
+        require(destination != null || name.isNotBlank()) { "The new person needs a name" }
         require(attributions.isNotEmpty() && attributions.distinct().size == attributions.size) { "Select distinct attribution edges to move" }
         val members = components().groups.values.first { person in it }.toSet()
+        val destinationMembers = destination?.let {
+            require(objects[it]?.type == "Person" && active(it) && it !in members) { "Choose a different active contact" }
+            components().membersByPerson.getValue(it).toSet()
+        }.orEmpty()
         val associated = members.flatMap { outgoing(it) + incoming(it).filter { edge -> edge.second.type == "participant" } }.distinctBy { it.first }
             .filter { (id, e) -> e.type in Companion.attributions && active(id) && (if (e.type == "participant") e.to in members else e.from in members) }.toMap()
         require(attributions.all { it in associated }) { "Selection is not an active attribution of this person" }
-        val unverified = attributions.any { id ->
-            val e = associated.getValue(id)
+        fun legacyPhone(e: GraphEntity): Boolean {
             val metadata = e.from?.let { value(it, "card_metadata") as? JsonObject }
-            e.type == "has_contact_point" && (value(e.to!!, "kind") as? JsonPrimitive)?.content == "phone" &&
-                (metadata?.get("legacy_unverified") == JsonPrimitive(true) || (value(e.to, "compat_table") as? JsonPrimitive)?.content == "identifiers" || value(e.to, "matching_hint") == JsonPrimitive(true))
+            return metadata?.get("legacy_unverified") == JsonPrimitive(true) ||
+                e.from?.let { value(it, "legacy_unverified") } == JsonPrimitive(true) ||
+                (value(e.to!!, "compat_table") as? JsonPrimitive)?.content == "identifiers" || value(e.to, "matching_hint") == JsonPrimitive(true)
         }
-        val newPerson = createObject("Person", buildJsonObject { if (unverified) put("card_metadata", buildJsonObject { put("legacy_unverified", true) }) })
-        val newName = createObject("Name", buildJsonObject { put("display", name.trim()) })
-        val ops = mutableListOf(newPerson, newName, createEdge("has_name", newPerson.target, newName.target, buildJsonObject { put("preferred", true) }), createEdge("distinct_person", person, newPerson.target))
+        val phones = attributions.map { associated.getValue(it) }.filter { it.type == "has_contact_point" && (value(it.to!!, "kind") as? JsonPrimitive)?.content == "phone" }
+        val unverified = phones.any(::legacyPhone)
+        require(phones.all { e ->
+            legacyPhone(e) || hasInternationalPrefix((value(e.to!!, "value") as? JsonPrimitive)?.content.orEmpty()) ||
+                (value(e.to, "region") as? JsonPrimitive)?.content?.isNotBlank() == true
+        }) { "Add the country code to this phone number in Edit details before moving it. Its current country would not safely follow it." }
+        val ops = mutableListOf<GraphOperation>()
+        val target = destination ?: run {
+            val newPerson = createObject("Person", buildJsonObject { if (unverified) put("card_metadata", buildJsonObject { put("legacy_unverified", true) }) })
+            val newName = createObject("Name", buildJsonObject { put("display", name.trim()) })
+            ops += listOf(newPerson, newName, createEdge("has_name", newPerson.target, newName.target, buildJsonObject { put("preferred", true) }))
+            newPerson.target
+        }
+        if (destination != null && unverified) {
+            require(!conflicted(destination, "card_metadata")) { "Resolve destination contact conflicts first" }
+            val metadata = (value(destination, "card_metadata") as? JsonObject).orEmpty()
+            ops += edit(destination, "card_metadata", JsonObject(metadata + ("legacy_unverified" to JsonPrimitive(true))))
+        }
+        ops += createEdge("distinct_person", person, target)
+        val attached = destinationMembers.flatMap { outgoing(it) + incoming(it).filter { (_, edge) -> edge.type == "participant" } }
+            .filter { (id, edge) -> active(id) && edge.type in Companion.attributions }
+            .map { (_, edge) -> edge.type to (if (edge.type == "participant") edge.from else edge.to) }.toMutableSet()
         attributions.forEach { id ->
             val edge = associated.getValue(id)
             val keys = propertyNames(id) + "_lifecycle"
             require(keys.none { conflicted(id, it) }) { "Resolve attribution conflicts before moving it" }
             val properties = JsonObject(keys.filter { it != "_lifecycle" }.associateWith { value(id, it)!! } + if (edge.type == "has_name") mapOf("preferred" to JsonPrimitive(false)) else emptyMap())
             ops.add(edit(id, "_lifecycle", JsonPrimitive("retracted")))
-            ops.add(createEdge(edge.type, if (edge.type != "participant") newPerson.target else edge.from!!, if (edge.type == "participant") newPerson.target else edge.to!!, properties))
+            if (attached.add(edge.type to (if (edge.type == "participant") edge.from else edge.to))) ops.add(createEdge(edge.type, if (edge.type != "participant") target else edge.from!!, if (edge.type == "participant") target else edge.to!!, properties))
         }
-        return GraphSplit(newPerson.target, ops, (associated.keys - attributions.toSet()).sorted())
+        return GraphSplit(target, ops, (associated.keys - attributions.toSet()).sorted())
     }
 }

@@ -4,6 +4,7 @@ import app.mypeople.ui.icons.*
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -55,6 +56,7 @@ private class PersonRows(
     val owner: Int,
     val events: List<Map.Entry<String, Event>> = emptyList(),
     val links: List<Profile> = emptyList(),
+    val selection: GraphSelection? = null,
     val failed: Boolean = false,
 )
 
@@ -67,13 +69,14 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
     val id = if (rememberedUid.isNotEmpty()) records.people.entries.firstOrNull { it.value.contact_uid == rememberedUid || rememberedUid in it.value.contact_aliases }?.key else routeId?.takeIf { it in records.people }
     val person = records.people[id]
     var detailAttempt by remember(id) { mutableIntStateOf(0) }
-    val loadedRows by produceState<PersonRows?>(null, DetailSource(records), id, detailAttempt) {
+    val loadedRows by produceState<PersonRows?>(null, DetailSource(records), id, detailAttempt, state.replicatedContacts) {
         value = null
         if (id != null && person != null) {
             try {
                 value = withContext(Dispatchers.IO) {
                     PersonRows(records, id, records.eventsFor(id).entries.toList(),
-                        records.profilesFor(id).values.filter { it.status == "confirmed" })
+                        records.profilesFor(id).values.filter { it.status == "confirmed" },
+                        selection = if (state.replicatedContacts) graph.store.associations(person.contact_uid) else null)
                 }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { value = PersonRows(records, id, failed = true) }
@@ -88,7 +91,13 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
     var evidenceKey by remember { mutableStateOf<String?>(null) }
     var forget by remember { mutableStateOf<String?>(null) }
     var merging by remember { mutableStateOf(false) }
-    var splitting by remember { mutableStateOf(false) }
+    var organizing by rememberSaveable(routeId) { mutableStateOf(false) }
+    var movingItem by remember(person?.contact_uid) { mutableStateOf<String?>(null) }
+    var moveSelection by remember(person?.contact_uid) { mutableStateOf<GraphSelection?>(null) }
+    var lastMove by remember(person?.contact_uid) { mutableStateOf<ContactMove?>(null) }
+    var moveMessage by remember { mutableStateOf<String?>(null) }
+    var undoing by remember { mutableStateOf(false) }
+    BackHandler(enabled = organizing) { organizing = false }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val list = rememberLazyListState()
@@ -98,19 +107,20 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
     Column {
         TopAppBar(windowInsets = WindowInsets(0, 0, 0, 0), colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface), title = {
             // The hero collapses into the top bar once it scrolls away.
-            AnimatedVisibility(collapsed && person != null, enter = fadeIn(KinMotion.effects()), exit = fadeOut(KinMotion.effects())) {
-                Text(person?.name.orEmpty(), style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            AnimatedVisibility((collapsed || organizing) && person != null, enter = fadeIn(KinMotion.effects()), exit = fadeOut(KinMotion.effects())) {
+                Text(if (organizing) "Edit contact" else person?.name.orEmpty(), style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }, navigationIcon = {
-            IconButton(onClick = onBack) { Icon(Symbols.ArrowBack, "Back") }
+            IconButton(onClick = { if (organizing) organizing = false else onBack() }) { Icon(Symbols.ArrowBack, "Back") }
         }, actions = {
             if (person != null && id != null) {
                 val favorite = person.card?.favorite == true
-                IconButton(onClick = { scope.launch { runCatching { graph.saveContact(person.contactCard().copy(favorite = !favorite), id, person.contact_uid, expectedPerson = person) }.onFailure { Toast.makeText(context, "Could not save favorite", Toast.LENGTH_SHORT).show() } } }) {
+                if (!organizing) IconButton(onClick = { scope.launch { runCatching { graph.saveContact(person.contactCard().copy(favorite = !favorite), id, person.contact_uid, expectedPerson = person) }.onFailure { Toast.makeText(context, "Could not save favorite", Toast.LENGTH_SHORT).show() } } }) {
                     Icon(if (favorite) Symbols.StarFilled else Symbols.Star, if (favorite) "Remove from favorites" else "Add to favorites", tint = if (favorite) LocalPersonPalette.current?.accent ?: LocalContentColor.current else LocalContentColor.current)
                 }
-                IconButton(onClick = { editContact = true }) { Icon(Symbols.Edit, "Edit contact") }
-                Box {
+                if (organizing) TextButton(onClick = { organizing = false }) { Text("Done") }
+                else IconButton(onClick = { if (state.replicatedContacts) organizing = true else editContact = true }, modifier = Modifier.testTag("edit-person")) { Icon(Symbols.Edit, "Edit contact") }
+                if (!organizing) Box {
                     IconButton(onClick = { menu = true }) { Icon(Symbols.MoreVert, "More options") }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         listOf("Rename", "Nicknames", "Add fact", "Add note", "Relationship settings").forEach { label ->
@@ -126,70 +136,125 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
         }
         val events = rows?.events.orEmpty()
         val profile = remember(rows) { currentProfile(events.map { it.value }) }
-        LazyColumn(state = list, modifier = Modifier.testTag("person-list"), contentPadding = PaddingValues(start = KinSpace.s4, end = KinSpace.s4, bottom = KinSpace.s8)) {
-            item { ContactHero(person, profile, graph) }
-            item { Box(Modifier.padding(top = KinSpace.s4)) { ContactActions(person, graph, edit = { editContact = true }) } }
+        val ownership = rows?.selection
+        fun reassignItem(row: GraphAssociation) { moveSelection = ownership; movingItem = row.id }
+        val identityRows = ownership?.associations.orEmpty().filter { it.kind == "has_contact_point" || it.isProfile }
+        val otherRows = ownership?.associations.orEmpty().filter { it.kind in setOf("has_note", "subject_of", "participant") && !it.isProfile }
+        moveMessage?.let { message ->
+                Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.padding(horizontal = KinSpace.s4, vertical = KinSpace.s2)) {
+                    Row(Modifier.fillMaxWidth().padding(KinSpace.s3), verticalAlignment = Alignment.CenterVertically) {
+                        Text(message, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                        lastMove?.let { receipt -> TextButton(enabled = !undoing, onClick = {
+                            undoing = true
+                            scope.launch {
+                                try { graph.store.undoContactMove(receipt); lastMove = null; moveMessage = "Move undone" }
+                                catch (e: CancellationException) { throw e }
+                                catch (e: Exception) { Toast.makeText(context, graph.editError(e), Toast.LENGTH_LONG).show() }
+                                finally { undoing = false }
+                            }
+                        }) { Text("Undo") } }
+                        TextButton(onClick = { lastMove = null; moveMessage = null }) { Text("Dismiss") }
+                    }
+                }
+        }
+        LazyColumn(state = list, modifier = Modifier.weight(1f).testTag("person-list"), contentPadding = PaddingValues(start = KinSpace.s4, end = KinSpace.s4, bottom = KinSpace.s8)) {
+            item {
+                if (organizing) Row(Modifier.fillMaxWidth().padding(vertical = KinSpace.s4), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(KinSpace.s3)) {
+                    Avatar(person, graph)
+                    Column(Modifier.weight(1f)) {
+                        Text(person.name, style = MaterialTheme.typography.titleLarge)
+                        Text("Details, accounts & memories", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else ContactHero(person, profile, graph)
+            }
+            if (!organizing) item { Box(Modifier.padding(top = KinSpace.s4)) { ContactActions(person, graph, edit = { editContact = true }) } }
             item {
                 FlowRow(Modifier.padding(top = KinSpace.s3), horizontalArrangement = Arrangement.spacedBy(KinSpace.s2)) {
-                    FilledTonalButton(onClick = { dialog = "Add note" }) { Icon(Icons.Outlined.EditNote, null, Modifier.size(18.dp)); Spacer(Modifier.width(KinSpace.s2)); Text("Add a note") }
-                    OutlinedButton(onClick = { dialog = "Add fact" }) { Icon(Icons.Outlined.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(KinSpace.s2)); Text("Add fact") }
+                    if (organizing) FilledTonalButton(onClick = { editContact = true }) { Icon(Symbols.Edit, null, Modifier.size(18.dp)); Spacer(Modifier.width(KinSpace.s2)); Text("Edit details") }
+                    if (!organizing) FilledTonalButton(onClick = { dialog = "Add note" }) { Icon(Icons.Outlined.EditNote, null, Modifier.size(18.dp)); Spacer(Modifier.width(KinSpace.s2)); Text("Add a note") }
+                    if (!organizing) OutlinedButton(onClick = { dialog = "Add fact" }) { Icon(Icons.Outlined.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(KinSpace.s2)); Text("Add fact") }
                     OutlinedButton(onClick = { merging = true }) { Text("Merge with…") }
-                    if (state.replicatedContacts) OutlinedButton(onClick = { splitting = true }) { Text("Separate person…") }
                 }
             }
-            item { ContactDetails(person, id, graph, edit = { editContact = true }) }
-            item { Section("Your relationship") }
-            item {
-                JournalCard {
-                    Column(Modifier.padding(KinSpace.s5), verticalArrangement = Arrangement.spacedBy(KinSpace.s3)) {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(KinSpace.s2), verticalArrangement = Arrangement.spacedBy(KinSpace.s2)) {
-                            MetaLabel(person.category.replaceFirstChar { it.uppercase() })
-                            if (person.muted) MetaLabel("Nudges muted")
+            if (organizing) {
+                item {
+                    Section("Numbers & accounts")
+                    Text("Not ${person.name}? Move an item to the right person.", Modifier.padding(bottom = KinSpace.s3), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (ownership == null) item {
+                    if (rows?.failed == true) TextButton(onClick = { detailAttempt++ }) { Text("Couldn't load contact items. Retry") }
+                    else Text("Loading contact items…")
+                }
+                if (ownership != null && identityRows.isEmpty()) item { Text("No numbers or accounts yet. Add them in Edit details.") }
+                items(identityRows, key = { "identity-${it.id}" }) { row -> ContactOwnershipRow(row) { reassignItem(row) } }
+                if (otherRows.isNotEmpty()) item { Section("Notes, facts & history") }
+                items(otherRows, key = { "ownership-${it.id}" }) { row -> ContactOwnershipRow(row) { reassignItem(row) } }
+            } else {
+                item { ContactDetails(person, id, graph, edit = { editContact = true }, reassign = { objectId: String ->
+                    ownership?.associations?.firstOrNull { it.objectId == objectId }?.let { reassignItem(it) }
+                    Unit
+                }.takeIf { ownership != null }) }
+                item { Section("Your relationship") }
+                item {
+                    JournalCard {
+                        Column(Modifier.padding(KinSpace.s5), verticalArrangement = Arrangement.spacedBy(KinSpace.s3)) {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(KinSpace.s2), verticalArrangement = Arrangement.spacedBy(KinSpace.s2)) {
+                                MetaLabel(person.category.replaceFirstChar { it.uppercase() })
+                                if (person.muted) MetaLabel("Nudges muted")
+                            }
+                            Text("Closeness · ${(person.closeness * 100).roundToInt()}%", style = MaterialTheme.typography.labelLarge)
+                            LinearProgressIndicator(progress = { person.closeness.toFloat().coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth(), color = LocalPersonPalette.current?.accent ?: MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+                            Text(person.cadence_days?.let { "Usually talk every ~${it.roundToInt()} days" } ?: "Still learning your rhythm", style = MaterialTheme.typography.bodyMedium)
+                            Text("Last contact · ${formatDate(person.last_contact?.take(10))}\nTrend · ${person.trend}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (person.channels.isNotEmpty()) Text(person.channels.joinToString(" · ") { "${it.channel} ${it.count}" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            TextButton(onClick = { dialog = "Relationship settings" }, contentPadding = PaddingValues(0.dp)) { Text("Adjust your rhythm") }
                         }
-                        Text("Closeness · ${(person.closeness * 100).roundToInt()}%", style = MaterialTheme.typography.labelLarge)
-                        LinearProgressIndicator(progress = { person.closeness.toFloat().coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth(), color = LocalPersonPalette.current?.accent ?: MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-                        Text(person.cadence_days?.let { "Usually talk every ~${it.roundToInt()} days" } ?: "Still learning your rhythm", style = MaterialTheme.typography.bodyMedium)
-                        Text("Last contact · ${formatDate(person.last_contact?.take(10))}\nTrend · ${person.trend}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        if (person.channels.isNotEmpty()) Text(person.channels.joinToString(" · ") { "${it.channel} ${it.count}" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        TextButton(onClick = { dialog = "Relationship settings" }, contentPadding = PaddingValues(0.dp)) { Text("Adjust your rhythm") }
                     }
                 }
-            }
-            val links = rows?.links.orEmpty()
-            if (links.isNotEmpty()) {
-                item { Section("Around the web") }
-                itemsIndexed(links, key = { _, link -> link.url }) { index, link ->
-                    Surface(onClick = { openLink(context, link.url) }, modifier = Modifier.fillMaxWidth().padding(bottom = KinSpace.half), shape = segmentShape(index, links.size), color = journalSurfaceColor()) {
-                        Column(Modifier.padding(KinSpace.s4), verticalArrangement = Arrangement.spacedBy(KinSpace.s1)) {
-                            Text(link.site, style = MaterialTheme.typography.titleMedium)
-                            Text(link.url, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                            Text("Confirmed by you", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                val links = rows?.links.orEmpty()
+                if (links.isNotEmpty()) {
+                    item { Section("Around the web") }
+                    itemsIndexed(links, key = { _, link -> link.url }) { index, link ->
+                        Surface(onClick = { openLink(context, link.url) }, modifier = Modifier.fillMaxWidth().padding(bottom = KinSpace.half), shape = segmentShape(index, links.size), color = journalSurfaceColor()) {
+                            Column(Modifier.padding(KinSpace.s4), verticalArrangement = Arrangement.spacedBy(KinSpace.s1)) {
+                                Text(link.site, style = MaterialTheme.typography.titleMedium)
+                                Text(link.url, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                Text("Confirmed profile", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                ownership?.associations?.firstOrNull { it.isProfile && it.url == link.url }?.let { row ->
+                                    TextButton(onClick = { reassignItem(row) }) { Text("Belongs to someone else…") }
+                                }
+                            }
                         }
                     }
                 }
-            }
-            item {
-                Section("Notes and facts")
-                Text("Tap one to see where it came from.", Modifier.padding(bottom = KinSpace.s3), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (rows == null) item {
-                Text("Loading notes and facts…", Modifier.padding(vertical = KinSpace.s4), style = MaterialTheme.typography.bodyMedium)
-            } else if (rows.failed) item {
-                Column {
-                    Text("Notes and links could not be loaded. Your saved data has not been changed.")
-                    TextButton(onClick = { detailAttempt++ }) { Text("Retry") }
+                item {
+                    Section("Notes and facts")
+                    Text("Tap one to see where it came from.", Modifier.padding(bottom = KinSpace.s3), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-            } else if (events.isEmpty()) item {
-                Text("Nothing yet. Add a note or a fact from the menu.", Modifier.padding(vertical = KinSpace.s4), style = MaterialTheme.typography.bodyMedium)
-            }
-            itemsIndexed(events, key = { _, entry -> entry.key }) { index, (eventId, event) ->
-                Surface(Modifier.padding(bottom = KinSpace.half), shape = segmentShape(index, events.size), color = journalSurfaceColor()) {
-                    Column(Modifier.fillMaxWidth().combinedClickable(onClickLabel = "View where it came from", onLongClickLabel = if (event.isNote) "Forget note" else "Forget fact", onClick = { evidenceKey = eventId; evidence = event }, onLongClick = { if (!eventId.startsWith("-")) forget = eventId }).padding(KinSpace.s4), verticalArrangement = Arrangement.spacedBy(KinSpace.s2)) {
-                        Text(formatDate(event.date), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(event.value, style = MaterialTheme.typography.bodyLarge)
-                        Row(horizontalArrangement = Arrangement.spacedBy(KinSpace.s2), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(if (event.isManual) Icons.Outlined.Edit else Icons.Outlined.FormatQuote, null, Modifier.size(16.dp), tint = LocalPersonPalette.current?.accent ?: MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("${if (event.isNote) "" else "${event.type} · "}${event.origin}${if (eventId.startsWith("-")) " · Not yet on your Mac" else ""}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (rows == null) item {
+                    Text("Loading notes and facts…", Modifier.padding(vertical = KinSpace.s4), style = MaterialTheme.typography.bodyMedium)
+                } else if (rows.failed) item {
+                    Column {
+                        Text("Notes and links could not be loaded. Your saved data has not been changed.")
+                        TextButton(onClick = { detailAttempt++ }) { Text("Retry") }
+                    }
+                } else if (events.isEmpty()) item {
+                    Text("Nothing yet. Add a note or a fact from the menu.", Modifier.padding(vertical = KinSpace.s4), style = MaterialTheme.typography.bodyMedium)
+                }
+                itemsIndexed(events, key = { _, entry -> entry.key }) { index, (eventId, event) ->
+                    Surface(Modifier.padding(bottom = KinSpace.half), shape = segmentShape(index, events.size), color = journalSurfaceColor()) {
+                        Column(Modifier.fillMaxWidth().combinedClickable(onClickLabel = "View where it came from", onLongClickLabel = if (event.isNote) "Forget note" else "Forget fact", onClick = { evidenceKey = eventId; evidence = event }, onLongClick = { if (!eventId.startsWith("-")) forget = eventId }).padding(KinSpace.s4), verticalArrangement = Arrangement.spacedBy(KinSpace.s2)) {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text(formatDate(event.date), Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                ownership?.associations?.firstOrNull { it.objectId == eventId }?.let { row ->
+                                    TextButton(onClick = { reassignItem(row) }) { Text("Not this person…") }
+                                }
+                            }
+                            Text(event.value, style = MaterialTheme.typography.bodyLarge)
+                            Row(horizontalArrangement = Arrangement.spacedBy(KinSpace.s2), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(if (event.isManual) Icons.Outlined.Edit else Icons.Outlined.FormatQuote, null, Modifier.size(16.dp), tint = LocalPersonPalette.current?.accent ?: MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("${if (event.isNote) "" else "${event.type} · "}${event.origin}${if (eventId.startsWith("-")) " · Not yet on your Mac" else ""}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     }
                 }
@@ -210,7 +275,13 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
                 if (evidenceKey != null) TextButton(onClick = { forget = evidenceKey; evidence = null }) { Text(if (event.isNote) "Forget note" else "Forget fact", color = MaterialTheme.colorScheme.error) }
             })
         }
-        if (splitting) SplitContactDialog(person, graph, close = { splitting = false }, opened = { uid -> rememberedUid = uid; splitting = false })
+        movingItem?.let { anchorId -> moveSelection?.takeIf { selection -> selection.associations.any { it.id == anchorId } }?.let { selection ->
+            MoveContactItemsSheet(person, selection, anchorId, graph, close = { movingItem = null }, moved = { receipt, name ->
+                lastMove = receipt
+                moveMessage = "Moved to $name"
+                movingItem = null
+            })
+        } }
         if (merging) MergeWithDialog(id, records, graph, onClose = { merging = false }, onMerged = { merging = false; onBack() })
         forget?.let { eventId ->
             AlertDialog(onDismissRequest = { forget = null }, title = { Text("Forget this?") }, text = { Text("It stays forgotten on your other devices after you next sync. Adding it again brings it back.") },

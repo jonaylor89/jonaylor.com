@@ -20,8 +20,20 @@ data class GraphBundle(val collection: String, val heads: List<String> = emptyLi
 @Serializable
 data class GraphState(val bundle: GraphBundle, val peer: String = UUID.randomUUID().toString(), val localIds: Map<String, Int> = emptyMap(), val remoteHeads: List<String> = emptyList())
 
-data class GraphAssociation(val id: String, val kind: String, val label: String, val objectId: String)
-data class GraphSelection(val uid: String, val heads: List<String>, val associations: List<GraphAssociation>)
+data class GraphAssociation(val id: String, val kind: String, val label: String, val objectId: String, val contactPoints: Set<String> = emptySet(), val detail: String = "", val url: String? = null, val isProfile: Boolean = false, val evidenceAnchors: Set<String> = emptySet())
+data class GraphSelection(val uid: String, val heads: List<String>, val associations: List<GraphAssociation>) {
+    fun movingWith(anchor: String): Set<String> {
+        val row = associations.single { it.id == anchor }
+        return setOf(anchor) + suggested(setOf(anchor)) + associations.filter {
+            it.id != anchor && it.evidenceAnchors == setOf(row.objectId)
+        }.map { it.id }
+    }
+
+    /** Only suggest data whose entire known provenance belongs to the selected points. */
+    fun suggested(points: Set<String>): Set<String> = associations.filter {
+        it.kind != "has_contact_point" && it.contactPoints.isNotEmpty() && points.containsAll(it.contactPoints)
+    }.map { it.id }.toSet()
+}
 
 /** Graph is the authority; integer ids exist only for the current native screens. */
 class GraphStore(val state: GraphState, private val timing: (String, Long) -> Unit = { _, _ -> }) {
@@ -114,22 +126,67 @@ class GraphStore(val state: GraphState, private val timing: (String, Long) -> Un
         val members = membersByPerson[uid] ?: listOf(uid)
         return members.flatMap { outgoing(it).filter { edge -> edge.second.type in VersionedGraph.attributions && edge.second.type != "participant" } + incoming(it).filter { edge -> edge.second.type == "participant" } }.distinctBy { it.first }.sortedWith(compareBy<Pair<String, GraphEntity>> { (graph.value(it.first, "card_order") as? JsonPrimitive)?.intOrNull ?: 1_000_000 }.thenBy { it.first })
     }
-    fun selection(uid: String) = GraphSelection(uid, graph.heads, associated(uid).map { (id, e) ->
-        val obj = if (e.type == "participant") e.from!! else e.to!!
-        val label = when (graph.objects[obj]?.type) {
-            "Name" -> text(obj, "display")
-            "ContactPoint" -> "${text(obj, "kind")}: ${text(obj, "value")} ${text(obj, "label")}".trim()
-            "Claim" -> "${text(obj, "predicate")}: ${text(obj, "value")}"
-            "Note" -> text(obj, "body")
-            "InteractionBatch" -> listOf("${text(obj, "count")} messages", text(obj, "channel"), text(obj, "thread").takeIf { it.isNotBlank() }?.let { "Thread: $it" }.orEmpty(), text(obj, "first_at"), text(obj, "last_at")).filter { it.isNotBlank() }.joinToString(" · ")
-            "Interaction" -> {
-                val conversation = outgoing(obj).firstOrNull { it.second.type == "in_conversation" }?.second?.to
-                listOf(text(obj, "channel"), text(obj, "at").ifBlank { text(obj, "timestamp").ifBlank { text(obj, "date") } }, text(obj, "direction"), conversation?.let { "Thread: ${text(it, "external_key")}" }.orEmpty(), text(obj, "text").ifBlank { text(obj, "snippet") }).filter { it.isNotBlank() }.joinToString(" · ")
+    fun selection(uid: String): GraphSelection {
+        val associations = associated(uid).filter { (_, e) -> graph.active(if (e.type == "participant") e.from!! else e.to!!) }
+        // Follow evidence toward its sources, never through a person, conversation or
+        // processing run: those may contain unrelated contacts. Keep unmatched source
+        // leaves too, so mixed evidence cannot silently become an exclusive match.
+        fun sources(obj: String, stopAtEvidence: Boolean = false): Set<String> {
+            val seen = mutableSetOf<String>()
+            val leaves = mutableSetOf<String>()
+            val pending = java.util.ArrayDeque<String>()
+            pending.add(obj)
+            while (pending.isNotEmpty()) {
+                val current = pending.removeLast()
+                if (!seen.add(current)) continue
+                if (stopAtEvidence && graph.objects[current]?.type in setOf("ContactPoint", "Note", "Interaction", "InteractionBatch")) {
+                    leaves += current
+                    continue
+                }
+                val next = outgoing(current).filter { (_, edge) ->
+                    edge.type in setOf("originated_from", "supported_by", "contradicted_by", "drawn_from") && graph.active(edge.to!!)
+                }.map { it.second.to!! }
+                if (next.isEmpty()) leaves += current else pending.addAll(next)
             }
-            else -> properties(obj).toString()
+            return leaves
         }
-        GraphAssociation(id, e.type, label, obj)
-    })
+        val pointSources = associations.filter { it.second.type == "has_contact_point" }.associate { (id, e) ->
+            // A legacy person snapshot can already contain several people's data.
+            // Sharing that card is not proof that a fact came from its phone number.
+            id to sources(e.to!!).filterNot { graph.objects[it]?.type == "SourceRecord" && text(it, "table") == "people" }.toSet()
+        }
+        val displayName = primaryName(uid)?.let { text(it, "display") }.orEmpty()
+        return GraphSelection(uid, graph.heads, associations.map { (id, e) ->
+            val obj = if (e.type == "participant") e.from!! else e.to!!
+            val owner = if (e.type == "participant") e.to!! else e.from!!
+            val metadata = graph.value(owner, "card_metadata") as? JsonObject
+            val sourceRecords = ((graph.value(owner, "source_records") ?: metadata?.get("source_records")) as? JsonArray).orEmpty()
+                .mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+            val presentation = splitPresentation(graph.objects[obj]?.type.orEmpty(), properties(obj), sourceRecords)
+            val label = presentation?.label ?: when (graph.objects[obj]?.type) {
+                "Name" -> text(obj, "display")
+                "ContactPoint" -> "${text(obj, "kind")}: ${text(obj, "value")} ${text(obj, "label")}".trim()
+                "Claim" -> "${text(obj, "predicate")}: ${text(obj, "value")}"
+                "Note" -> text(obj, "body")
+                "Asset" -> listOf(text(obj, "role").replace('_', ' ').ifBlank { "Photo or attachment" }, text(obj, "filename"), text(obj, "caption")).filter { it.isNotBlank() }.joinToString(" · ")
+                "RelationshipPreferences" -> listOf("Contact preferences", text(obj, "category"), text(obj, "region").takeIf { it.isNotBlank() }?.let { "Country: $it" }.orEmpty(), text(obj, "preferred_channel"), "Favorite".takeIf { text(obj, "favorite") == "true" }.orEmpty(), "Nudges muted".takeIf { text(obj, "muted") == "true" }.orEmpty()).filter { it.isNotBlank() }.joinToString(" · ")
+                "InteractionBatch" -> listOf("${text(obj, "count")} messages", text(obj, "channel"), text(obj, "thread").takeIf { it.isNotBlank() }?.let { "Thread: $it" }.orEmpty(), text(obj, "first_at"), text(obj, "last_at")).filter { it.isNotBlank() }.joinToString(" · ")
+                "Interaction" -> {
+                    val conversation = outgoing(obj).firstOrNull { it.second.type == "in_conversation" }?.second?.to
+                    listOf(text(obj, "channel"), text(obj, "at").ifBlank { text(obj, "timestamp").ifBlank { text(obj, "date") } }, text(obj, "direction"), conversation?.let { "Thread: ${text(it, "external_key")}" }.orEmpty(), text(obj, "text").ifBlank { text(obj, "snippet") }).filter { it.isNotBlank() }.joinToString(" · ")
+                }
+                else -> properties(obj).toString()
+            }
+            val provenance = sources(obj)
+            val related = pointSources.filterValues { roots -> roots.any { it in provenance } }
+            val fullyLinked = provenance.isNotEmpty() && related.values.flatten().toSet().containsAll(provenance)
+            val originalNames = outgoing(owner).filter { (_, edge) -> edge.type == "has_name" && graph.active(edge.to!!) }
+                .map { text(it.second.to!!, "display") }.filter { it.isNotBlank() }.distinct()
+            val context = if (presentation != null && originalNames.any { it != displayName }) "Contact context: ${originalNames.joinToString(" · ")}" else ""
+            val detail = listOf(presentation?.detail.orEmpty(), context).filter { it.isNotBlank() }.joinToString("\n")
+            GraphAssociation(id, e.type, label, obj, if (fullyLinked) related.keys else emptySet(), detail, presentation?.url, text(obj, "predicate") == "public_profile", sources(obj, stopAtEvidence = true))
+        })
+    }
     fun commit(ops: List<GraphOperation>, blobs: Map<String, String> = emptyMap()): GraphState {
         if (ops.isEmpty()) return state
         val c = graph.commit(state.peer, ops, state.bundle.collection)

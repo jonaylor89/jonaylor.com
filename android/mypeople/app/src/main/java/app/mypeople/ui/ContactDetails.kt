@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import app.mypeople.AppGraph
 import app.mypeople.data.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -113,38 +114,45 @@ fun ContactActions(person: Person, graph: AppGraph, edit: () -> Unit) {
 }
 
 private val KindOrder = listOf("phone", "email", "address", "website")
+private data class ContactDetailDeletion(val person: Person, val field: ContactField, val copies: Int)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun InfoRow(icon: ImageVector, value: String, label: String, shape: androidx.compose.ui.graphics.Shape, onClick: (() -> Unit)?, trailing: Pair<String, ImageVector>? = null, onTrailing: () -> Unit = {}) {
+private fun InfoRow(icon: ImageVector, value: String, label: String, shape: androidx.compose.ui.graphics.Shape, onClick: (() -> Unit)?, trailing: Pair<String, ImageVector>? = null, onTrailing: () -> Unit = {}, onReassign: (() -> Unit)? = null, onDelete: (() -> Unit)? = null) {
     val context = LocalContext.current
     var menu by remember { mutableStateOf(false) }
     fun copy() { (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Contact detail", value)); Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show() }
     Surface(Modifier.fillMaxWidth(), shape = shape, color = journalSurfaceColor()) {
         Box {
-            Row(Modifier.fillMaxWidth().combinedClickable(onClickLabel = label, onLongClickLabel = "Copy or share", onClick = { onClick?.invoke() ?: copy() }, onLongClick = { menu = true }).heightIn(min = KinSize.rowTwoLine).padding(start = KinSpace.s4, end = if (trailing != null) KinSpace.s1 else KinSpace.s4, top = KinSpace.s3, bottom = KinSpace.s3), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(KinSpace.s4)) {
+            Row(Modifier.fillMaxWidth().combinedClickable(onClickLabel = label, onLongClickLabel = "Contact detail options", onClick = { onClick?.invoke() ?: copy() }, onLongClick = { menu = true }).heightIn(min = KinSize.rowTwoLine).padding(start = KinSpace.s4, end = if (trailing != null || onReassign != null || onDelete != null) KinSpace.s1 else KinSpace.s4, top = KinSpace.s3, bottom = KinSpace.s3), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(KinSpace.s4)) {
                 Icon(icon, null, tint = LocalPersonPalette.current?.accent ?: MaterialTheme.colorScheme.primary)
                 Column(Modifier.weight(1f)) {
                     Text(value, style = MaterialTheme.typography.bodyLarge)
                     if (label.isNotEmpty()) Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (trailing != null) IconButton(onClick = onTrailing) { Icon(trailing.second, trailing.first, tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                if (onReassign != null || onDelete != null) IconButton(onClick = { menu = true }) { Icon(Symbols.MoreVert, "Options for $value", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                if (onReassign != null) DropdownMenuItem(text = { Text("Belongs to someone else…") }, onClick = { menu = false; onReassign() })
                 DropdownMenuItem(text = { Text("Copy") }, leadingIcon = { Icon(Symbols.ContentCopy, null) }, onClick = { menu = false; copy() })
                 DropdownMenuItem(text = { Text("Share") }, leadingIcon = { Icon(Symbols.Share, null) }, onClick = { menu = false; context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, value), "Share detail")) })
+                if (onDelete != null) DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) }, leadingIcon = { Icon(Symbols.Delete, null, tint = MaterialTheme.colorScheme.error) }, onClick = { menu = false; onDelete() })
             }
         }
     }
 }
 
 @Composable
-fun ContactDetails(person: Person, id: Int, graph: AppGraph, edit: () -> Unit) {
+fun ContactDetails(person: Person, id: Int, graph: AppGraph, reassign: ((String) -> Unit)? = null, edit: () -> Unit) {
     val context = LocalContext.current; val scope = rememberCoroutineScope()
     val card = person.contactCard()
     val reach = remember(card) { Reach(context, card, edit) }
     var trash by remember { mutableStateOf(false) }
     var undo by remember { mutableStateOf(false) }
+    var deleting by remember(person.contact_uid) { mutableStateOf<ContactDetailDeletion?>(null) }
+    var deletingNow by remember { mutableStateOf(false) }
+    var deleteError by remember { mutableStateOf<String?>(null) }
     val (phoneState, retryPhones) = rememberContactPhonePreview(person, graph)
     val phonePreview = phoneState.preview
     Column(verticalArrangement = Arrangement.spacedBy(KinSpace.s3)) {
@@ -179,12 +187,17 @@ fun ContactDetails(person: Person, id: Int, graph: AppGraph, edit: () -> Unit) {
                 phonePreview?.numbers.orEmpty().map { number -> number.representative.copy(value = number.number, label = number.labels.joinToString(" / ")) to number.entries }
             displayFields.sortedWith(compareBy<Pair<ContactField, Int>> { KindOrder.indexOf(it.first.kind).let { i -> if (i < 0) KindOrder.size else i } }.thenByDescending { it.first.preferred }).forEach { (f, copies) ->
                 val label = listOf(f.label.ifEmpty { f.kind.replaceFirstChar { it.uppercase() } }, if (f.preferred) "Default" else "", if (copies > 1) "$copies saved copies" else "").filter { it.isNotEmpty() }.joinToString(" · ")
+                val correction: (() -> Unit)? = if (f.object_id.isNotBlank() && reassign != null) ({ reassign(f.object_id) }) else null
+                val deletion: (() -> Unit)? = if (!person.trashed && f.object_id.isNotBlank()) ({
+                    deleting = ContactDetailDeletion(person, card.fields.first { it.object_id == f.object_id }, copies)
+                    deleteError = null
+                }) else null
                 when (f.kind) {
-                    "phone" -> add { shape -> InfoRow(Symbols.Call, phoneDisplay(f.value), label, shape, onClick = { reach.call(f) }, trailing = "Message" to Symbols.Chat, onTrailing = { reach.text(f) }) }
-                    "email" -> add { shape -> InfoRow(Symbols.Mail, f.value, label, shape, onClick = { reach.email(f) }) }
-                    "address" -> add { shape -> InfoRow(Symbols.Home, f.value, label, shape, onClick = null, trailing = "Directions" to Symbols.Directions, onTrailing = { reach.map(f) }) }
-                    "website" -> add { shape -> InfoRow(Symbols.Link, f.value, label, shape, onClick = { openLink(context, f.value) }) }
-                    else -> add { shape -> InfoRow(Symbols.Notes, f.value, label, shape, onClick = null) }
+                    "phone" -> add { shape -> InfoRow(Symbols.Call, phoneDisplay(f.value), label, shape, onClick = { reach.call(f) }, trailing = "Message" to Symbols.Chat, onTrailing = { reach.text(f) }, onReassign = correction, onDelete = deletion) }
+                    "email" -> add { shape -> InfoRow(Symbols.Mail, f.value, label, shape, onClick = { reach.email(f) }, onReassign = correction, onDelete = deletion) }
+                    "address" -> add { shape -> InfoRow(Symbols.Home, f.value, label, shape, onClick = null, trailing = "Directions" to Symbols.Directions, onTrailing = { reach.map(f) }, onReassign = correction, onDelete = deletion) }
+                    "website" -> add { shape -> InfoRow(Symbols.Link, f.value, label, shape, onClick = { openLink(context, f.value) }, onReassign = correction, onDelete = deletion) }
+                    else -> add { shape -> InfoRow(Symbols.Notes, f.value, label, shape, onClick = null, onReassign = correction, onDelete = deletion) }
                 }
             }
             if (card.organization.isNotBlank() || card.title.isNotBlank()) add { shape -> InfoRow(Symbols.Group, listOf(card.title, card.organization).filter { it.isNotBlank() }.joinToString(" · "), "Work", shape, onClick = null) }
@@ -207,6 +220,29 @@ fun ContactDetails(person: Person, id: Int, graph: AppGraph, edit: () -> Unit) {
             if (person.trashed) TextButton(onClick = { graph.edit("contact_restore", buildJsonObject { put("person_id", id) }) }) { Text("Restore") }
             else TextButton(onClick = { trash = true }) { Text("Move to trash", color = MaterialTheme.colorScheme.error) }
         }
+    }
+    deleting?.let { request ->
+        AlertDialog(onDismissRequest = { if (!deletingNow) deleting = null }, title = { Text(if (request.copies > 1) "Delete one saved copy?" else "Delete this detail?") }, text = {
+            Column(verticalArrangement = Arrangement.spacedBy(KinSpace.s3)) {
+                Text(request.field.value, style = MaterialTheme.typography.bodyLarge)
+                if (request.field.label.isNotBlank()) Text(request.field.label, style = MaterialTheme.typography.bodySmall)
+                Text(if (request.copies > 1) "This row has ${request.copies} saved copies. Only this copy will be removed from ${request.person.name}; ${request.copies - 1} will remain. Facts and messages won't be deleted."
+                    else "Remove this detail from ${request.person.name}? Facts, messages and other contacts won't be deleted.")
+                deleteError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            }
+        }, confirmButton = {
+            TextButton(enabled = !deletingNow, onClick = {
+                deletingNow = true
+                scope.launch {
+                    try {
+                        graph.store.deleteContactField(request.person, request.field.object_id)
+                        deleting = null
+                    } catch (e: CancellationException) { throw e }
+                    catch (e: Exception) { deleteError = graph.editError(e) }
+                    finally { deletingNow = false }
+                }
+            }) { Text(if (deletingNow) "Deleting…" else "Delete", color = MaterialTheme.colorScheme.error) }
+        }, dismissButton = { TextButton(enabled = !deletingNow, onClick = { deleting = null }) { Text("Cancel") } })
     }
     if (trash) AlertDialog(onDismissRequest = { trash = false }, title = { Text("Move ${person.name} to trash?") }, text = { Text("Hidden from your address book and removed from the MyPeople Android account. Other accounts aren't changed. You can restore them from People → Trash.") }, confirmButton = { TextButton(onClick = { graph.edit("contact_trash", buildJsonObject { put("person_id", id) }); trash = false }) { Text("Move to trash") } }, dismissButton = { TextButton(onClick = { trash = false }) { Text("Cancel") } })
     if (undo) AlertDialog(onDismissRequest = { undo = false }, title = { Text("Undo last merge?") }, text = { Text("Your Mac restores the separate records only if they haven't changed since merging. Otherwise it refuses rather than overwrite newer edits.") }, confirmButton = { TextButton(onClick = { graph.edit("merge_undo", buildJsonObject { put("person_id", id) }); undo = false }) { Text("Queue undo") } }, dismissButton = { TextButton(onClick = { undo = false }) { Text("Cancel") } })

@@ -16,6 +16,9 @@ import java.util.UUID
 @Serializable
 data class Notice(val id: String = UUID.randomUUID().toString(), val message: String)
 
+/** In-session undo is safe only while this exact graph frontier is still current. */
+internal data class ContactMove(val destinationUid: String, val heads: List<String>, val undo: List<GraphOperation>)
+
 @Serializable
 data class DiskState(
     val records: Records = Records(),
@@ -365,6 +368,17 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
             disk.graph?.let { GraphStore(it).phonePreview(person) } ?: person.phonePreview()
         }
     }
+    /** Remove only this contact's links to one saved field. Shared objects and evidence survive. */
+    internal suspend fun deleteContactField(expectedPerson: Person, objectId: String) = locked {
+        val person = current().people.values.firstOrNull { it.contact_uid == expectedPerson.contact_uid }
+        require(person != null && sameContactVersion(person, expectedPerson) && person.contact_aliases == expectedPerson.contact_aliases && person.contact_conflicts == expectedPerson.contact_conflicts) { "This contact changed. Reopen its details before deleting." }
+        require(!person.trashed && objectId.isNotBlank() && person.contactFields().any { it.object_id == objectId }) { "This saved detail is no longer available." }
+        val gs = GraphStore(requireNotNull(disk.graph))
+        val edges = gs.associated(person.contact_uid).filter { (_, edge) -> edge.type == "has_contact_point" && edge.to == objectId }.map { it.first }
+        require(edges.isNotEmpty() && edges.none { gs.graph.conflicted(it, "_lifecycle") }) { "This detail changed. Reopen it before deleting." }
+        saveGraph(gs.commit(edges.map { gs.graph.edit(it, "_lifecycle", JsonPrimitive("retracted")) }))
+    }
+
     internal suspend fun cleanDuplicatePhoneFields(id: Int, expectedPerson: Person): Int = locked {
         val person = current().people[id]
         require(sameContactVersion(person, expectedPerson) && person != null && person.contact_aliases == expectedPerson.contact_aliases && person.contact_conflicts == expectedPerson.contact_conflicts && person.canCleanDuplicatePhones()) { "Contact changed or a detail needs a choice; preview again." }
@@ -425,6 +439,36 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
         saveGraph(gs.commit(split.operations))
         disk.graph!!.localIds.getValue(split.person)
     }
+    internal suspend fun moveContactItems(selection: GraphSelection, edges: Set<String>, destination: String? = null, name: String = ""): ContactMove = locked {
+        val gs = GraphStore(requireNotNull(disk.graph))
+        require(selection.heads == gs.graph.heads) { "This contact changed. Close this sheet and review it again." }
+        require(edges.isNotEmpty() && edges.all { edge -> selection.associations.any { it.id == edge } }) { "Choose items from this contact." }
+        val plan = gs.graph.move(selection.uid, edges.sorted(), destination, name)
+        val next = gs.commit(plan.operations)
+        val after = GraphStore(next).graph
+        val createdNames = plan.operations.filter { it.kind == "create_object" && it.payload.text("type") == "Name" }.map { it.target }.toSet()
+        // Keep the new contact's name when undo puts its empty shell in trash.
+        val inverse = plan.operations.asReversed().filterNot {
+            it.target in createdNames || (it.kind == "create_edge" && it.payload.text("type") == "has_name" && it.payload.text("to") in createdNames)
+        }.map { op ->
+            when (op.kind) {
+                "create_object", "create_edge" -> after.edit(op.target, "_lifecycle", JsonPrimitive(if (op.payload.text("type") == "Person") "trashed" else "retracted"))
+                else -> {
+                    val property = if (op.kind == "set_lifecycle") "_lifecycle" else op.payload.text("property")
+                    after.edit(op.target, property, gs.graph.value(op.target, property) ?: JsonNull)
+                }
+            }
+        }
+        saveGraph(next)
+        ContactMove(plan.person, after.heads, inverse)
+    }
+
+    internal suspend fun undoContactMove(move: ContactMove) = locked {
+        val gs = GraphStore(requireNotNull(disk.graph))
+        require(gs.graph.heads == move.heads) { "Contacts changed since this move. Undo is no longer safe; move the items back instead." }
+        saveGraph(gs.commit(move.undo))
+    }
+
     suspend fun resolveGraph(target: String, property: String, operation: String) = locked {
         val gs = GraphStore(requireNotNull(disk.graph))
         val choice = gs.graph.alternatives(target, property).firstOrNull { it.operation == operation }?.value
