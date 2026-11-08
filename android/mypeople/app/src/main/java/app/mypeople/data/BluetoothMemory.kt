@@ -18,7 +18,6 @@ import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.coroutineContext
 
@@ -81,13 +80,13 @@ class BluetoothMemory(private val context: Context, private val files: OfflineFi
                 }
             }
         }, 10, 10, TimeUnit.SECONDS)
-        val deadline = AtomicLong(System.nanoTime() + TimeUnit.SECONDS.toNanos(60))
-        val watchdog = timer.scheduleAtFixedRate({ if (System.nanoTime() > deadline.get()) runCatching { socket.close() } }, 1, 1, TimeUnit.SECONDS)
+        val deadline = BluetoothDeadline()
+        val watchdog = timer.scheduleAtFixedRate({ if (deadline.expired()) runCatching { socket.close() } }, 1, 1, TimeUnit.SECONDS)
         val temp = File.createTempFile("bluetooth-memory-", ".sherloq", context.cacheDir)
         val jobContext = coroutineContext
         fun heartbeat() {
             jobContext.ensureActive()
-            deadline.set(System.nanoTime() + TimeUnit.SECONDS.toNanos(60))
+            deadline.progress()
         }
         try {
             progress(BluetoothProgress(BluetoothPhase.CONNECTING))
@@ -103,7 +102,7 @@ class BluetoothMemory(private val context: Context, private val files: OfflineFi
                 }
                 progress(BluetoothProgress(BluetoothPhase.WAITING_FOR_MAC))
                 // An older queued request may take time. This phase is explicit, not an endless Connecting label.
-                deadline.set(System.nanoTime() + TimeUnit.MINUTES.toNanos(20))
+                deadline.waitingForMac()
             }
             val digest = FileOutputStream(temp).use { output ->
                 val hash = BluetoothWire.readSnapshot(socket.inputStream, output, ::heartbeat) { done, size ->
@@ -113,14 +112,14 @@ class BluetoothMemory(private val context: Context, private val files: OfflineFi
                 hash
             }
             progress(BluetoothProgress(BluetoothPhase.IMPORTING))
-            deadline.set(System.nanoTime() + TimeUnit.MINUTES.toNanos(2))
+            deadline.importing()
             jobContext.ensureActive()
             // This is the only acknowledgment point: records + receipt results + queue commit atomically.
             importing.set(true)
             try { files.importMemory(Uri.fromFile(temp), offer.passphrase, expectedSource = offer.source) }
             finally { importing.set(false) }
             progress(BluetoothProgress(BluetoothPhase.CONFIRMING))
-            deadline.set(System.nanoTime() + TimeUnit.SECONDS.toNanos(15))
+            deadline.confirming()
             val confirmed = runCatching {
                 synchronized(outputLock) { BluetoothWire.acknowledge(socket.outputStream, offer.version, digest) }
                 if (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) android.util.Log.i("MyPeopleBluetooth", "ack_written")

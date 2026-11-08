@@ -105,12 +105,24 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
         }
         return history
     }
+    private fun changedHintTargets(previous: Records?, next: Records): Set<String>? {
+        if (previous === next) return emptySet()
+        fun hintsOnly(records: Records) = records.events.isEmpty() && records.profiles.isEmpty() && records.moments.isEmpty() &&
+            records.dupes.isEmpty() && records.contactChanges.isEmpty() && records.people.values.all { it.name.isEmpty() && it.card == null && it.identifiers.isEmpty() }
+        if (previous == null || !hintsOnly(previous) || !hintsOnly(next)) return null
+        return (previous.people.keys + next.people.keys).filter { previous.people[it] != next.people[it] }.flatMap { id ->
+            listOfNotNull(previous.people[id], next.people[id]).flatMap { listOf(it.contact_uid) + it.contact_aliases }
+        }.filter { it.isNotEmpty() }.toSet()
+    }
     private fun current(): Records {
         if (viewRecords !== disk.records || viewPending !== disk.pending || viewReplica !== disk.replica || viewGraph !== disk.graph) {
             val base = optimistic(disk.records, disk.pending)
             view = disk.graph?.let { next ->
                 val gs = GraphStore(next)
                 val previous = viewGraph
+                if (previous != null && previous.bundle.collection == next.bundle.collection &&
+                    previous.bundle.heads == next.bundle.heads && previous.localIds == next.localIds &&
+                    viewRecords === disk.records && viewPending === disk.pending) return@let view
                 val oldIds = previous?.bundle?.commits.orEmpty().map { it.id }.toSet()
                 val replaced = !next.bundle.commits.map { it.id }.toSet().containsAll(oldIds)
                 val changed = previous == null || replaced || previous.bundle.collection != next.bundle.collection || next.bundle.commits.filterNot { it.id in oldIds }.any { commit ->
@@ -125,14 +137,15 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
                 // changed derived inputs keep the full projection path.
                 val edits = next.bundle.commits.filterNot { it.id in oldIds }.flatMap { it.operations }
                 val cardTypes = setOf("Person", "Name", "ContactPoint", "Note", "Claim", "Asset", "RelationshipPreferences", "has_name", "has_contact_point", "has_note", "subject_of", "has_asset", "has_preferences", "same_person", "distinct_person", "Decision", "targets", "Moment", "about")
+                val hintTargets = changedHintTargets(viewRecords, disk.records)
                 val incremental = previous != null && !replaced && previous.bundle.collection == next.bundle.collection &&
                     previous.localIds.all { (uid, id) -> next.localIds[uid] == id } &&
-                    viewRecords === disk.records && viewPending === disk.pending && viewReplica === disk.replica &&
+                    hintTargets != null && viewPending === disk.pending &&
                     edits.all { (gs.graph.objects[it.target] ?: gs.graph.edges[it.target])?.type in cardTypes }
                 val targets = if (incremental) edits.flatMap { op ->
                     val edge = gs.graph.edges[op.target]
                     listOfNotNull(op.target, edge?.from, edge?.to)
-                }.toSet() else null
+                }.toSet() + hintTargets!! else null
                 val projected = gs.project(computeDuplicates = changed, derived = base, previous = view, changedTargets = targets)
                 projected
             } ?: if (disk.replica.enabled) contactHistory().project(base, disk.replica.localIds) else base
@@ -548,9 +561,10 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
         val oldView = current()
         // Keep only rebuildable relationship inference, not a second copy of cards/facts.
         val received = (if (snapshot.base_revision != null) disk.records else Records()).applyChanges(snapshot.records)
-        val derived = Records(people = received.people.mapValues { (_, p) -> Person("", contact_uid = p.contact_uid,
+        val derivedCandidate = Records(people = received.people.mapValues { (_, p) -> Person("", contact_uid = p.contact_uid,
             contact_aliases = p.contact_aliases, category = p.category, closeness = p.closeness,
             cadence_days = p.cadence_days, trend = p.trend, days_365 = p.days_365, muted = p.muted) })
+        val derived = if (derivedCandidate == disk.records) disk.records else derivedCandidate
         var local = disk.graph ?: GraphState(GraphBundle(incoming.collection))
         if (local.bundle.collection != incoming.collection) {
             require(disk.offlineSource == null) { "Cannot join different graph collections." }
@@ -560,21 +574,29 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
         }
         var merged = GraphStore(local).receive(incoming)
         var gs = GraphStore(merged)
-        val idMap = merged.localIds.toMutableMap()
-        val used = idMap.values.toMutableSet()
-        gs.graph.objects.filterValues { it.type == "Person" }.keys.sorted().forEach { uid ->
-            val old = oldView.people.entries.firstOrNull { (_, p) -> p.contact_uid == uid || p.contact_uid == gs.text(uid, "legacy_contact_uid") }
-            val remoteId = gs.text(uid, "legacy_id").toIntOrNull()
-            val preferred = old?.key ?: remoteId
-            if (uid !in idMap && preferred != null && preferred !in used) { idMap[uid] = preferred; used += preferred }
+        // Existing native IDs need no adoption, object-table scan or quadratic
+        // search through every displayed person. Only newly received people do.
+        val unmapped = gs.graph.people.filter { it !in merged.localIds }.sorted()
+        if (unmapped.isNotEmpty()) {
+            val idMap = merged.localIds.toMutableMap()
+            val used = idMap.values.toMutableSet()
+            val oldByUid = oldView.people.entries.flatMap { (id, person) ->
+                (listOf(person.contact_uid) + person.contact_aliases).filter { it.isNotEmpty() }.map { it to id }
+            }.toMap()
+            for (uid in unmapped) {
+                val preferred = oldByUid[uid] ?: oldByUid[gs.text(uid, "legacy_contact_uid")] ?: gs.text(uid, "legacy_id").toIntOrNull()
+                if (preferred != null && preferred !in used) { idMap[uid] = preferred; used += preferred }
+            }
+            merged = GraphStore(merged.copy(localIds = idMap)).indexed()
+            gs = GraphStore(merged)
         }
-        merged = GraphStore(merged.copy(localIds = idMap)).indexed()
-        gs = GraphStore(merged)
-        val newView = gs.project()
+        // Only the legacy outbox converter needs a complete adoption view.
+        // Routine native sync must not project the entire book twice.
+        val newView by lazy { gs.project() }
         fun resolve(oldUid: String, oldId: Int?): String? {
             val old = oldView.people[oldId] ?: oldView.people.values.firstOrNull { it.contact_uid == oldUid || oldUid in it.contact_aliases }
             return newView.people.values.firstOrNull { it.contact_uid == oldUid || oldUid in it.contact_aliases }?.contact_uid
-                ?: gs.graph.objects.filterValues { it.type == "Person" }.keys.firstOrNull { id ->
+                ?: gs.graph.people.firstOrNull { id ->
                     (oldUid.isNotEmpty() && gs.text(id, "legacy_contact_uid") == oldUid) || (old != null && gs.text(id, "legacy_id").toIntOrNull() == oldId)
                 }?.let { found -> newView.people.values.firstOrNull { it.contact_uid == found || found in it.contact_aliases }?.contact_uid }
         }
@@ -653,9 +675,11 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
         merged = GraphStore(merged).indexed()
         if (migrated > 0) notices += Notice(message = "$migrated queued legacy edits were committed into local graph history.")
         if (retained.isNotEmpty()) notices += Notice(message = "${retained.size} legacy requests remain queued for the Mac; nothing was discarded.")
-        save(disk.copy(graph = merged, pending = retained, failedEdits = failed, notices = notices, records = derived,
+        val pending = if (retained == disk.pending) disk.pending else retained
+        val replica = ReplicaState(publisher = snapshot.publisher).let { if (it == disk.replica) disk.replica else it }
+        save(disk.copy(graph = merged, pending = pending, failedEdits = failed, notices = notices, records = derived,
             offlineSource = snapshot.source, offlineRevision = snapshot.revision, cursor = 0,
-            replica = ReplicaState(publisher = snapshot.publisher), lastSync = Instant.now().toString(), lastError = null))
+            replica = replica, lastSync = Instant.now().toString(), lastError = null))
     }
     suspend fun exportOffline(): TransferManifest = locked {
         val source = requireNotNull(disk.offlineSource) { "Import a memory file from your Mac first." }

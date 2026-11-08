@@ -69,7 +69,7 @@ class GraphStore(val state: GraphState, private val timing: (String, Long) -> Un
             require(hash.matches(blobHashPattern))
             require(GraphBlobs.open(blobs, hash).use { GraphBlobs.verifiedHash(it, buffer) } == hash) { "Damaged graph blob" }
         }
-        verifyReferences(commits, available.keys)
+        if (commits.isNotEmpty()) verifyReferences(commits, available.keys)
     }
     companion object {
         private val blobHashPattern = Regex("[0-9a-f]{64}")
@@ -214,12 +214,12 @@ class GraphStore(val state: GraphState, private val timing: (String, Long) -> Un
         val hints = derived.people.values.flatMap { p -> (listOf(p.contact_uid) + p.contact_aliases).map { it to p } }.toMap()
         val ids = indexed().localIds
         val incremental = previous != null && changedTargets != null
+        fun owners(target: String) = listOfNotNull(components.rootByPerson[target]) +
+            graph.incoming(target).filter { it.second.type in VersionedGraph.attributions }.mapNotNull { components.rootByPerson[it.second.from] }
         val roots = if (incremental) changedTargets!!.flatMap { target ->
-            // Include inactive edges: removing an attribution must invalidate its
-            // old owner too. Shared objects can invalidate more than one person.
-            listOfNotNull(components.rootByPerson[target]) +
-                graph.incoming(target).filter { it.second.type in VersionedGraph.attributions }.mapNotNull { components.rootByPerson[it.second.from] } +
-                graph.outgoing(target).filter { it.second.type == "about" }.mapNotNull { components.rootByPerson[it.second.to] }
+            // Include inactive attribution/decision edges so removal invalidates
+            // the old owner too. A review decision can target a Claim, not a Person.
+            owners(target) + graph.outgoing(target).filter { it.second.type in setOf("about", "targets") }.flatMap { owners(it.second.to!!) }
         }.toMutableSet() else components.groups.keys.toMutableSet()
         // An identity edit can retire an old root or split it into several roots.
         // Include every old member's new component, not the rest of the book.

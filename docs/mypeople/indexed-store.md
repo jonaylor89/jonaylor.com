@@ -32,6 +32,13 @@ updates commit together. The Store publishes its new state **after COMMIT**, and
 Save returns only after that FULL-sync commit. Errors roll back the transaction
 and keep the previous visible version. Read snapshots cannot mutate the database.
 
+Routine graph sync adopts IDs only for previously unseen people. The legacy
+outbox adoption view is lazy, unchanged derived records/queues retain their
+identity, and unchanged authority reuses the published view. Small graph and
+relationship-hint deltas project only affected owners (including review targets).
+Commit collision, ancestry, blob and source checks remain in place. Received
+frontiers, receipts and sync metadata still commit before import acknowledgment.
+
 New blobs are hash-checked, atomically placed and fsynced before their references
 commit. Original history/blobs remain authoritative and complete; indexes and
 screen rows do not replace or discard them. Old snapshots use sequence-bounded
@@ -109,6 +116,9 @@ never pass their contents in command arguments or logs.
   152,547 operations, 37,461 blobs, ~57 MB metadata and ~497 MB raw data. Cold
   readiness, durable edits, merges and a second process are measured with a
   192 MiB heap. This fixture must never be installed on a personal device.
+- Indexed sync regression checks the 152,547-operation synthetic book across an
+  unchanged response, one relationship hint, one field delta and restart. Each
+  import must stay under one second without altering unrelated people/history.
 - Owner-query regression tests verify bounded decoding, actual query plans,
   historical ownership, projection exclusions and in-memory compatibility. A
   40,053-row synthetic Compose test, including empty placeholders, rejects unscoped/main-thread detail reads

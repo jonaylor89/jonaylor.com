@@ -212,6 +212,21 @@ class GraphStoreTest {
         assertEquals(restarted.snapshot().graph!!.bundle, restored.snapshot().graph!!.bundle)
     }
 
+    @Test fun `native review delta invalidates its fact owner without a full book projection`() = runBlocking {
+        val source=uuid(); val uid=uuid()
+        var initial=GraphStore(GraphStore.empty()).saveCard(uid,ContactCard("Review delta"))
+        val claim=VersionedGraph.createObject("Claim",buildJsonObject { put("predicate","public_profile"); put("value","https://example.test/review"); put("site","test") })
+        val decision=VersionedGraph.createObject("Decision",buildJsonObject { put("action","suggested") })
+        initial=GraphStore(initial).commit(listOf(claim,decision,VersionedGraph.createEdge("subject_of",uid,claim.target),VersionedGraph.createEdge("targets",decision.target,claim.target)))
+        val store=Store(temp.newFolder()); store.installOffline(snapshot(initial.bundle,source))
+        assertEquals("suggested",store.state.value.records.profiles.values.single().status)
+        val graph=GraphStore(store.snapshot().graph!!).graph
+        val change=graph.commit(uuid(),listOf(graph.edit(decision.target,"action",JsonPrimitive("rejected"))),initial.bundle.collection)
+        store.installOffline(snapshot(GraphBundle(change.collection,listOf(change.id),listOf(change)),source,2))
+        assertEquals("rejected",store.state.value.records.profiles.values.single().status)
+        assertEquals("Review delta",store.state.value.records.people.values.single().name)
+    }
+
     @Test fun `delta receive preserves offline edits and conflict choice is explicit`() = runBlocking {
         val initial = GraphStore(base()).indexed(); val uid = GraphStore(initial).project().people.values.single().contact_uid
         val source = uuid(); val left = Store(temp.newFolder()); val right = Store(temp.newFolder())

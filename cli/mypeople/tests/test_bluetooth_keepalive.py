@@ -43,6 +43,72 @@ def test_keepalive_does_not_authorize_an_incorrect_digest():
     assert not p.imported.is_set()
 
 
+class ClockEvent:
+    def __init__(self, clock, tick):
+        self.clock, self.tick, self.value = clock, tick, False
+
+    def is_set(self):
+        return self.value
+
+    def set(self):
+        self.value = True
+
+    def wait(self, seconds):
+        self.clock[0] += seconds
+        self.tick(self.clock[0])
+        return self.value
+
+
+@pytest.mark.parametrize("version", [2, 3])
+def test_valid_keepalives_allow_a_192_second_durable_import_without_faking_a_receipt(monkeypatch, version):
+    clock = [100.0]
+    monkeypatch.setattr(bluetooth.time, "monotonic", lambda: clock[0])
+    p, data = authenticated(version)
+    p.expect_snapshot(data)
+    digest = hashlib.sha256(data).hexdigest()
+
+    def tick(now):
+        if int(now - 100) % 10 == 0:
+            assert p.feed(b"WAIT\n") == "waiting"
+            assert not p.imported.is_set()
+        if now - 100 >= 192:
+            p.feed(f"OK {digest}\n".encode())
+
+    p.imported = ClockEvent(clock, tick)
+    progress = []
+    import threading
+    assert bluetooth._wait_for_import(p, threading.Event(), 100 + 1200, progress=lambda: progress.append(clock[0]))
+    assert clock[0] == 292
+    assert p.imported.is_set()
+    assert progress
+
+
+@pytest.mark.parametrize("keepalive,limit,expected", [(False, 1200, 120), (True, 200, 200)])
+def test_import_wait_still_bounds_dead_peers_and_total_session(monkeypatch, keepalive, limit, expected):
+    clock = [0.0]
+    monkeypatch.setattr(bluetooth.time, "monotonic", lambda: clock[0])
+    p, data = authenticated(3)
+    p.expect_snapshot(data)
+    p.imported = ClockEvent(clock, lambda now: p.feed(b"WAIT\n") if keepalive and int(now) % 10 == 0 else None)
+    import threading
+    assert not bluetooth._wait_for_import(p, threading.Event(), limit)
+    assert clock[0] == expected
+    assert not p.imported.is_set()
+
+
+def test_partial_or_unvalidated_bytes_do_not_extend_the_import_idle_timeout(monkeypatch):
+    clock = [0.0]
+    monkeypatch.setattr(bluetooth.time, "monotonic", lambda: clock[0])
+    p, data = authenticated(3)
+    p.expect_snapshot(data)
+    p.feed(b"WA")
+    p.imported = ClockEvent(clock, lambda now: None)
+    import threading
+    assert not bluetooth._wait_for_import(p, threading.Event(), 1200)
+    assert clock[0] == 120
+    assert not p.imported.is_set()
+
+
 def test_duplicate_native_open_does_not_replace_or_close_an_accepted_channel():
     from types import SimpleNamespace
     def channel(ident, opened=True):

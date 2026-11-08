@@ -23,6 +23,8 @@ READY = b"SHRD0003"
 # Trusted peers now send the complete graph, not just a small operation outbox.
 MAX_UPLOAD = MAX_FILE
 HEADER_SIZE = 48
+SESSION_SECONDS = 20 * 60
+IMPORT_IDLE_SECONDS = 120
 
 
 def offer(address: str, service: str, password: str, source: str, token: str, expires: int, *, version: int = 1, publisher: str | None = None, wait_keepalive: bool = False, graph_collection: str | None = None) -> dict:
@@ -60,6 +62,7 @@ class SessionProtocol:
         self.expected_digest: str | None = None
         self.imported = threading.Event()
         self.last_activity = time.time()
+        self.last_import_activity: float | None = None
 
     def expect_snapshot(self, data: bytes) -> None:
         self.expected_digest = hashlib.sha256(data).hexdigest()
@@ -115,6 +118,7 @@ class SessionProtocol:
                 # Authenticated import liveness is NOT an acknowledgment. Keep the
                 # radio alive while Android commits; only the exact digest can finish.
                 if self.version >= 2 and line == b"WAIT":
+                    self.last_import_activity = time.monotonic()
                     event = "waiting"
                     continue
                 expected_ack = b"OK" if self.version == 1 else ("OK " + self.expected_digest).encode()
@@ -124,6 +128,22 @@ class SessionProtocol:
                 return "confirmed"
             return event
         return event
+
+
+def _wait_for_import(protocol, stopped, session_deadline, *, progress=lambda: None):
+    """Valid WAIT renews import idleness, never the hard session cap or a receipt."""
+    started = time.monotonic()
+    last_reported = started
+    while not protocol.imported.is_set():
+        now = time.monotonic()
+        activity = max(started, protocol.last_import_activity or started)
+        if stopped.is_set() or now >= session_deadline or now - activity >= IMPORT_IDLE_SECONDS:
+            return False
+        if activity > started and now - last_reported >= 30:
+            progress()
+            last_reported = now
+        protocol.imported.wait(min(1.0, session_deadline - now, IMPORT_IDLE_SECONDS - (now - activity)))
+    return True
 
 
 def _known_channel(receivers, channel):
@@ -202,7 +222,7 @@ def _listen(listener, expires: int, version: int, pump, refresh):
         if protocol is not None and version >= 2 and protocol.upload is None and now - protocol.last_activity > 60:
             print("Edits upload stalled. Incomplete edits were not applied.", flush=True)
             break
-        if listener.active and now - listener.started_at > 1200:
+        if listener.active and time.monotonic() - listener.started_at > SESSION_SECONDS:
             break
         if not listener.active and time.monotonic() >= next_refresh:
             # Never re-arm an accepted socket, even before authentication arrives.
@@ -295,7 +315,7 @@ def serve(path: Path, password: str, source: str, *, minutes: int = 10, show: bo
                         return
                     self.owner.active = True
                     self.owner.active_protocol = self.protocol
-                    self.owner.started_at = time.time()
+                    self.owner.started_at = time.monotonic()
                 print("Phone authenticated.", flush=True)
             if (version == 1 and decision == "authenticated") or decision == "uploaded":
                 threading.Thread(target=self.owner.transmit, args=(channel, self.protocol), daemon=True).start()
@@ -347,7 +367,7 @@ def serve(path: Path, password: str, source: str, *, minutes: int = 10, show: bo
                     print("Sending updated encrypted memory over Bluetooth…", flush=True)
                     for part in (header, response):
                         for start in range(0, len(part), mtu):
-                            if time.time() - self.started_at > 1200 or self.done.is_set():
+                            if time.monotonic() - self.started_at > SESSION_SECONDS or self.done.is_set():
                                 raise TransferError("Bluetooth transfer stopped or timed out.")
                             block = part[start:start + mtu]
                             if channel.writeSync_length_(block, len(block)):
@@ -358,7 +378,9 @@ def serve(path: Path, password: str, source: str, *, minutes: int = 10, show: bo
                                 last_percent = percent
                                 print(f"Bluetooth: {percent}%", flush=True)
                     stage = "waiting for the phone to commit its import"
-                    if not protocol.imported.wait(120):
+                    print("Memory sent. Waiting for the phone to finish its durable import…", flush=True)
+                    if not _wait_for_import(protocol, self.done, self.started_at + SESSION_SECONDS,
+                                            progress=lambda: print("Phone is still importing; waiting for its commit confirmation…", flush=True)):
                         raise TransferError("Sent memory but the phone did not confirm import. It is safe to sync again.")
                     if version >= 2 and channel.writeSync_length_(FINISHED, len(FINISHED)):
                         print("Phone imported memory; final radio confirmation was interrupted.", flush=True)

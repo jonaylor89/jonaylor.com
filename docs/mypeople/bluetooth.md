@@ -52,7 +52,24 @@ Bluetooth permission; Android 31+ requests Bluetooth Connect, not discovery or l
 access. QR credentials are not put in Intents or logs.
 
 The Mac prints transfer progress and reports success only after the phone acknowledges
-its import. The temporary RFCOMM service and QR credentials are removed on exit. Run the
+its import. A received encrypted file is not yet an imported book. During import,
+authenticated `WAIT` messages renew the Mac's two-minute **idle** timeout, bounded
+by the twenty-minute total session limit. Android's local import watchdog allows
+up to twenty minutes rather than closing the radio after two; final confirmation
+still has a short timeout. Keepalives never acknowledge a receipt or clear edits.
+
+If an older client says “Sent memory but the phone did not confirm import,” the
+phone may have committed after its old two-minute radio deadline. Keep both
+stores, update both clients, cancel the old QR session and generate a fresh QR.
+Retrying joins the same UUID history; do not reset either device or force an ACK.
+
+Native indexed imports reuse an unchanged contact view and project only affected
+owners for small graph/relationship-hint deltas. They no longer eagerly rebuild
+the full book for ID adoption or the obsolete outbox converter on every sync.
+A production-shaped synthetic 152,547-operation book measured 19 ms for an
+unchanged import, 285 ms for one hint update and 167 ms for one field update on
+the disposable emulator. These are local import timings, not radio transfer
+benchmarks or a guarantee for full first-time migrations. The temporary RFCOMM service and QR credentials are removed on exit. Run the
 command again for a new QR. Do not share the QR or screenshots of it: it contains a
 short-lived transfer capability and the private transfer passphrase.
 
