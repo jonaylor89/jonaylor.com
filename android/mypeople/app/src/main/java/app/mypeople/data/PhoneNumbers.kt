@@ -23,6 +23,12 @@ fun internationalPhone(raw: String, region: String): InternationalPhone? = runCa
     else InternationalPhone(number, if (parsed.hasExtension()) parsed.extension else "")
 }.getOrNull()
 
+/** Format only explicit international numbers; never make an unknown local number look US. */
+internal fun phoneDisplay(raw: String): String = if (!hasInternationalPrefix(raw)) raw else runCatching {
+    val util=PhoneNumberUtil.getInstance()
+    util.format(util.parse(raw,"ZZ"),PhoneNumberUtil.PhoneNumberFormat.INTERNATIONAL)
+}.getOrDefault(raw)
+
 fun hasInternationalPrefix(raw: String): Boolean = raw.trim().startsWith("+") || raw.trim().startsWith("tel:+", ignoreCase = true)
 
 fun dialable(raw: String, region: String): String? = internationalPhone(raw, region)?.rfc3966

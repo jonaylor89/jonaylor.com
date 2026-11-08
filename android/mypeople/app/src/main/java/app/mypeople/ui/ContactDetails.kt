@@ -72,11 +72,14 @@ private data class ReachAction(val channel: String, val label: String, val icon:
  * widest, in their accent; actions they have no details for are hidden, never disabled.
  */
 @Composable
-fun ContactActions(person: Person, edit: () -> Unit) {
+fun ContactActions(person: Person, graph: AppGraph, edit: () -> Unit) {
     val context = LocalContext.current
     val card = person.contactCard()
     val reach = remember(card) { Reach(context, card, edit) }
-    val phone = card.first("phone"); val email = card.first("email")
+    val (phoneState, _) = rememberContactPhonePreview(person, graph)
+    val knownPhone = phoneState.preview?.numbers?.sortedByDescending { it.representative.preferred }?.firstOrNull()
+    val phone = knownPhone?.representative?.copy(value = knownPhone.number)
+    val email = card.first("email")
     val actions = buildList {
         if (phone != null) { add(ReachAction("call", "Call", Symbols.Call, Symbols.CallFilled) { reach.call(phone) }); add(ReachAction("text", "Message", Symbols.Chat, Symbols.ChatFilled) { reach.text(phone) }) }
         if (email != null) add(ReachAction("email", "Email", Symbols.Mail, Symbols.MailFilled) { reach.email(email) })
@@ -142,9 +145,10 @@ fun ContactDetails(person: Person, id: Int, graph: AppGraph, edit: () -> Unit) {
     val reach = remember(card) { Reach(context, card, edit) }
     var trash by remember { mutableStateOf(false) }
     var undo by remember { mutableStateOf(false) }
+    val (phoneState, retryPhones) = rememberContactPhonePreview(person, graph)
+    val phonePreview = phoneState.preview
     Column(verticalArrangement = Arrangement.spacedBy(KinSpace.s3)) {
         Section("Contact info")
-        if (person.mergeDecisionConflicts().isNotEmpty()) MergeDecisionPrompt(person, graph)
         val detailConflicts = person.contact_conflicts.filter { (field, choices) -> !isMergeDecisionConflict(field, choices) }
         if (detailConflicts.isNotEmpty()) {
             Surface(shape = RoundedCornerShape(KinRadius.xl), color = MaterialTheme.colorScheme.errorContainer) {
@@ -168,13 +172,15 @@ fun ContactDetails(person: Person, id: Int, graph: AppGraph, edit: () -> Unit) {
                 }
             }
         }
-        if (person.card == null || card.legacy_unverified) Text("Legacy matching numbers may lack country codes. Re-import your original contacts before relying on these for international calls.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        if (person.card == null || (card.legacy_unverified && phonePreview?.numbers?.any { !hasInternationalPrefix(it.number) } == true)) Text("Legacy matching numbers may lack country codes. Re-import your original contacts before relying on these for international calls.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         // Phone, email, address, links, then work, dates and notes.
         val rows = buildList<@Composable (androidx.compose.ui.graphics.Shape) -> Unit> {
-            card.fields.sortedWith(compareBy<ContactField> { KindOrder.indexOf(it.kind).let { i -> if (i < 0) KindOrder.size else i } }.thenByDescending { it.preferred }).forEach { f ->
-                val label = listOf(f.label.ifEmpty { f.kind.replaceFirstChar { it.uppercase() } }, if (f.preferred) "Default" else "").filter { it.isNotEmpty() }.joinToString(" · ")
+            val displayFields = card.fields.filterNot { it.kind == "phone" }.map { it to 1 } +
+                phonePreview?.numbers.orEmpty().map { number -> number.representative.copy(value = number.number, label = number.labels.joinToString(" / ")) to number.entries }
+            displayFields.sortedWith(compareBy<Pair<ContactField, Int>> { KindOrder.indexOf(it.first.kind).let { i -> if (i < 0) KindOrder.size else i } }.thenByDescending { it.first.preferred }).forEach { (f, copies) ->
+                val label = listOf(f.label.ifEmpty { f.kind.replaceFirstChar { it.uppercase() } }, if (f.preferred) "Default" else "", if (copies > 1) "$copies saved copies" else "").filter { it.isNotEmpty() }.joinToString(" · ")
                 when (f.kind) {
-                    "phone" -> add { shape -> InfoRow(Symbols.Call, formatPhone(f.value), label, shape, onClick = { reach.call(f) }, trailing = "Message" to Symbols.Chat, onTrailing = { reach.text(f) }) }
+                    "phone" -> add { shape -> InfoRow(Symbols.Call, phoneDisplay(f.value), label, shape, onClick = { reach.call(f) }, trailing = "Message" to Symbols.Chat, onTrailing = { reach.text(f) }) }
                     "email" -> add { shape -> InfoRow(Symbols.Mail, f.value, label, shape, onClick = { reach.email(f) }) }
                     "address" -> add { shape -> InfoRow(Symbols.Home, f.value, label, shape, onClick = null, trailing = "Directions" to Symbols.Directions, onTrailing = { reach.map(f) }) }
                     "website" -> add { shape -> InfoRow(Symbols.Link, f.value, label, shape, onClick = { openLink(context, f.value) }) }
@@ -185,9 +191,15 @@ fun ContactDetails(person: Person, id: Int, graph: AppGraph, edit: () -> Unit) {
             if (card.birthday.isNotBlank()) add { shape -> InfoRow(Symbols.Cake, formatDate(card.birthday), "Birthday", shape, onClick = null) }
             if (card.notes.isNotBlank()) add { shape -> InfoRow(Symbols.Notes, card.notes, "Your contact notes", shape, onClick = null) }
         }
-        if (rows.isEmpty()) Text("No details yet. Add a number or email in Edit contact.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (phonePreview == null && card.fields.any { it.kind == "phone" }) {
+            if (phoneState.failed) TextButton(onClick = retryPhones) { Text("Retry phone preview") }
+            else Text("Checking phone entries…", style = MaterialTheme.typography.bodySmall)
+        }
+        if (rows.isEmpty() && phonePreview != null) Text("No verified contact details yet. Add a number or email in Edit contact.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         else Column(verticalArrangement = Arrangement.spacedBy(KinSpace.half)) { rows.forEachIndexed { index, row -> row(segmentShape(index, rows.size)) } }
-        if (!person.trashed) DuplicatePhoneAction(person, id, graph)
+        phonePreview?.let { UnverifiedPhoneHints(it) }
+        if (!person.trashed && phonePreview != null) DuplicatePhoneAction(person, id, graph, phonePreview)
+        if (person.mergeDecisionConflicts().isNotEmpty()) MergeDecisionPrompt(person, graph)
         if (person.trashed) MetaLabel("In trash · kept until you restore it")
         FlowRow(horizontalArrangement = Arrangement.spacedBy(KinSpace.s2)) {
             TextButton(onClick = { scope.launch { runCatching { shareContacts(context, listOf(card)) }.onFailure { Toast.makeText(context, "Could not share ${person.name}", Toast.LENGTH_SHORT).show() } } }) { Text("Share vCard") }

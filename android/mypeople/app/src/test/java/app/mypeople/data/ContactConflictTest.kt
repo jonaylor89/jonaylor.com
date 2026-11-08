@@ -37,10 +37,46 @@ class ContactConflictTest {
         it.initialize(); it.installOffline(TransferManifest(type="snapshot",source=fixture.state.bundle.collection,revision=1,graph=fixture.state.bundle))
     }
 
+    @Test fun sixKnownEntriesBecomeTwoNumbersWithoutResolvingIdentityOrDiscardingHints() = runBlocking {
+        val a=UUID.randomUUID().toString(); val b=UUID.randomUUID().toString()
+        var base=GraphStore(GraphStore.empty()).saveCard(a,ContactCard("Example A",region="GB",legacy_unverified=true,notes="Keep A note",
+            fields=listOf("+442079460018","+44 20 7946 0018","+44 (20) 7946-0018").map { ContactField("phone",it,"Mobile") }))
+        base=GraphStore(base).saveCard(b,ContactCard("Example B",region="US",legacy_unverified=true,notes="Keep B note",
+            fields=listOf("+12025550101","+1 202 555 0101","+1 (202) 555-0101").map { ContactField("phone",it,"Mobile") }))
+        val hints=listOf("2079460018","2025550101").map { value ->
+            VersionedGraph.createObject("ContactPoint",buildJsonObject { put("kind","phone"); put("value",value); put("matching_hint",true); put("compat_table","identifiers") })
+        }
+        base=GraphStore(base).commit(hints + hints.map { VersionedGraph.createEdge("has_contact_point",a,it.target) })
+        val separate=VersionedGraph.createEdge("distinct_person",a,b)
+        val old=GraphStore(base).commit(listOf(separate))
+        val merged=GraphStore(base).commit(listOf(VersionedGraph.createEdge("same_person",a,b)))
+        val state=GraphStore(old).receive(merged.bundle)
+        val dir=temp.newFolder(); val store=install(Fixture(state,separate.target),dir)
+        val person=store.state.value.records.people.entries.single()
+        val before=store.snapshot().graph!!
+        val preview=store.contactPhonePreview(person.value)
+        assertEquals(6,preview.entries); assertEquals(2,preview.numbers.size)
+        assertEquals(listOf(3,3),preview.numbers.map { it.entries }); assertEquals(2,preview.importHints.size)
+        assertEquals(4,preview.cleanup.removed)
+        assertEquals(setOf("Example A","Example B"), preview.earlierSeparation.flatMap { listOf(it.left.name,it.right.name) }.toSet())
+        assertTrue(preview.earlierSeparation.all { it.left.numbers.size==1 && it.right.numbers.size==1 })
+        assertEquals(4,store.cleanDuplicatePhoneFields(person.key,person.value))
+        val reopened=Store(dir); reopened.initialize()
+        val after=reopened.state.value.records.people.entries.single()
+        val clean=reopened.contactPhonePreview(after.value)
+        assertEquals(2,clean.entries); assertEquals(2,clean.numbers.size); assertEquals(2,clean.importHints.size)
+        assertEquals(preview.importHints,clean.importHints)
+        assertEquals(person.value.contact_conflicts,after.value.contact_conflicts)
+        assertTrue(GraphStore(reopened.snapshot().graph!!).graph.active(separate.target))
+        assertEquals(person.value.contactCard().notes,after.value.contactCard().notes)
+        assertEquals(8,GraphStore(before).project().people.values.single().contactFields().size)
+        assertEquals("2079460018",phoneDisplay("2079460018"))
+    }
+
     @Test fun mergeWarningsAreNotCompetingFieldVersions() {
         val person = GraphStore(fixture().state).project().people.values.single()
         assertEquals(1, person.mergeDecisionConflicts().size)
-        assertEquals("Merged records also marked as different people", person.contactConflictSummary())
+        assertEquals("Earlier keep-separate decision", person.contactConflictSummary())
         val key = person.mergeDecisionConflicts().keys.single()
         assertFalse(isMergeDecisionConflict(key, listOf(ContactConflict("ordinary-choice",JsonPrimitive("retracted")))))
         assertEquals("Notes", conflictFieldTitle("${UUID.randomUUID()}/body", person))
@@ -93,6 +129,8 @@ class ContactConflictTest {
         val expected=store.state.value.records.people.values.single()
         assertTrue(expected.contact_conflicts.size > expected.mergeDecisionConflicts().size)
         val heads=store.snapshot().graph!!.bundle.heads
+        try { store.cleanDuplicatePhoneFields(store.state.value.records.people.keys.single(),expected); fail("A genuine field conflict must still block cleanup") } catch (_:IllegalArgumentException) { }
+        assertEquals(heads,store.snapshot().graph!!.bundle.heads)
         try { store.resolveMergeDecision(expected,keepMerged=true,cleanPhones=true); fail("Must not clean while a real field conflict remains") } catch (_:IllegalArgumentException) { }
         assertEquals(heads,store.snapshot().graph!!.bundle.heads)
         store.resolveMergeDecision(expected,keepMerged=true,cleanPhones=false)

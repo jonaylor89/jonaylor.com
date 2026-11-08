@@ -20,8 +20,20 @@ private fun ContactCard.phoneEqualityKey(field: ContactField): String {
     return "literal:${field.region}:$raw"
 }
 
-internal fun ContactCard.withoutDuplicatePhones(): DuplicatePhoneCleanup {
-    val phones = fields.indices.filter { fields[it].kind == "phone" && fields[it].value.isNotBlank() }
+/** Display the same conservative equivalence classes that cleanup actually uses. */
+internal data class PhoneNumberGroup(val number: String, val entries: Int, val labels: List<String>, val representative: ContactField)
+internal fun ContactCard.phoneNumberGroups(): List<PhoneNumberGroup> =
+    fields.filter { it.kind == "phone" && it.value.isNotBlank() }.groupBy { phoneEqualityKey(it) }.map { (key, fields) ->
+        PhoneNumberGroup(
+            if (key.startsWith("international:")) key.removePrefix("international:") else fields.first().value,
+            fields.size,
+            fields.map { it.label }.filter { it.isNotBlank() }.distinctBy { it.lowercase(Locale.ROOT) },
+            fields.sortedWith(compareByDescending<ContactField> { it.preferred }.thenByDescending { it.user_added }.thenByDescending { it.region.isNotEmpty() }).first(),
+        )
+    }
+
+internal fun ContactCard.withoutDuplicatePhones(excludedPhoneIds: Set<String> = emptySet()): DuplicatePhoneCleanup {
+    val phones = fields.indices.filter { fields[it].kind == "phone" && fields[it].value.isNotBlank() && fields[it].object_id !in excludedPhoneIds }
     val groups = phones.groupBy { phoneEqualityKey(fields[it]) }.values.filter { it.size > 1 }
     val replacements = mutableMapOf<Int, ContactField>()
     val removed = mutableSetOf<Int>()

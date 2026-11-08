@@ -39,6 +39,8 @@ fun ReviewScreen(records: Records, graph: AppGraph, scrollToTopRequest: Long = 0
     DisposableEffect(Unit) { onDispose { graph.settings.seenDuplicates = seen.orEmpty() + latest.map { it.key } } }
     val fresh = groups.count { duplicateRank(it.key, seen) < 2 }
     val versions = remember(records) { records.people.entries.filter { it.value.contact_conflicts.isNotEmpty() }.sortedBy { it.value.name.lowercase() } }
+    val mergeDecisions = versions.count { it.value.mergeDecisionConflicts().isNotEmpty() }
+    val valueConflicts = versions.count { entry -> entry.value.contact_conflicts.any { (field, choices) -> !isMergeDecisionConflict(field, choices) } }
     val versionsList = rememberLazyListState()
     val profilesList = rememberLazyListState()
     val duplicatesList = rememberLazyListState()
@@ -49,12 +51,12 @@ fun ReviewScreen(records: Records, graph: AppGraph, scrollToTopRequest: Long = 0
             item { Heading("A second look", "Good memory starts with getting people right.", onAccount = openSettings) }
             stickyHeader {
                 Surface(color = MaterialTheme.colorScheme.surface) {
-                    Box(Modifier.padding(vertical = 8.dp)) { JournalTabs(tab, listOf("Profiles", "Duplicates", if (versions.isEmpty()) "Conflicts" else "Conflicts (${versions.size})")) { tab = it } }
+                    Box(Modifier.padding(vertical = 8.dp)) { JournalTabs(tab, listOf("Profiles", "Duplicates", if (versions.isEmpty()) "Decisions" else "Decisions (${versions.size})")) { tab = it } }
                 }
             }
             item {
                 Column(Modifier.padding(horizontal = KinSpace.s4, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(if (tab == 2) "${versions.size} contacts need a decision" else if (tab == 0) "${profiles.size} suggested profiles" else "${groups.size} groups to review" + if (fresh > 0) " · $fresh new" else "", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (tab == 2) "$mergeDecisions earlier separation decisions · $valueConflicts contacts with conflicting values" else if (tab == 0) "${profiles.size} suggested profiles" else "${groups.size} groups to review" + if (fresh > 0) " · $fresh new" else "", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(if (tab == 2) "Review merge decisions or independently edited details here. Nothing is chosen for you, and previous values stay in history." else if (tab == 0) "A suggestion is never a confirmed identity. Even a supported assessment needs your confirmation." else "Compare the details before combining records. Similar names don’t always mean the same person.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }

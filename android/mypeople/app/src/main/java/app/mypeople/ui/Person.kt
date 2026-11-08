@@ -128,7 +128,7 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
         val profile = remember(rows) { currentProfile(events.map { it.value }) }
         LazyColumn(state = list, modifier = Modifier.testTag("person-list"), contentPadding = PaddingValues(start = KinSpace.s4, end = KinSpace.s4, bottom = KinSpace.s8)) {
             item { ContactHero(person, profile, graph) }
-            item { Box(Modifier.padding(top = KinSpace.s4)) { ContactActions(person, edit = { editContact = true }) } }
+            item { Box(Modifier.padding(top = KinSpace.s4)) { ContactActions(person, graph, edit = { editContact = true }) } }
             item {
                 FlowRow(Modifier.padding(top = KinSpace.s3), horizontalArrangement = Arrangement.spacedBy(KinSpace.s2)) {
                     FilledTonalButton(onClick = { dialog = "Add note" }) { Icon(Icons.Outlined.EditNote, null, Modifier.size(18.dp)); Spacer(Modifier.width(KinSpace.s2)); Text("Add a note") }

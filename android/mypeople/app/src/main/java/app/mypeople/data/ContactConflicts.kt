@@ -9,6 +9,7 @@ internal fun isMergeDecisionConflict(field: String, choices: List<ContactConflic
         choices.single().value == JsonPrimitive("retracted")
 
 internal fun Person.mergeDecisionConflicts() = contact_conflicts.filter { (field, choices) -> isMergeDecisionConflict(field, choices) }
+internal fun Person.canCleanDuplicatePhones() = !trashed && contact_conflicts.all { (field, choices) -> isMergeDecisionConflict(field, choices) }
 
 internal fun conflictFieldTitle(field: String, person: Person): String {
     val property = field.substringAfterLast('/')
@@ -37,6 +38,6 @@ internal fun conflictFieldTitle(field: String, person: Person): String {
 internal fun Person.contactConflictSummary(): String {
     val merge = mergeDecisionConflicts()
     val details = contact_conflicts.filterKeys { it !in merge }
-    return if (merge.isNotEmpty()) "Merged records also marked as different people" + if (details.isNotEmpty()) " · ${details.size} other details" else ""
+    return if (merge.isNotEmpty()) "Earlier keep-separate decision" + if (details.isNotEmpty()) " · ${details.size} other details" else ""
     else details.keys.map { conflictFieldTitle(it, this) }.distinct().joinToString(" · ")
 }

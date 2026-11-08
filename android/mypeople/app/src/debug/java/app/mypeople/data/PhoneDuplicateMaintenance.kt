@@ -36,15 +36,16 @@ class PhoneDuplicateMaintenance : Instrumentation() {
                 val planFile = File(context.cacheDir, "phone-cleanup-plan.json")
                 when (options.getString("op")) {
                     "preview" -> {
-                        val graph = GraphStore(native).graph
+                        val gs = GraphStore(native)
+                        val graph = gs.graph
                         val edits = mutableListOf<PhoneCleanupEdit>()
                         var conflicts = 0; var shared = 0; var scanned = 0
                         for ((id, person) in store.state.value.records.people) {
                             if (person.trashed) continue
                             scanned++
-                            if (person.contact_conflicts.isNotEmpty()) { conflicts++; continue }
+                            if (!person.canCleanDuplicatePhones()) { conflicts++; continue }
                             val card = person.contactCard()
-                            val cleanup = card.withoutDuplicatePhones()
+                            val cleanup = gs.phonePreview(person).cleanup
                             if (cleanup.removed == 0) continue
                             // A contact-point object's metadata can be owned by multiple people.
                             // Never change another person's labels/defaults as a side effect.
@@ -66,8 +67,8 @@ class PhoneDuplicateMaintenance : Instrumentation() {
                         require(native.bundle.collection == plan.collection && native.bundle.heads == plan.heads) { "The graph changed; preview again" }
                         require(plan.edits.all { edit ->
                             val current = store.state.value.records.people[edit.id]
-                            current == edit.before && !edit.before.trashed && edit.before.contact_conflicts.isEmpty() &&
-                                edit.before.contactCard().withoutDuplicatePhones().let { it.card == edit.after && it.removed == edit.removed }
+                            current == edit.before && edit.before.canCleanDuplicatePhones() &&
+                                GraphStore(native).phonePreview(edit.before).cleanup.let { it.card == edit.after && it.removed == edit.removed }
                         }) { "The preview no longer matches; nothing was changed" }
                         if (plan.edits.isEmpty()) {
                             output.putString("stream", "PHONE CLEANUP APPLIED contacts=0 extraFields=0")

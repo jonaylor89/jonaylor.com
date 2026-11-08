@@ -344,13 +344,20 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
     }
     /** A phone-only cleanup must not run the full card-save path or modify shared
      * contact-point metadata belonging to another identity. History remains append-only. */
+    internal suspend fun contactPhonePreview(expected: Person): ContactPhonePreview {
+        if (expected.contact_uid.isEmpty() || expected.contactFields().none { it.kind == "phone" && it.object_id.isNotEmpty() }) return expected.phonePreview()
+        return locked {
+            val person = current().people.values.firstOrNull { it.contact_uid == expected.contact_uid }
+            if (!sameContactVersion(person, expected) || person == null) throw EditRejected("Contact changed; reopen its phone details.")
+            disk.graph?.let { GraphStore(it).phonePreview(person) } ?: person.phonePreview()
+        }
+    }
     internal suspend fun cleanDuplicatePhoneFields(id: Int, expectedPerson: Person): Int = locked {
         val person = current().people[id]
-        require(sameContactVersion(person, expectedPerson) && person != null && !person.trashed && person.contact_conflicts.isEmpty()) { "Contact changed; preview again." }
-        val before = person.contactCard()
-        val cleanup = before.withoutDuplicatePhones()
-        if (cleanup.removed == 0) return@locked 0
+        require(sameContactVersion(person, expectedPerson) && person != null && person.contact_aliases == expectedPerson.contact_aliases && person.contact_conflicts == expectedPerson.contact_conflicts && person.canCleanDuplicatePhones()) { "Contact changed or a detail needs a choice; preview again." }
         val gs = GraphStore(requireNotNull(disk.graph))
+        val cleanup = gs.phonePreview(person).cleanup
+        if (cleanup.removed == 0) return@locked 0
         val ops = gs.duplicatePhoneOperations(person, cleanup)
         saveGraph(gs.commit(ops))
         cleanup.removed
@@ -377,7 +384,7 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
         var removed = 0
         if (cleanPhones) {
             require(keepMerged && !person.trashed && conflicts.size == person.contact_conflicts.size) { "Resolve the other conflicting details before removing duplicate phone fields." }
-            val cleanup = person.contactCard().withoutDuplicatePhones()
+            val cleanup = gs.phonePreview(person).cleanup
             ops += gs.duplicatePhoneOperations(person, cleanup)
             removed = cleanup.removed
         }

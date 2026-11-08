@@ -65,29 +65,45 @@ A persisted baseline and Provider version checks distinguish our callbacks from 
 
 Legacy/unverified phone details are not exported to Android until re-imported or explicitly verified. Photos sent to the Provider are bounded thumbnails; full manual JPEG/PNG images remain in the card and encrypted backup. Extremely large contacts may exceed Android's IPC limits and are refused by the bridge without discarding the originals.
 
-## Resolve a contact decision
+## Repeated numbers and earlier identity decisions
 
-Open **Review → Conflicts**. The tab shows how many contacts need attention.
+A person can legitimately have more than one phone number. The contact page
+groups equivalent formats into one row per distinct number and shows how many
+saved copies it represents. Formatting is derived for display, not rewritten in
+the graph. Unknown countries and different extensions are never equated.
 
-- **Merge decision needs review** is an older “different people” assertion
-  conflicting with a merge, not competing phone-number values. Tap **Resolve
-  merge decision**, explicitly choose **Keep one merged contact** or **Restore
-  N separate contact records**, then confirm. Keeping the merge clears only the
-  older separate-person assertion. Restoring separation preserves existing
-  record/field ownership and can bring back duplicate-looking contacts.
-- If the merged person has duplicate phone fields and no other conflicts, the
-  confirmation offers **Also remove … duplicate phone fields**. You can turn it
-  off. The identity decision and selected cleanup commit together; a stale view
-  or shared-metadata error leaves both unapplied.
-- Actual independently edited values still appear on the contact under **Two
-  versions, safely kept**, with human-readable field labels rather than graph
-  UUID paths. Choose a value there; no version is selected automatically.
-- After conflicts are resolved, **Remove … duplicate phone fields** is available
-  in Contact info. This no longer requires operator maintenance. Originals and
-  complete edit history remain available in the graph.
+**Remove … repeated entries** previews the exact numbers being kept and the
+before/after entry counts. For example, six entries containing three copies each
+of two numbers become two entries, not one number. Cleanup preserves labels,
+defaults, field ownership, original history and any earlier identity decision.
+It is available even with an earlier merge/separation warning; genuine competing
+field values must still be resolved first.
 
-Canceling a review does nothing. Decisions save on this phone and travel to peers
-on the next sync. Android copies follow the resulting MyPeople contact.
+Old `matching_hint` / legacy-identifier phone points appear under **unverified
+import hints**, not among the normal phone rows or Call/Message actions. Their
+provenance is read from the graph on a background thread for this contact only.
+They are retained for source review, excluded from repeated-entry cleanup, and
+never assigned a guessed country code.
+
+Open **Review → Decisions** for earlier separation decisions and actual value
+conflicts, counted separately:
+
+- **Earlier separation decision → Review earlier decision** shows the current
+  distinct numbers and the named source records previously marked as different
+  people. Choose whether the displayed details belong to one person, then
+  **Keep this contact**. Multiple phone numbers do not imply different people.
+- If they really are different people, the alternative explicitly confirms
+  restoring **all N separate records** using existing field ownership. Nothing
+  is erased, but duplicate-looking contacts can reappear.
+- Optional phone cleanup can share the same atomic commit with a confirmed keep
+  decision. It can also run independently without confirming or undoing a merge.
+- Actual independently edited values still appear under **Two versions, safely
+  kept**, with human-readable field labels rather than graph UUID paths.
+  No identity decision or competing value is selected automatically.
+
+Canceling a preview does nothing. Saved decisions travel to peers on the next
+sync. Android copies follow MyPeople, subject to permission and phone-verification
+safeguards.
 
 ## Backup and restore
 
