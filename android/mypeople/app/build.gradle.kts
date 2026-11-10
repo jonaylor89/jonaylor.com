@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -56,6 +57,8 @@ dependencies {
     implementation(libs.navigation)
     implementation(libs.serialization)
     implementation(libs.coil.compose)
+    implementation(libs.appfunctions)
+    ksp(libs.appfunctions.compiler)
     testImplementation(libs.junit)
     testImplementation("org.xerial:sqlite-jdbc:3.50.3.0")
     androidTestImplementation(platform(libs.compose.bom))
