@@ -32,9 +32,6 @@ const resume = {
 		"GCP",
 		"AWS",
 		"Terraform",
-		"Ethereum",
-		"Solidity",
-		"Solana",
 		"AI/ML/DS",
 		"web crawling",
 		"data engineering",
@@ -62,6 +59,19 @@ const resume = {
 		},
 		{
 			location: "New York City, NY",
+			company: "BeatStars",
+			url: "https://www.beatstars.com/claude",
+			period: "Spring 2026 - Fall 2026",
+			title: "Engineering Manager (Contract)",
+			bullets: [
+				"Rebuilt the engineering team after the Lemonaide acquisition",
+        "Redefined engineering culture, ceremonies, and hiring requirements",
+				"Launched the BeatStars MCP / Claude Connector",
+			],
+			tech: ["PHP", "Go", "MCP", "Claude", "Jenkins", "GitHub Actions"],
+		},
+		{
+			location: "New York City, NY",
 			company: "Udio",
 			period: "Fall 2024 - Fall 2025",
 			title: "Product/Growth Engineer",
@@ -72,19 +82,6 @@ const resume = {
 				"Used product-analytics to guide feature development",
 			],
 			tech: ["Nextjs", "Supabase", "Golang", "k8s", "GCP", "LLMs", "Mixpanel", "React Native"],
-		},
-		{
-			location: "New York City, NY",
-			company: "BeatStars",
-			url: "https://www.beatstars.com/claude",
-			period: "Spring 2026 - Fall 2026",
-			title: "Engineering Manager (Contract)",
-			bullets: [
-				"Led legacy PHP rewrites to Go",
-				"Created the BeatStars MCP / Claude Connector",
-				"Simplified CI/CD by migrating frontend and backend teams from Jenkins to GitHub Actions",
-			],
-			tech: ["PHP", "Go", "MCP", "Claude", "Jenkins", "GitHub Actions"],
 		},
 		{
 			location: "San Francisco, CA",
@@ -132,21 +129,20 @@ const resume = {
 	],
 	projects: [
 		{
+			name: "Housefly",
+			period: "2024",
+			url: "https://housefly.jonaylor.com",
+			bullets: [
+        "An interactive learning project designed to teach web scraping",
+			],
+		},
+		{
 			name: "Wine in a Million",
 			period: "Fall 2019",
 			url: "https://github.com/jonaylor89/WineInAMillion",
 			bullets: [
 				"Won <a href='https://devpost.com/software/wine-in-a-million' target='_blank' rel='noopener'>first place</a> for GDIT's Natural Language Processing Challenge",
 				"Uses BERT as a Service (AI/ML/NLP Model), Jupyter notebooks, and a wine review dataset to recommend wine to users similar to their current tastes",
-			],
-		},
-		{
-			name: "Hot Wheels",
-			period: "Fall 2019",
-			url: "https://github.com/BatmaniNRobin/HotWheeels_Ramhacks2019",
-			bullets: [
-				"Won <a href='https://devpost.com/software/hot-wheels' target='_blank' rel='noopener'>second place</a> at RamHacks 2019",
-				"Uses Augmented Reality, AI, and microservices (Flask Framework) to let CarMax customers check if a car in the lot is available or not",
 			],
 		},
 		{
@@ -165,38 +161,10 @@ const resume = {
 				"Offensive security competition used as a simulation for an actual corporate penetration test",
 			],
 		},
-	],
-	leadership: [
 		{
-			title: "Lead Organizer of RVA Remix Competition",
-			period: "Summer 2022",
-			bullets: [
-				"https://rvaremix.org",
-				"Lead a week long in-person music remixing competition",
-				"Featured ~$1000 in prizes for winners",
-				"Included workshops and seminars for participants",
-			],
-		},
-		{
-			title: "President of RamDev",
-			period: "Summer 2018 - Summer 2020",
-			bullets: [
-				"Organize weekly tech-talks by companies and students",
-				"Invite corporate developers to speak and bring internships for students",
-				"Organize Hackathon trips",
-			],
-		},
-		{
-			title: "Lead RamHacks Organizer",
-			period: "Spring 2020 - Fall 2020",
-			bullets: [
-				"Annual VCU Hackathon and largest hackathon in Virginia",
-				"Oversaw VCU's first all virtual hackathon during COVID-19 lockdown",
-			],
-		},
-		{
-			title: "Hyperloop Software Lead",
-			period: "Fall 2017 - Fall 2018",
+			name: "Hyperloop Software Lead",
+			period: "2018",
+      url: "https://news.vcu.edu/article/The_sprint_to_SpaceX_Inside_VCUs_dash_to_beat_the_clock__and",
 			bullets: [
 				"Design and implement software for the Hyperloop team at VCU competing in SpaceX's annual competition",
 				"Handpicked by SpaceX as one of the top 20 teams internationally",
@@ -530,6 +498,7 @@ const resume = {
       </section>
 
       <!-- Leadership -->
+<!--
       <section>
         <h2 class="section-header">Leadership</h2>
         {resume.leadership.map((role) => (
@@ -544,6 +513,7 @@ const resume = {
           </div>
         ))}
       </section>
+-->
 
       <!-- Certifications -->
       <section>
