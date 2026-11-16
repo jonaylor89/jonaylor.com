@@ -11,6 +11,7 @@ import android.net.Uri
 import android.provider.ContactsContract as C
 import android.provider.ContactsContract.CommonDataKinds as K
 import androidx.core.content.ContextCompat
+import app.mypeople.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -25,7 +26,7 @@ import java.util.Base64
  */
 class DeviceContacts(private val context: Context, private val graph: app.mypeople.AppGraph) {
     companion object {
-        const val ACCOUNT_TYPE = "app.sherloq.contacts"
+        const val ACCOUNT_TYPE = BuildConfig.APPLICATION_ID + ".contacts"
         const val ACCOUNT_NAME = "Sherloq"
     }
     private val resolver = context.contentResolver

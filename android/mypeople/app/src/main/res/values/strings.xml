@@ -1,1 +1,5 @@
-<resources><string name="contacts_account">MyPeople</string></resources>
+<resources>
+    <string name="app_name">MyPeople</string>
+    <string name="contacts_account">MyPeople</string>
+    <string name="contacts_account_type" translatable="false">app.sherloq.contacts</string>
+</resources>

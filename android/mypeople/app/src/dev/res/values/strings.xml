@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">MyPeople Dev</string>
+    <string name="contacts_account">MyPeople Dev</string>
+    <string name="contacts_account_type" translatable="false">app.sherloq.dev.contacts</string>
+</resources>

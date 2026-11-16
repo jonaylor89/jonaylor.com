@@ -1,8 +1,5 @@
 package app.mypeople.ui
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.rememberScrollState
@@ -16,14 +13,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
 import app.mypeople.AppGraph
 import app.mypeople.data.*
 import app.mypeople.ui.icons.Symbols
 import coil3.compose.AsyncImage
-import java.util.Base64
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -34,7 +29,6 @@ import kotlinx.coroutines.withContext
 @Composable
 fun PhotoChooser(person: Person, graph: AppGraph, dismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
     var choices by remember(person.contact_uid) { mutableStateOf<PhotoChoices?>(null) }
     var selected by remember(person.contact_uid) { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
@@ -50,33 +44,12 @@ fun PhotoChooser(person: Person, graph: AppGraph, dismiss: () -> Unit) {
         catch (_: Exception) { error = "Couldn’t load photos. Try again." }
         finally { loading = false }
     }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) scope.launch {
-            saving = true; error = null
-            try {
-                val bytes = withContext(Dispatchers.IO) {
-                    requireNotNull(context.contentResolver.openInputStream(uri)).use { input ->
-                        val output = java.io.ByteArrayOutputStream()
-                        val buffer = ByteArray(8192)
-                        val limit = 2 * 1024 * 1024
-                        while (output.size() <= limit) {
-                            val count = input.read(buffer, 0, minOf(buffer.size, limit + 1 - output.size()))
-                            if (count < 0) break
-                            output.write(buffer, 0, count)
-                        }
-                        output.toByteArray()
-                    }
-                }
-                require(bytes.size <= 2 * 1024 * 1024) { "Choose a photo under 2 MiB." }
-                val card = person.contactCard().copy(photo = Base64.getEncoder().encodeToString(bytes), photo_hash = "")
-                card.validate()
-                graph.saveContact(card, contactUid = person.contact_uid, expectedPerson = person)
-                dismiss()
-            } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { error = e.message ?: "Couldn’t add that photo. Try another image." }
-            finally { saving = false }
-        }
-    }
+    val addPhoto = rememberContactPhotoPicker(onPhoto = { encoded ->
+        val card = person.contactCard().copy(photo = encoded, photo_hash = "")
+        card.validate()
+        graph.saveContact(card, contactUid = person.contact_uid, expectedPerson = person)
+        dismiss()
+    }, loading = { saving = it; if (it) error = null }, error = { error = it }, visualPicker = true)
     ModalBottomSheet(onDismissRequest = { if (!saving) dismiss() }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().fillMaxHeight(.92f).padding(horizontal = KinSpace.s5).padding(bottom = KinSpace.s5), verticalArrangement = Arrangement.spacedBy(KinSpace.s3)) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(KinSpace.s3)) {
@@ -139,7 +112,7 @@ fun PhotoChooser(person: Person, graph: AppGraph, dismiss: () -> Unit) {
             }
             choices?.let { options ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KinSpace.s2), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, enabled = !saving, modifier = Modifier.weight(1f)) { Text("Add photo") }
+                    TextButton(onClick = addPhoto, enabled = !saving, modifier = Modifier.weight(1f)) { Text("Add photo") }
                     TextButton(onClick = dismiss, enabled = !saving, modifier = Modifier.weight(1f)) { Text("Cancel") }
                     Button(enabled = !saving, modifier = Modifier.weight(1f), onClick = {
                         scope.launch {
