@@ -42,9 +42,9 @@ POLL_SECONDS = 2.0
 MIN_REFRESH_SECONDS = 5.0
 REFRESH_BACKOFF = 5  # never spend more than a fifth of the time refreshing
 STOP_SECONDS = 5
-HIDDEN_CARD_KEYS = ("photo", "originals", "source_records")  # large; the editor loads the full card
+HIDDEN_CARD_KEYS = ("photo", "photo_hash", "originals", "source_records")  # large; the editor loads the full card
 HISTORY_LIMIT = 200
-VIEW_CACHE_FORMAT = 1  # bump when a record's shape changes in a way an older cache can't satisfy
+VIEW_CACHE_FORMAT = 2  # bump when a record's shape changes in a way an older cache can't satisfy
 # Edits the app may send straight to ops.apply. Contact edits go through replica instead, as
 # `mypeople contact` does, so they enter causal history immediately. Model-backed operations
 # are jobs.
@@ -122,6 +122,8 @@ class View:
             return None
         path = self.avatars / f"{hashlib.sha256(data).hexdigest()}{'.png' if data.startswith(b'\x89PNG') else '.jpg'}"
         if not path.exists():
+            self.avatars.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            self.avatars.parent.chmod(0o700)
             self.avatars.mkdir(parents=True, exist_ok=True, mode=0o700)
             temp = path.with_suffix(f".{uuid.uuid4().hex}.tmp")
             temp.write_bytes(data)
@@ -609,6 +611,32 @@ def contact_split(self: Engine, conn, p: dict) -> dict:
     return result
 
 
+@method("contact.photos")
+def contact_photos(self: Engine, conn, p: dict) -> dict:
+    from . import photo_candidates
+    uid = _text(p, "uid")
+    _uid_person(conn, uid)
+    result = photo_candidates.list_for(conn, uid)
+    conn.commit()
+    return result
+
+
+@method("contact.photo.choose")
+def contact_photo_choose(self: Engine, conn, p: dict) -> dict:
+    from . import photo_candidates
+    uid = _text(p, "uid")
+    candidate = p.get("candidate", "")
+    if not isinstance(candidate, str):
+        raise RpcError("invalid", "Choose a photo or Automatic")
+    try:
+        photo_candidates.choose(conn, uid, candidate, observed=p.get("observed"))
+    except ValueError as exc:
+        raise RpcError("conflict" if "Reload photos" in str(exc) else "invalid", str(exc)) from None
+    conn.commit()
+    self.touched.add(_uid_person(conn, uid))
+    return {}
+
+
 @method("contact.get")
 def contact_get(self: Engine, conn, p: dict) -> dict:
     contact = _contact(replica.capture(conn), _text(p, "uid"))
@@ -707,7 +735,7 @@ def contact_export(self: Engine, conn, p: dict) -> dict:
     cards = [_contact(history, uid).card for uid in dict.fromkeys(uids)]
     path = Path(_text(p, "path")).expanduser()
     try:
-        path.write_bytes(contacts.vcard_export(cards).encode("utf-8", "replace"))
+        path.write_bytes(contacts.vcard_export(cards, photo_blob=lambda digest: conn.execute("SELECT content FROM graph_blobs WHERE hash=?", (digest,)).fetchone()[0]).encode("utf-8", "replace"))
     except OSError as exc:
         raise RpcError("invalid", f"Couldn't write {path}: {exc.strerror or exc}") from None
     return {"count": len(cards), "path": str(path)}

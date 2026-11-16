@@ -187,7 +187,9 @@ def test_cli_prioritizes_contacts_without_any_photo(conn, tmp_path, monkeypatch,
         platform = "linkedin" if source == "linkedin" or source == "social" and name == "Alice" else "instagram"
         profile(conn, pid, sp.account_url(platform, name.lower()))
     photos.save(conn, ids["Alice"], "contacts", JPEG)
-    photos.save(conn, ids["Carol"], "google", JPEG)
+    # Distinct content: deleting Carol\'s derived file must not delete Alice\'s
+    # shared content-addressed image too.
+    photos.save(conn, ids["Carol"], "google", JPEG + b"Carol")
     Path(photos.best(conn, ids["Carol"])["path"]).unlink()
 
     collected = []

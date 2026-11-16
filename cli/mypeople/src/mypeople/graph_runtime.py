@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import datetime as dt
 import hashlib
 import json
 import sqlite3
@@ -235,11 +236,19 @@ def capture(conn, *, archive=False):
                 # Do not change original attribution quality on ordinary SQL edits.
                 if entity in graph.objects:
                     person_props["attribution_quality"] = props[entity].get("attribution_quality", "asserted")
+                    # SQL cards do not own native-only registers such as photo_choice.
+                    # Preserve them (and their unresolved alternatives) on imports.
+                    person_props = props[entity] | person_props
                     edit(entity, person_props)
                 else:
                     object_("Person", person_props, person)
                 wanted = _card_entities(card, values["name"], store)
                 children = {r[0]: r for r in conn.execute("SELECT key,entity,edge,snapshot FROM graph_children WHERE person=?", (person,))}
+                if old and json.loads(json.loads(old[2]).get("contact_data") or "{}").get("photo", "") == card.get("photo", ""):
+                    # A projected avatar is not a new manual upload on a name/card edit.
+                    wanted.pop("photo", None)
+                # A replacement never destroys the previous manual candidate.
+                children.pop("photo", None)
                 for position, (key, (kind, relation, properties)) in enumerate(wanted.items()):
                     child = children.pop(key, None)
                     if child is None and key.startswith("field:"):
@@ -266,6 +275,9 @@ def capture(conn, *, archive=False):
                     else:
                         child_id = object_(kind, properties)
                         child_edge = edge_(relation, person, child_id, {"preferred": key == "name", "origin": "contact_card", "card_order":position})
+                    if key == "photo":
+                        ops.append(graph.edit(person, "photo_choice", child_id) if person in graph.objects else
+                                   {"id":uid(), "kind":"set_property", "target":person, "payload":{"property":"photo_choice", "value":child_id}, "replaces":[]})
                     storage_key = "field_uid:" + child_id if kind == "ContactPoint" else key
                     conn.execute("INSERT OR REPLACE INTO graph_children VALUES (?,?,?,?,?)", (person,storage_key,child_id,child_edge,encoded(properties)))
                 for key, child_id, child_edge, _ in children.values():
@@ -348,7 +360,7 @@ def capture(conn, *, archive=False):
         return result
 
 
-CARD_KEYS = frozenset(("name", "given", "family", "middle", "prefix", "suffix", "phonetic", "fields", "notes", "birthday", "organization", "title", "photo", "favorite", "preferred_channel", "region"))
+CARD_KEYS = frozenset(("name", "given", "family", "middle", "prefix", "suffix", "phonetic", "fields", "notes", "birthday", "organization", "title", "photo", "photo_hash", "favorite", "preferred_channel", "region"))
 
 
 def _card_entities(card, name, store):
@@ -369,7 +381,9 @@ def _card_entities(card, name, store):
             data = base64.b64decode(card["photo"], validate=True)
         except (ValueError, binascii.Error):
             raise GraphError("Invalid contact photo") from None
-        wanted["photo"] = ("Asset", "has_asset", {"content": {"blob_hash": store.put_blob(data)}, "role": "contact_photo"})
+        from .photos import image_dimensions
+        width, height = image_dimensions(data)
+        wanted["photo"] = ("Asset", "has_asset", {"content": {"blob_hash": store.put_blob(data)}, "role": "contact_photo", "source": "manual", "width": width, "height": height})
     # Preferences are attributable, versioned objects, not an opaque card.
     preferences = {"favorite":card.get("favorite",False),"preferred_channel":card.get("preferred_channel", ""),"region":card.get("region", "US")}
     if preferences:
@@ -539,11 +553,16 @@ def cards(graph, conn=None, roots=None):
                     card[p["predicate"]] = p.get("value", "")
             elif relation == "has_preferences":
                 card.update({k:p[k] for k in ("favorite", "preferred_channel", "region") if k in p})
-            elif relation == "has_asset" and p.get("role") == "contact_photo" and conn is not None:
-                digest = (p.get("content") or {}).get("blob_hash")
-                blob = conn.execute("SELECT content FROM graph_blobs WHERE hash=?", (digest,)).fetchone()
-                if blob:
+        from .photo_candidates import view as photo_view
+        avatar = photo_view(graph, root, members=members, assets={obj for _, rel, obj, _ in associations[root] if rel == "has_asset"})
+        selected = next((c for c in avatar["candidates"] if c["id"] == avatar["selected"]), None)
+        if selected and conn is not None:
+            blob = conn.execute("SELECT content FROM graph_blobs WHERE hash=?", (selected["hash"],)).fetchone()
+            if blob:
+                if selected["legacy_manual"] and len(blob[0]) <= 2 * 1024 * 1024:
                     card["photo"] = base64.b64encode(blob[0]).decode("ascii")
+                else:
+                    card["photo_hash"] = selected["hash"]
         if names:
             name = min(names)[4]
             card.update({k:v for k,v in name.items() if k in ("given","family","middle","prefix","suffix","phonetic")})
@@ -659,10 +678,12 @@ def _child_rows(conn, graph, props, root_rows, people, displayed, display_ids, p
                     directory = Path(tempfile.gettempdir()) / ("mypeople-graph-" + Store(conn).collection)
                 else:
                     directory = Path(database).parent / (Path(database).name + ".assets")
-                directory.mkdir(parents=True, exist_ok=True)
+                directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+                directory.chmod(0o700)
                 path = directory / digest
                 if not path.exists():
-                    path.write_bytes(blob[0])
+                    from .transfer import write_file
+                    write_file(path, blob[0])
                 previous = photo_paths.get(obj)
                 if previous and Path(previous).is_file() and hashlib.sha256(Path(previous).read_bytes()).hexdigest() == digest:
                     path = Path(previous)
@@ -1156,6 +1177,18 @@ def plan_edit(graph, person_uid, card=None, *, values=None, trashed=None, links=
                     return hashlib.sha256(content).hexdigest()
             store = Blobs()
         wanted = _card_entities(card,card["name"].strip(),store)
+        photo = wanted.pop("photo", None)
+        if card.get("photo", "") != (previous or {}).get("card", {}).get("photo", ""):
+            choice = ""
+            if photo:
+                now = dt.datetime.now(dt.timezone.utc).isoformat()
+                choice = add_object(photo[0], photo[2] | {"first_observed": now, "last_observed": now})
+                ops.append(create_edge("has_asset", root, choice, {"origin": "contact_card"}))
+            if root in graph.objects:
+                for member in groups[root]:
+                    ops.append(graph.edit(member, "photo_choice", choice))
+            else:
+                ops.append({"id":uid(), "kind":"set_property", "target":root, "payload":{"property":"photo_choice", "value":choice}, "replaces":[]})
         existing = defaultdict(list)
         for eid,relation,obj,owner in associations.get(root,[]):
             p = props[obj]
@@ -1167,7 +1200,6 @@ def plan_edit(graph, person_uid, card=None, *, values=None, trashed=None, links=
                     key = "field_uid:" + obj
             elif relation == "has_note" and p.get("origin") in ("contact_card_notes","legacy_card_notes"): key = "notes"
             elif relation == "subject_of" and p.get("asserted_by") in ("contact_card","legacy_contact_card"): key = p.get("predicate")
-            elif relation == "has_asset" and p.get("role") == "contact_photo": key = "photo"
             elif relation == "has_preferences" and p.get("origin") == "contact_card": key = "card_preferences"
             if key:
                 existing[key].append((eid,obj))

@@ -48,8 +48,27 @@ def image_width(data: bytes) -> int:
     return jpeg_width(data)
 
 
-def save(conn: sqlite3.Connection, person_id: int, source: str, data: bytes) -> bool:
-    """Keep the larger of this and any photo already saved from the same source."""
+def image_dimensions(data: bytes) -> tuple[int, int]:
+    width = image_width(data)
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return width, int.from_bytes(data[20:24], "big") or width
+    i = 2
+    while i + 9 < len(data) and data[:2] == b"\xff\xd8":
+        if data[i] != 0xFF:
+            break
+        marker, length = data[i + 1], int.from_bytes(data[i + 2:i + 4], "big")
+        if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+            return width, int.from_bytes(data[i + 5:i + 7], "big") or width
+        i += 2 + length
+    return width, width
+
+
+def save(conn: sqlite3.Connection, person_id: int, source: str, data: bytes, *, source_identity: str = "", source_updated_at: str = "") -> bool:
+    """Add an immutable candidate; identical source/content imports are idempotent."""
+    from . import graph_runtime
+    if graph_runtime.enabled(conn):
+        from . import photo_candidates
+        return photo_candidates.save(conn, person_id, source, data, source_identity=source_identity, source_updated_at=source_updated_at)
     width = image_width(data)
     if not width:
         return False
@@ -68,7 +87,15 @@ def save(conn: sqlite3.Connection, person_id: int, source: str, data: bytes) -> 
     return True
 
 
-def best(conn: sqlite3.Connection, person_id: int) -> sqlite3.Row | None:
+def best(conn: sqlite3.Connection, person_id: int) -> sqlite3.Row | dict | None:
+    from . import graph_runtime, photo_candidates
+    if graph_runtime.enabled(conn):
+        person = conn.execute("SELECT contact_uid FROM people WHERE id=?", (person_id,)).fetchone()
+        if not person:
+            return None
+        result = photo_candidates.list_for(conn, person[0])
+        selected = next((c for c in result["candidates"] if c["id"] == result["selected"]), None)
+        return selected if selected and selected.get("path") else None
     return conn.execute("SELECT * FROM photos WHERE person_id = ? ORDER BY width DESC LIMIT 1", (person_id,)).fetchone()
 
 
@@ -89,7 +116,7 @@ def collect_whatsapp(conn: sqlite3.Connection, root: Path = DEFAULT_DIR) -> dict
         if not person_id or conn.execute("SELECT is_me FROM people WHERE id = ?", (person_id,)).fetchone()["is_me"]:
             continue
         stats["matched"] += 1
-        stats["saved"] += save(conn, person_id, "whatsapp", file.read_bytes())
+        stats["saved"] += save(conn, person_id, "whatsapp", file.read_bytes(), source_identity=jid)
     conn.commit()
     return stats
 
@@ -149,7 +176,7 @@ def collect_contacts(conn: sqlite3.Connection, root: Path = ADDRESS_BOOK) -> dic
             if not person_id or conn.execute("SELECT is_me FROM people WHERE id = ?", (person_id,)).fetchone()["is_me"]:
                 continue
             stats["matched"] += 1
-            stats["saved"] += save(conn, person_id, "contacts", max(options, key=image_width))
+            stats["saved"] += save(conn, person_id, "contacts", max(options, key=image_width), source_identity=f"{db_file}:{pk}")
     conn.commit()
     return stats
 
@@ -180,7 +207,7 @@ def collect_google(conn: sqlite3.Connection, contacts: list[dict], fetch=_fetch)
             data = fetch(url)
         except OSError:
             continue
-        stats["saved"] += save(conn, person_id, "google", data)
+        stats["saved"] += save(conn, person_id, "google", data, source_identity=c["resourceName"])
     conn.commit()
     return stats
 
@@ -203,4 +230,4 @@ def collect(conn: sqlite3.Connection, source: str, path: Path | None = None) -> 
         return f"{source}: couldn't read its data ({e}). Grant your terminal Full Disk Access in System Settings > Privacy & Security."
     except (google.GoogleError, OSError) as e:  # e.g. not logged in to Google
         return f"{source}: skipped ({e})"
-    return f"{source}: {stats['photos']} photos, {stats['matched']} of people you know; {stats['saved']} new or larger."
+    return f"{source}: {stats['photos']} photos, {stats['matched']} of people you know; {stats['saved']} saved or restored."

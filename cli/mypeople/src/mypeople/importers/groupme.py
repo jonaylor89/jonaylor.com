@@ -145,7 +145,7 @@ def _collect_photos(conn: sqlite3.Connection, root: Path, account: str, fetch) -
                 data = fetch(url)
                 if len(data) > _MAX_PHOTO_BYTES or not photos.image_width(data):
                     raise ValueError("Invalid GroupMe photo")
-                stats["photos_saved"] += photos.save(conn, person, "groupme", data)
+                stats["photos_saved"] += photos.save(conn, person, "groupme", data, source_identity=uid)
                 break
             except (OSError, ValueError, urllib.error.URLError):
                 continue  # expired URLs must not undo the message import; try the next avatar

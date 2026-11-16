@@ -92,11 +92,12 @@ def test_apply_remembers_created_contacts(conn, monkeypatch):
     assert all(c.person_id != snap or c.resource for c in again)
 
 
-def test_photos_keep_largest_and_follow_merges(conn):
+def test_photos_keep_candidates_and_follow_merges(conn):
     assert photos.jpeg_width(JPEG_96) == 96 and photos.jpeg_width(JPEG_220) == 220
     assert photos.jpeg_width(b"not a jpeg") == 0
     marcus, snap = setup_people(conn)
     assert photos.save(conn, snap, "whatsapp", JPEG_220)
+    assert photos.save(conn, snap, "whatsapp", JPEG_96)
     assert not photos.save(conn, snap, "whatsapp", JPEG_96)
     assert photos.best(conn, snap)["width"] == 220
     identity.merge(conn, marcus, snap)
@@ -105,7 +106,7 @@ def test_photos_keep_largest_and_follow_merges(conn):
     contact = {"resourceName": "people/c1", "phoneNumbers": [{"value": "5551234567"}],
                "photos": [{"url": "x", "default": True}]}
     ch = google.plan(conn, [contact], with_photos=True, today=TODAY)[0]
-    assert ch.photo and ch.photo.endswith(f"{snap}-whatsapp.jpg")
+    assert ch.photo == photos.best(conn, marcus)["path"]
     contact["photos"] = [{"url": "y"}]  # the user's own photo is never replaced
     assert all(c.photo is None for c in google.plan(conn, [contact], with_photos=True, today=TODAY))
 

@@ -220,10 +220,10 @@ def collect(conn, selected: list[dict], *, again=False, browser=None, lookup=pub
                 image, detail = browser.image(url)
             if image:
                 data = fetch(image, source)
-                changed = photos.save(conn, pid, source, data)
+                changed = photos.save(conn, pid, source, data, source_identity=url)
                 stats["saved" if changed else "unchanged"] += 1
                 status = "ok"
-                detail += f"; {photos.image_width(data)}px" + (" saved" if changed else " (existing photo is as large or larger)")
+                detail += f"; {photos.image_width(data)}px" + (" saved" if changed else " (candidate already saved)")
         except (OSError, ValueError, http.client.HTTPException) as exc:
             detail = str(exc)[:160]
         if status != "ok":

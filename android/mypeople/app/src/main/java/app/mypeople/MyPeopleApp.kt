@@ -117,6 +117,9 @@ class AppGraph(context: Application, startMemoryImmediately: Boolean = true) {
         messages.trySend("Removed $removed duplicate phone fields. Original details remain in history.")
         removed
     }.await()
+    suspend fun choosePhoto(uid: String, candidate: String, observed: List<String>) = scope.async {
+        store.choosePhoto(uid, candidate, observed)
+    }.await()
     suspend fun saveContact(card: ContactCard, id: Int? = null, contactUid: String? = null, expectedPerson: Person? = null): Int {
         val start=System.nanoTime()
         return store.saveContact(card, id, contactUid, expectedPerson = expectedPerson).also { timing("MyPeopleEdit","contact_save",start) }

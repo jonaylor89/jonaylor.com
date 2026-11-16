@@ -117,7 +117,7 @@ def test_ops_validate_their_payloads(conn):
 
 def test_photo_collection_reports_one_line(conn, monkeypatch):
     monkeypatch.setattr(photos, "collect_contacts", lambda conn, root: {"photos": 3, "matched": 2, "saved": 1})
-    assert photos.collect(conn, "contacts") == "contacts: 3 photos, 2 of people you know; 1 new or larger."
+    assert photos.collect(conn, "contacts") == "contacts: 3 photos, 2 of people you know; 1 saved or restored."
 
 
 def test_a_surfaced_moment_does_not_block_undoing_a_merge_but_acting_on_one_does(conn):

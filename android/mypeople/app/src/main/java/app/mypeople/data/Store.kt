@@ -208,6 +208,8 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
                 it.reducer = gs.graph; it.blobsVerified = true
             }))
         }
+        // Rebuild disposable pre-candidate avatar projections once on upgrade.
+        journal.refreshPhotoPolicy(disk)
         journal.cachedRecords?.let {
             if (disk.graph != null && it.duplicateIndex == null) it.duplicateIndex = GraphDuplicateIndex().updated(it.people, it.people.keys)
             view = it; viewRecords = disk.records; viewPending = disk.pending; viewReplica = disk.replica; viewGraph = disk.graph
@@ -428,6 +430,12 @@ class Store(private val directory: File, private val saveTiming: (String, Long) 
         val repairable = gs.repairableCardFactAttributions().toSet()
         require(edges.isNotEmpty() && edges.distinct().size == edges.size && edges.all { it in repairable }) { "The repair no longer matches." }
         saveGraph(gs.commit(edges.map { gs.graph.edit(it, "_lifecycle", JsonPrimitive("active")) }))
+    }
+    suspend fun photoChoices(uid: String): PhotoChoices = locked {
+        GraphStore(requireNotNull(disk.graph) { "Sync with the graph-enabled CLI first." }).photoChoices(uid)
+    }
+    suspend fun choosePhoto(uid: String, candidate: String, observed: List<String>? = null) = locked {
+        saveGraph(GraphStore(requireNotNull(disk.graph)).choosePhoto(uid, candidate, observed))
     }
     suspend fun associations(uid: String): GraphSelection = locked {
         GraphStore(requireNotNull(disk.graph) { "Sync with the graph-enabled CLI first." }).selection(uid)

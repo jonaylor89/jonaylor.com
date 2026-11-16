@@ -310,7 +310,8 @@ class GraphStore(val state: GraphState, private val timing: (String, Long) -> Un
             val preferences = objects("has_preferences").map(::properties).fold(JsonObject(emptyMap())) { a, b -> JsonObject(a + b) }
             fun decision(action: String): JsonElement? = decisions.lastOrNull { text(it, "action") == action }?.let { graph.value(it, "value") } ?: preferences[action]
             fun claim(key: String) = claims.firstOrNull { text(it, "predicate") == key && text(it, "asserted_by") in setOf("contact_card", "legacy_contact_card") }?.let { text(it, "value") }.orEmpty()
-            val photoHash = objects("has_asset").firstNotNullOfOrNull { asset -> (graph.value(asset, "content") as? JsonObject)?.text("blob_hash")?.takeIf { it in state.bundle.blobs } }.orEmpty()
+            val avatar = photoChoices(uid)
+            val photoHash = avatar.candidates.firstOrNull { it.id == avatar.selected }?.hash.orEmpty()
             val card = ContactCard(name, given = primary?.let { text(it, "given") }.orEmpty(), family = primary?.let { text(it, "family") }.orEmpty(), middle = primary?.let { text(it, "middle") }.orEmpty(), prefix = primary?.let { text(it, "prefix") }.orEmpty(), suffix = primary?.let { text(it, "suffix") }.orEmpty(), phonetic = primary?.let { text(it, "phonetic") }.orEmpty(), fields = fields, birthday = claim("birthday"), organization = claim("organization"), title = claim("title"), notes = notes.filter { text(it, "origin") in setOf("contact_card_notes", "legacy_card_notes") }.joinToString("\n\n") { text(it, "body") }, photo_hash = photoHash,
                 favorite = (decision("favorite") as? JsonPrimitive)?.booleanOrNull ?: false, preferred_channel = (decision("preferred_channel") as? JsonPrimitive)?.contentOrNull.orEmpty(), region = (decision("region") as? JsonPrimitive)?.contentOrNull ?: "US", user_edited = members.any { (graph.value(it, "card_metadata") as? JsonObject)?.get("user_edited") == JsonPrimitive(true) }, legacy_unverified = legacyPhones(uid),
                 originals = members.flatMap { ((graph.value(it, "originals") ?: (graph.value(it, "card_metadata") as? JsonObject)?.get("originals")) as? JsonArray).orEmpty().map { v -> v.jsonPrimitive.content } }.distinct(), source_records = members.flatMap { ((graph.value(it, "source_records") ?: (graph.value(it, "card_metadata") as? JsonObject)?.get("source_records")) as? JsonArray).orEmpty().map { v -> v.jsonPrimitive.content } }.distinct())
@@ -428,16 +429,27 @@ class GraphStore(val state: GraphState, private val timing: (String, Long) -> Un
             else if (old.isNotEmpty()) update(old.first().second.to!!, "value", JsonPrimitive(v))
             else attach("Claim", "subject_of", buildJsonObject { put("predicate", k); put("value", v); put("asserted_by", "contact_card"); put("source", "manual") })
         }
-        val oldAssets = editable("has_asset")
-        val oldPhotoHash = oldAssets.firstNotNullOfOrNull { (_, e) -> (graph.value(e.to!!, "content") as? JsonObject)?.text("blob_hash") }.orEmpty()
+        val avatar = photoChoices(uid)
+        val oldPhotoHash = avatar.candidates.firstOrNull { it.id == avatar.selected }?.hash.orEmpty()
         require(card.photo_hash.isEmpty() || card.photo_hash == oldPhotoHash) { "Photo changed while editing. Reopen the contact; the draft was not applied." }
         val nextPhotoHash = if (card.photo.isNotEmpty()) digest(Base64.getDecoder().decode(card.photo)) else card.photo_hash
-        if (oldPhotoHash != nextPhotoHash) {
-            oldAssets.forEach { ops += graph.edit(it.first, "_lifecycle", JsonPrimitive("retracted")) }
+        if (oldPhotoHash != nextPhotoHash || card.photo.isNotEmpty()) {
+            var choice = ""
             if (card.photo.isNotEmpty()) {
-                val hash = digest(Base64.getDecoder().decode(card.photo)); blobs[hash] = card.photo
-                attach("Asset", "has_asset", buildJsonObject { put("role", "contact_photo"); put("content", buildJsonObject { put("blob_hash", hash) }) })
+                val existingPhoto = avatar.candidates.firstOrNull { it.hash == nextPhotoHash && it.source == "manual" }
+                if (existingPhoto != null) choice = existingPhoto.id
+                else {
+                    blobs[nextPhotoHash] = card.photo
+                    val dimensions = photoDimensions(Base64.getDecoder().decode(card.photo))
+                    val now = java.time.Instant.now().toString()
+                    val asset = VersionedGraph.createObject("Asset", buildJsonObject { put("role", "contact_photo"); put("source", "manual"); put("width", dimensions.first); put("height", dimensions.second); put("first_observed", now); put("last_observed", now); put("content", buildJsonObject { put("blob_hash", nextPhotoHash) }) })
+                    ops += asset; ops += VersionedGraph.createEdge("has_asset", uid, asset.target)
+                    choice = asset.target
+                }
             }
+            if (uid in graph.objects) {
+                graph.components().membersByPerson.getValue(uid).forEach { ops += graph.edit(it, "photo_choice", JsonPrimitive(choice)) }
+            } else ops += GraphOperation(UUID.randomUUID().toString(), "set_property", uid, buildJsonObject { put("property", "photo_choice"); put("value", choice) }, emptyList())
         }
         if (uid in graph.objects) {
             update(uid, "originals", json.encodeToJsonElement(card.originals)); update(uid, "source_records", json.encodeToJsonElement(card.source_records))

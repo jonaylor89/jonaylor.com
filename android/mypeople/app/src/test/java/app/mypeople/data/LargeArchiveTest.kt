@@ -114,7 +114,7 @@ class LargeArchiveTest {
         assertEquals("", card.photo)
         assertEquals(body, restarted.snapshot().graph!!.bundle.blobs[card.photo_hash])
     }
-    @Test fun `graph photos stay as hashes through unrelated edits and explicit removal`() = runBlocking {
+    @Test fun `graph photos stay as hashes through unrelated edits and return to automatic`() = runBlocking {
         val store = Store(temporary.newFolder())
         val image = byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 0, 1, 2, 3)
         val encoded = Base64.getEncoder().encodeToString(image)
@@ -126,7 +126,10 @@ class LargeArchiveTest {
         assertEquals(hash, store.state.value.records.people.getValue(id).contactCard().photo_hash)
         assertEquals(encoded, store.snapshot().graph!!.bundle.blobs[hash])
         store.saveContact(store.state.value.records.people.getValue(id).contactCard().copy(photo_hash = ""), id)
-        assertEquals("", store.state.value.records.people.getValue(id).contactCard().photo_hash)
+        assertEquals(hash, store.state.value.records.people.getValue(id).contactCard().photo_hash)
+        val uid = store.state.value.records.people.getValue(id).contact_uid
+        assertTrue(store.photoChoices(uid).automatic)
+        assertEquals(1, store.photoChoices(uid).candidates.size)
         assertEquals(encoded, store.snapshot().graph!!.bundle.blobs[hash])
     }
 }

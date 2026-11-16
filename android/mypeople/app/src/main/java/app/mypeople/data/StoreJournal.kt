@@ -26,6 +26,14 @@ internal class StoreJournal(private val directory: File, private val timing: (St
         return indexed!!.readState()
     }
     internal fun saveIndexed(previous: DiskState, next: DiskState, view: Records): Records = indexed!!.save(previous,next,view,cachedRecords).also { cachedRecords=it }
+    internal fun refreshPhotoPolicy(state: DiskState) {
+        val database = indexed ?: return
+        if (state.graph == null || database.meta("photo_policy") == PHOTO_POLICY_VERSION) return
+        database.transaction {
+            val rebuilt = GraphStore(state.graph).project(derived = optimistic(state.records, state.pending))
+            cachedRecords = database.save(state, state, rebuilt, database.readRecords("view"))
+        }
+    }
     private var sequence = 0L
     private var frames = 0
     var cachedRecords: Records? = null

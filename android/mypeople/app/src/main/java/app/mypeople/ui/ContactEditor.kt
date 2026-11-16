@@ -78,7 +78,7 @@ fun ContactEditor(graph: AppGraph, personId: Int? = null, initial: ContactCard =
                     Avatar(Person(card.name, card = card), graph, 88.dp)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(enabled = !draft.saving, onClick = { photo.launch(arrayOf("image/jpeg", "image/png")) }) { Text("Choose photo") }
-                        if (card.photo.isNotEmpty() || card.photo_hash.isNotEmpty()) TextButton(onClick = { update(card.copy(photo = "", photo_hash = "")) }) { Text("Remove photo") }
+                        if (card.photo.isNotEmpty() || card.photo_hash.isNotEmpty()) TextButton(onClick = { update(card.copy(photo = "", photo_hash = "")) }) { Text("Use automatic photo") }
                     }
                     OutlinedTextField(card.name, { update(card.copy(name = it)) }, label = { Text("Display name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                     TextButton(onClick = { showNameFields = !showNameFields }) { Text(if (showNameFields) "Hide name details" else "More name fields") }
