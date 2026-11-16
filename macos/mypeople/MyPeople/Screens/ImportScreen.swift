@@ -25,6 +25,7 @@ private let importGroups: [(title: String, sources: [ImportSource])] = [
         ImportSource(id: "google", title: "Google Contacts", symbol: "person.crop.rectangle.stack", detail: "Reads your contacts using your Google sign-in. Set that up on the Google screen.", path: .none),
     ]),
     ("From an Export", [
+        ImportSource(id: "groupme", title: "GroupMe", symbol: "bubble.left.and.bubble.right", detail: "The unzipped GroupMe account export containing profile/ and conversation folders. People you have directly messaged become contacts; groups add messages from already-linked people. Names never auto-merge contacts.", path: .folder, hint: "00001"),
         ImportSource(id: "instagram", title: "Instagram", symbol: "camera", detail: "The unzipped folder from Instagram's Download Your Information.", path: .folder, hint: "instagram-yourname-2026-10-23-abc"),
         ImportSource(id: "linkedin", title: "LinkedIn", symbol: "briefcase", detail: "The unzipped folder from LinkedIn's data export.", path: .folder, hint: "Basic_LinkedInDataExport_10-24-2026"),
         ImportSource(id: "twitter", title: "X", symbol: "at", detail: "An unzipped X archive. Conversations it doesn't name wait for you to say who they're with.", path: .folder, hint: "twitter-2026-10-27-abc"),
@@ -44,6 +45,7 @@ struct ImportView: View {
     @State private var names = ""
     @State private var naming = false
     @State private var signalOutput = ""
+    @State private var groupmePhotos = true
 
     private var source: ImportSource {
         importGroups.flatMap(\.sources).first { $0.id == selection } ?? importGroups[0].sources[0]
@@ -112,6 +114,9 @@ struct ImportView: View {
                 if source.id == "mbox" {
                     TextField("Your email addresses", text: $me, prompt: Text(verbatim: "you@example.com, you@work.example"))
                 }
+                if source.id == "groupme" {
+                    Toggle("Download profile pictures from GroupMe", isOn: $groupmePhotos)
+                }
                 if source.id == "twitter" {
                     PickFileField(title: "Names file (optional)", path: $names, mode: .file, placeholder: "One \"ID @handle Display Name\" per line")
                 }
@@ -156,6 +161,7 @@ struct ImportView: View {
             await model.startJob("import", jobParams([
                 "source": .string(source.id), "path": stringValue(path), "since": stringValue(since),
                 "me": JSONValue(strings: addresses), "names": stringValue(names),
+                "photos": .bool(source.id == "groupme" && groupmePhotos),
             ]))
         }
     }

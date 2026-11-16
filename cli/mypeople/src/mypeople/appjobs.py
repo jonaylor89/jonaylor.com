@@ -26,7 +26,7 @@ GRACE_SECONDS = 8  # after Ctrl-C, before SIGTERM
 KILL_SECONDS = 5  # after SIGTERM, before SIGKILL
 MAX_LINE = 2000
 _ESCAPES = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|[\x00-\x08\x0b-\x1f\x7f-\x9f]")
-IMPORT_SOURCES = ("vcf", "google", "imessage", "whatsapp", "instagram", "mino", "mbox", "gvoice", "snapchat", "linkedin", "twitter", "telegram", "signal")
+IMPORT_SOURCES = ("vcf", "google", "imessage", "whatsapp", "instagram", "mino", "mbox", "gvoice", "snapchat", "linkedin", "twitter", "telegram", "signal", "groupme")
 
 
 class JobError(ValueError):
@@ -63,7 +63,7 @@ def _import(p: dict) -> list[str]:
     source = p.get("source")
     if source not in IMPORT_SOURCES:
         raise JobError(f"Unknown import source {source!r}")
-    return ["import", source, *([p["path"]] if p.get("path") else []), *_values(p, "since", "names"), *_repeated(p, "me", "--me")]
+    return ["import", source, *([p["path"]] if p.get("path") else []), *_values(p, "since", "names"), *_repeated(p, "me", "--me"), *_flags(p, "photos")]
 
 
 def _google_sync(p: dict) -> list[str]:
