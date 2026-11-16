@@ -95,6 +95,15 @@ def cmd_import(conn, args) -> None:
             stats = import_signal(conn, Path(args.path).expanduser(), args.since)
         except SignalError as e:
             sys.exit(str(e))
+    elif args.source == "groupme":
+        from .importers.groupme import GroupMeError, import_groupme
+
+        if not args.path:
+            sys.exit("Pass the unzipped GroupMe account export folder (containing profile/).")
+        try:
+            stats = import_groupme(conn, Path(args.path).expanduser(), args.since, with_photos=args.photos)
+        except GroupMeError as e:
+            sys.exit(str(e))
     elif args.source == "telegram":
         from .importers.telegram import TelegramError, import_telegram
 
@@ -840,10 +849,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("import", help="import contacts, iMessages, or email")
-    p.add_argument("source", choices=("vcf", "google", "imessage", "whatsapp", "instagram", "mino", "mbox", "gvoice", "snapchat", "linkedin", "twitter", "telegram", "signal"))
+    p.add_argument("source", choices=("vcf", "google", "imessage", "whatsapp", "instagram", "mino", "mbox", "gvoice", "snapchat", "linkedin", "twitter", "telegram", "signal", "groupme"))
     p.add_argument("path", nargs="?", help="file or folder to import (imessage, whatsapp, and mino default to their local stores)")
     p.add_argument("--me", action="append", help="your own email address (mbox; repeatable; optional once `mypeople me` is set)")
     p.add_argument("--since", type=_date, help="only import from this date (YYYY-MM-DD)")
+    p.add_argument("--photos", action="store_true", help="download profile pictures from GroupMe (GroupMe only; uses its image CDN)")
     p.add_argument("--review", action="store_true", help="twitter: go through conversations the archive doesn't name and say who each is with")
     p.add_argument("--names", help="twitter: a file naming accounts the archive doesn't, one \"ID @handle Display Name\" per line")
     p.set_defaults(func=cmd_import)

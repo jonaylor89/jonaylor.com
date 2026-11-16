@@ -102,6 +102,19 @@ uv run mypeople import signal ~/signal-history.jsonl
 #     Re-importing the same desktop history is safe. Names alone never merge people;
 #     unknown group members, calls, and disappearing/view-once messages are excluded.
 
+# 2j. GroupMe account export: pass the unzipped folder containing profile/ and conversation folders.
+#     In the Mac app: Import > From an Export > GroupMe, then choose that folder.
+uv run mypeople import groupme ~/Desktop/00001 --photos
+#     --photos downloads profile pictures from GroupMe\'s image CDN and adds them to the same
+#     contacts, following merges. Re-import after extraction is safe: existing messages, facts,
+#     and extraction checkpoints are unchanged. Expired/failed photos are retried next time.
+#     The Mac app offers a Download profile pictures toggle (on by default).
+#     Re-importing is safe; --since YYYY-MM-DD limits history. Only people you have directly
+#     messaged become new people. Groups add incoming messages from already-linked GroupMe IDs,
+#     never everyone in the group. System/bot and hidden messages are excluded; media is not copied.
+#     Display names never auto-merge contacts. Use `merge KEEP DROP` to link an imported person
+#     to an existing contact; future imports follow that merge and preserve the contact card.
+
 # 3. Email, read from the Mino mail client's local store (all signed-in accounts).
 #    Re-run any time; it picks up whatever Mino has synced since.
 uv run mypeople import mino
