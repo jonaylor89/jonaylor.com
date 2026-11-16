@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -33,7 +34,18 @@ import java.util.concurrent.atomic.AtomicBoolean
 fun QrCamera(onScanned: (String) -> Unit, onClose: () -> Unit, onError: () -> Unit) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
-    val previewView = remember(context) { PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER } }
+    var help by remember { mutableStateOf(false) }
+    val previewView = remember(context) { PreviewView(context).apply {
+        // TextureView composes correctly with dialog chrome, overlays and large-text relayouts.
+        implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+        scaleType = PreviewView.ScaleType.FILL_CENTER
+    } }
+    var previewReady by remember { mutableStateOf(false) }
+    DisposableEffect(previewView, lifecycle) {
+        val observer = androidx.lifecycle.Observer<PreviewView.StreamState> { previewReady = it == PreviewView.StreamState.STREAMING }
+        previewView.previewStreamState.observe(lifecycle, observer)
+        onDispose { previewView.previewStreamState.removeObserver(observer) }
+    }
     val currentScanned by rememberUpdatedState(onScanned)
     val currentError by rememberUpdatedState(onError)
     DisposableEffect(previewView, lifecycle) {
@@ -51,6 +63,8 @@ fun QrCamera(onScanned: (String) -> Unit, onClose: () -> Unit, onError: () -> Un
                 scanner.process(input).addOnSuccessListener { results ->
                     val raw = results.firstOrNull { it.rawValue != null }?.rawValue
                     if (alive.get() && raw != null && detected.compareAndSet(false, true)) currentScanned(raw)
+                }.addOnFailureListener {
+                    if (alive.get() && detected.compareAndSet(false, true)) currentError()
                 }.addOnCompleteListener { frame.close() }
             }
         }
@@ -74,15 +88,22 @@ fun QrCamera(onScanned: (String) -> Unit, onClose: () -> Unit, onError: () -> Un
         Surface(Modifier.fillMaxSize(), color = Color(0xFF111A16), contentColor = Color.White) {
             Column(Modifier.fillMaxSize().systemBarsPadding()) {
                 Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Scan your Mac’s QR", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                    Text("Scan Mac QR", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
                     TextButton(onClick = onClose) { Text("Cancel", color = Color.White) }
                 }
-                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Box(Modifier.weight(1f).fillMaxWidth().clipToBounds(), contentAlignment = Alignment.Center) {
                     AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
-                    Box(Modifier.padding(36.dp).fillMaxWidth().aspectRatio(1f).border(2.dp, Color.White.copy(alpha = .85f), RoundedCornerShape(28.dp)))
+                    Box(Modifier.padding(KinSpace.s6).sizeIn(maxWidth = 320.dp, maxHeight = 320.dp).fillMaxSize().border(2.dp, Color.White.copy(alpha = .85f), RoundedCornerShape(KinRadius.xl)))
+                    if (!previewReady) Surface(color = Color(0xFF111A16), shape = RoundedCornerShape(KinRadius.lg)) {
+                        Text("Opening camera…", Modifier.padding(KinSpace.s4), color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
-                Text("Point at the private QR on your Mac.\nCamera images stay on this phone.", Modifier.padding(24.dp), style = MaterialTheme.typography.bodyMedium)
+                Column(Modifier.padding(KinSpace.s4), verticalArrangement = Arrangement.spacedBy(KinSpace.s2)) {
+                    Text("Scan the QR opened by MyPeople on your Mac.", style = MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick = { help = true }) { Text("Where do I find the QR?", color = Color.White) }
+                }
             }
         }
     }
+    if (help) MacQrHelp(onClose = { help = false })
 }

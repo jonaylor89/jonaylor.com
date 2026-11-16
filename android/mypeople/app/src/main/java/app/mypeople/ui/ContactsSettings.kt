@@ -5,6 +5,9 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -134,41 +137,6 @@ fun ContactsSettings(graph: AppGraph, state: StoreState, feedback: (String) -> U
         else { passphrase = ""; backupAction = "" }
     }
     val restoreBackup = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) { backupUri = uri; backupAction = "restore"; backupError = null; passphrase = "" } }
-    JournalCard {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Your address book", style = MaterialTheme.typography.titleLarge)
-            Row { Checkbox(peopleFirst, { peopleFirst = it; graph.settings.peopleFirst = it }); Text("Open to People on launch", Modifier.padding(top = 12.dp)) }
-            OutlinedButton(enabled = !busy, onClick = { importFile.launch(arrayOf("text/x-vcard", "text/vcard", "application/octet-stream", "text/plain")) }) { Text("Import vCard · review first") }
-            OutlinedButton(enabled = !busy, onClick = { permissionAction = "import"; permissions.launch(arrayOf(Manifest.permission.READ_CONTACTS)) }) { Text("Import existing Android contacts") }
-            OutlinedButton(enabled = !busy, onClick = { runTask { shareContacts(context, state.records.people.values.filterNot { it.trashed }.map { it.contactCard() }) } }) { Text("Export address book as vCard") }
-            TextButton(onClick = { report = true }) { Text("Migration safety report") }
-            Text("vCard files are unencrypted and contain contact details. They do not contain MyPeople facts, evidence, or conversation history.", style = MaterialTheme.typography.bodySmall)
-        }
-    }
-    JournalCard {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Android contacts integration", style = MaterialTheme.typography.titleLarge)
-            Text("Keeps a separate MyPeople account for the dialer, messaging apps, and system pickers. Only verified contact details are copied—not facts, quotes, or relationship scores. Other accounts are never written to.")
-            Row { Switch(enabled && graph.deviceContacts.permitted(), enabled = !busy, onCheckedChange = { value ->
-                if (value) consent = true else { graph.settings.contactsEnabled = false; enabled = false; status = "Integration paused. Existing Android copies remain; remove the MyPeople account in Android Settings to remove them." }
-            }); Text("Enable integration", Modifier.padding(start = 12.dp, top = 12.dp)) }
-            Text(status, style = MaterialTheme.typography.bodySmall)
-            if (enabled) {
-                OutlinedButton(enabled = !busy, onClick = { reconcile() }) { Text("Retry Android copy update") }
-                Text("MyPeople is the source of truth. Saved edits automatically update its Android copies. Edits or deletions in other contact apps are replaced with the MyPeople version. Resolve offline conflicts inside MyPeople before those contacts can update.", style = MaterialTheme.typography.bodySmall)
-            }
-        }
-    }
-    JournalCard {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Backup & recovery", style = MaterialTheme.typography.titleLarge)
-            Text("Encrypted full phone backup: contacts, photos, facts, trash, and unsynced edits. Transfer passphrases are excluded. Reconnect to the same Mac/server after restoring.")
-            OutlinedButton(enabled = !busy, onClick = { backupAction = "export"; passphrase = ""; backupError = null }) { Text("Create encrypted phone backup") }
-            OutlinedButton(enabled = !busy && state.pending.isEmpty(), onClick = { restoreBackup.launch(arrayOf("*/*")) }) { Text("Restore encrypted phone backup") }
-            if (state.pending.isNotEmpty()) Text("Sync pending edits before restoring. Exporting a backup is always available.", style = MaterialTheme.typography.bodySmall)
-            Text("This is a phone backup, not a backup of your Mac’s message database. App uninstall still removes local data. Test recovery before deleting other contacts apps.", style = MaterialTheme.typography.bodySmall)
-        }
-    }
     if (state.failedEdits.isNotEmpty()) JournalCard {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Edits needing recovery", style = MaterialTheme.typography.titleLarge)
@@ -186,6 +154,46 @@ fun ContactsSettings(graph: AppGraph, state: StoreState, feedback: (String) -> U
             }
         }
     }
+    Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(KinRadius.xl), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Row(Modifier.fillMaxWidth().toggleable(value = peopleFirst, role = Role.Switch, onValueChange = { peopleFirst = it; graph.settings.peopleFirst = it }).padding(KinSpace.s4), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(KinSpace.s3)) {
+            Text("Open to People on launch", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+            Switch(checked = peopleFirst, onCheckedChange = null)
+        }
+    }
+    SettingsDisclosure("Android contacts", if (enabled) "Integration enabled" else "Show MyPeople in your dialer and other apps") {
+        Column(verticalArrangement = Arrangement.spacedBy(KinSpace.s3)) {
+            Text("Keeps a separate MyPeople account for the dialer, messaging apps, and system pickers. Only verified contact details are copied—not facts, quotes, or relationship scores. Other accounts are never written to.")
+            Row(Modifier.fillMaxWidth().toggleable(value = enabled && graph.deviceContacts.permitted(), enabled = !busy, role = Role.Switch, onValueChange = { value ->
+                if (value) consent = true else { graph.settings.contactsEnabled = false; enabled = false; status = "Integration paused. Existing Android copies remain; remove the MyPeople account in Android Settings to remove them." }
+            }), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(KinSpace.s3)) {
+                Text("Enable integration", Modifier.weight(1f))
+                Switch(enabled && graph.deviceContacts.permitted(), enabled = !busy, onCheckedChange = null)
+            }
+            Text(status, style = MaterialTheme.typography.bodySmall)
+            if (enabled) {
+                OutlinedButton(enabled = !busy, onClick = { reconcile() }) { Text("Retry Android copy update") }
+                Text("MyPeople is the source of truth. Saved edits automatically update its Android copies. Edits or deletions in other contact apps are replaced with the MyPeople version. Resolve offline conflicts inside MyPeople before those contacts can update.", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+    SettingsDisclosure("Import & export contacts", "Android contacts and vCard files") {
+        Column(verticalArrangement = Arrangement.spacedBy(KinSpace.s3)) {
+            OutlinedButton(enabled = !busy, onClick = { importFile.launch(arrayOf("text/x-vcard", "text/vcard", "application/octet-stream", "text/plain")) }) { Text("Import vCard · review first") }
+            OutlinedButton(enabled = !busy, onClick = { permissionAction = "import"; permissions.launch(arrayOf(Manifest.permission.READ_CONTACTS)) }) { Text("Import existing Android contacts") }
+            OutlinedButton(enabled = !busy, onClick = { runTask { shareContacts(context, state.records.people.values.filterNot { it.trashed }.map { it.contactCard() }) } }) { Text("Export address book as vCard") }
+            TextButton(onClick = { report = true }) { Text("Migration safety report") }
+            Text("vCard files are unencrypted and contain contact details. They do not contain MyPeople facts, evidence, or conversation history.", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+    SettingsDisclosure("Backup & restore", "Encrypted full phone backup") {
+        Column(verticalArrangement = Arrangement.spacedBy(KinSpace.s3)) {
+            Text("Encrypted full phone backup: contacts, photos, facts, trash, and unsynced edits. Transfer passphrases are excluded. Reconnect to the same Mac after restoring.")
+            OutlinedButton(enabled = !busy, onClick = { backupAction = "export"; passphrase = ""; backupError = null }) { Text("Create encrypted phone backup") }
+            OutlinedButton(enabled = !busy && state.pending.isEmpty(), onClick = { restoreBackup.launch(arrayOf("*/*")) }) { Text("Restore encrypted phone backup") }
+            if (state.pending.isNotEmpty()) Text("Sync pending edits before restoring. Exporting a backup is always available.", style = MaterialTheme.typography.bodySmall)
+            Text("This is a phone backup, not a backup of your Mac’s message database. App uninstall still removes local data. Test recovery before deleting other contacts apps.", style = MaterialTheme.typography.bodySmall)
+        }
+    }
     if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
     recovering?.let { op ->
         val card = json.decodeFromJsonElement<ContactCard>(requireNotNull(op.payload["card"]))
@@ -197,16 +205,16 @@ fun ContactsSettings(graph: AppGraph, state: StoreState, feedback: (String) -> U
     if (report) AlertDialog(onDismissRequest = { report = false }, title = { Text("Migration safety report") }, text = { Text(state.records.migrationReport().summary(), Modifier.verticalScroll(rememberScrollState())) }, confirmButton = { TextButton(onClick = { report = false }) { Text("Close") } })
     if (consent) AlertDialog(onDismissRequest = { consent = false }, title = { Text("Make contacts available to Android?") }, text = { Text("Apps with Contacts permission can read these details. Only the MyPeople account is managed. Existing Google/SIM/device contacts are not removed and may aggregate with the new copies. MyPeople is authoritative: edits or deletions of its copies in other apps will be replaced automatically. Edit in MyPeople instead. Import and review your original contacts first.") }, confirmButton = { TextButton(onClick = { consent = false; permissionAction = "enable"; permissions.launch(arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.WRITE_CONTACTS)) }) { Text("Allow & enable") } }, dismissButton = { TextButton(onClick = { consent = false }) { Text("Cancel") } })
     if (backupAction.isNotEmpty()) AlertDialog(onDismissRequest = { if (!busy) { backupAction = ""; passphrase = "" } }, title = { Text(if (backupAction == "export") "Protect your backup" else "Restore this phone?") }, text = {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(if (backupAction == "export") "Use a separate passphrase of at least 12 ASCII characters. Losing it means losing access to the backup." else "Replaces saved phone memory. Pending edits in the backup are restored and retried by UUID. Android integration is paused and server credentials must be entered again. Your current pending queue must be empty.")
-            OutlinedTextField(passphrase, { passphrase = it; backupError = null }, label = { Text("Backup passphrase") }, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(if (backupAction == "export") "Use a separate passphrase of at least 12 ASCII characters. Losing it means losing access to the backup." else "Replaces saved phone memory. Pending edits in the backup are restored and retried by UUID. Android integration is paused and transfer passphrases must be entered again. Your current pending queue must be empty.")
+            OutlinedTextField(passphrase, { passphrase = it; backupError = null }, label = { Text("Backup passphrase") }, enabled = !busy, singleLine = true, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password), visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
             backupError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
     }, confirmButton = { TextButton(enabled = !busy && passphrase.length >= 12, onClick = {
         if (backupAction == "export") createBackup.launch("MyPeople-phone-${java.time.LocalDate.now()}.sherloq-backup")
         else scope.launch {
             busy = true
-            try { graph.backups.restore(requireNotNull(backupUri), passphrase); enabled = false; backupAction = ""; passphrase = ""; feedback("Backup restored. Reconnect to the same Mac/server to sync.") }
+            try { graph.backups.restore(requireNotNull(backupUri), passphrase); enabled = false; backupAction = ""; passphrase = ""; feedback("Backup restored. Reconnect to the same Mac to sync.") }
             catch (e: Exception) { backupError = e.message ?: "Could not restore; saved contacts were kept." }
             finally { busy = false }
         }
