@@ -19,6 +19,12 @@ android {
     }
 
     buildTypes {
+        create("dev") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            matchingFallbacks += "debug"
+        }
         release {
             isMinifyEnabled = false
             // CI signs the tested unsigned APK in its main-only publishing job.
@@ -30,11 +36,16 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
 kotlin {
     jvmToolchain(17)
+}
+
+configurations.named("devImplementation") {
+    extendsFrom(configurations.getByName("debugImplementation"))
 }
 
 dependencies {
@@ -51,6 +62,7 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.4.2")
     implementation("androidx.camera:camera-view:1.4.2")
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
+    implementation("com.google.mlkit:genai-prompt:1.0.0-beta4")
     implementation(libs.activity.compose)
     implementation(libs.lifecycle.viewmodel)
     implementation(libs.lifecycle.runtime)

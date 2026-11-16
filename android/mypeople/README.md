@@ -19,6 +19,19 @@ The supplied version catalog is unchanged. `compileSdk` is 37 because its depend
 
 APK: `app/build/outputs/apk/debug/app-debug.apk`.
 
+### Side-by-side development app
+
+Build `./gradlew :app:assembleDev` for **MyPeople Dev** (`app.sherloq.dev`). It uses the local debug signing key, separate app-private storage, FileProvider authority and contacts-account type (`app.sherloq.dev.contacts`), and does not include debug maintenance instrumentation. The regular debug/release package and account identity are unchanged. Start with an empty dev address book; do not copy personal databases into it or enable Android contact copying just to test contact capture.
+
+```sh
+adb devices -l # connect a phone, enable USB debugging, approve the computer
+adb -s <serial> install -r app/build/outputs/apk/dev/app-dev.apk
+adb -s <serial> shell am start -n app.sherloq.dev/app.mypeople.MainActivity \
+  -a android.intent.action.INSERT -t vnd.android.cursor.dir/contact
+```
+
+The last command opens New contact directly. Describe-to-add still requires an already-installed, available AICore model. Never uninstall the regular app to install the dev build.
+
 Pushes to `main` publish signed APKs through the shared monorepo release workflow;
 PRs produce debug artifacts without signing credentials. The package ID remains
 `app.sherloq`. **Existing debug-signed installations need a verified backup before
@@ -51,7 +64,8 @@ The visual direction is a **living address book**: warm paper, botanical green, 
 - People has pinned search/sorting, compact rows, a draggable A–Z/# rail with a letter preview, an accessible letter chooser, and instant top/bottom jumps. Single bottom-nav taps restore position; double taps return to the root/top without reviving a person detail page.
 - Home and Review keep their segmented tabs available while scrolling. Tabs become horizontally scrollable at large font sizes; content and actions reflow rather than using fixed-height cards.
 - Home combines a date-led daily page with recent contacts. Upcoming uses distinct calendar accents.
-- Person portraits open an offline, source-labelled photo chooser with previews, explicit Save/Cancel, Automatic, and the system Photo Picker. Pins survive imports and sync; identical pictures share a tile. [Photo model and policy](../../docs/mypeople/photos.md).
+- New contact offers a single description → editable draft → explicit Save using Android’s already-installed Gemini Nano when available. No model is bundled or downloaded and no API key or internet permission is needed. Add manually opens the compact name/contact form; phones without ready local AI open the manual form automatically, without an AI warning or setup screen. Everyone uses the same form and Save action, including when handing the phone to someone else; no separate handoff mode or completion screens. [Contact-creation storyboards](../../docs/mypeople/contact-creation-ux.md).
+- Person portraits open an offline, source-labelled photo chooser with previews, explicit Save/Cancel, Automatic, and the system Photo Picker. Adding a photo there or in the contact editor offers Take photo or Choose photo; camera captures are oriented, resized to fit, and stripped of EXIF location metadata. Pins survive imports and sync; identical pictures share a tile. [Photo model and policy](../../docs/mypeople/photos.md).
 - Person pages expose note/fact creation and relationship adjustments directly. Facts offer evidence and a confirmed forget action without requiring a long press.
 - Suggested profiles explicitly require identity confirmation. Assessment badges are not confirmation badges, and only confirmed profiles appear on a person’s page.
 - Settings puts offline storage, last sync, and queued edits before credential setup. A persistent status strip links failures and pending work to Settings, using the same top-level navigation behavior as the bottom bar.
@@ -68,7 +82,7 @@ The visual direction is a **living address book**: warm paper, botanical green, 
 - `StreamingGraphLoadTest` verifies 272 MiB of raw blobs through import/edit/restart/encrypted backup/fresh-process restore with a 192 MiB heap. A referenced original asset larger than the old card-size limit stays hashed through unrelated edits. `GraphCutoverTest` also checks compact photo baselines and stable Provider field UUIDs. These tests require disposable-emulator opt-ins; never run synthetic fixtures on a personal phone. Large legacy cutovers use separate preparation/verification/commit processes: [Wi-Fi/USB migration](../../docs/mypeople/bluetooth.md#large-complete-graphs-wi-fiusb-migration).
 - Synthetic save regression: `GraphLargeImportTest` requires `myPeopleDisposable=true`, emulator hardware and a synthetic fixture. At 2,600 people / 329,000 messages / 192 MiB heap, the first fix reduced same-emulator saves from 2,888 ms to 716–744 ms. The structurally shared/incremental pipeline then measured 30–35 ms for the first save and a 16–19 ms median for six subsequent saves per run (13–21 ms normally). Rename/phone-add saves, including duplicate checks, normally measured 18/16–17 ms versus the previous 1,038/916 ms; quick-action note/rename saves measured 13 ms. One 125–145 ms memory-pressure outlier remained per run (blocking GC confirmed in emulator logs); it can affect either preference or identity edits. First save after a fresh-process restart measured 35–37 ms (3.5–4.0 s to authoritative readiness). Reducer append fell from ~220 ms to 1 ms; publication fell from ~360 ms to 7–11 ms. Seven preference edits wrote 7,805 journal bytes without a checkpoint. These timings are environment-dependent, not directly comparable to the earlier ~12 s run. Separate-process restart and encrypted backup/restore preserve the complete book.
 - Data moves only when you scan a Mac's QR or choose an encrypted file. Nothing syncs in the background.
-- Photos come only from local files received with a memory. The APK has no `INTERNET` permission, so it can't reach the network. ML Kit's dependency on Google's `datatransport` telemetry is stripped in the manifest: its permissions and its upload backend are removed, so events are dropped before they're stored. QR scanning runs on the device. `ScanWithoutNetworkTest` checks both, and any ML Kit update should be rechecked with `aapt2 dump permissions`.
+- Photos come from synced memory, files you choose, or pictures you explicitly capture. The APK has no `INTERNET` permission, so it can't reach the network. ML Kit's dependency on Google's `datatransport` telemetry is stripped in the manifest: its permissions and its upload backend are removed, so events are dropped before they're stored. QR scanning runs on the device. Optional contact-description extraction runs through Android AICore only when its model is already available; MyPeople never requests a model download. `ScanWithoutNetworkTest` checks the denied network permission and offline QR decoding, and any ML Kit update should be rechecked with `aapt2 dump permissions`.
 - Local files and preferences are app-private; cloud backup and device transfer are disabled. Graph notes, facts, profiles, review decisions, preferences and contact edits use UUIDs and can reconcile with any peer in the same collection. Unresolved old row-ID requests remain publisher-bound until recovered.
 - Relationship overrides cleared to “Automatic” can only be fully re-inferred on the Mac. The phone shows the last known value until that sync returns.
 

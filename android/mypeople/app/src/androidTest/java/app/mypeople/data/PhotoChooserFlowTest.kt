@@ -66,6 +66,10 @@ class PhotoChooserFlowTest {
         }
         compose.onNodeWithTag("contact-photos").performClick()
         compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("GroupMe photo").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Add photo").performClick()
+        compose.onNodeWithText("Take photo").assertIsDisplayed()
+        compose.onNodeWithText("Choose photo").assertIsDisplayed()
+        androidx.test.espresso.Espresso.pressBack()
         compose.onNodeWithContentDescription("GroupMe photo").performClick()
         compose.onNodeWithText("Save").assertIsDisplayed().performClick()
         compose.waitUntil(5000) { runBlocking { app.store.photoChoices(uid).preferred.isNotEmpty() } }

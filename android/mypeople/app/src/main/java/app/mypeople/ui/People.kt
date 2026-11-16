@@ -155,7 +155,7 @@ fun PeopleScreen(records: Records, graph: AppGraph, scrollToTopRequest: Long = 0
             }
         }
         Box(Modifier.align(Alignment.BottomEnd).padding(KinSpace.s4)) {
-            KinFab("Create contact", Symbols.PersonAdd, expanded = fabExpanded, enabled = canEdit && !loading) { create = true }
+            KinFab("New contact", Symbols.PersonAdd, expanded = fabExpanded, enabled = canEdit && !loading) { create = true }
         }
     }
 }
