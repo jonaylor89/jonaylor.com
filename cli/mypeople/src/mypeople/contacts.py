@@ -166,7 +166,7 @@ def _vcard_fold(line: str) -> str:
     return "".join(out)
 
 
-def vcard_export(cards: list[dict]) -> str:
+def vcard_export(cards: list[dict], *, photo_blob=None) -> str:
     """vCard 3.0, matching VCards.export on Android, so a file from either side reads the same."""
     result = []
     for card in cards:
@@ -196,8 +196,12 @@ def vcard_export(cards: list[dict]) -> str:
                           ("X-SHERLOQ-REGION", "region"), ("X-PHONETIC-FIRST-NAME", "phonetic")):
             if card.get(key):
                 lines.append(f"{prop}:{_vcard_escape(card[key])}")
-        if card.get("photo"):
-            lines.append(f"PHOTO;ENCODING=b;TYPE=JPEG:{card['photo']}")
+        photo = card.get("photo", "")
+        if not photo and card.get("photo_hash") and photo_blob:
+            photo = base64.b64encode(photo_blob(card["photo_hash"])).decode("ascii")
+        if photo:
+            kind = "PNG" if base64.b64decode(photo).startswith(b"\x89PNG") else "JPEG"
+            lines.append(f"PHOTO;ENCODING=b;TYPE={kind}:{photo}")
         if card.get("favorite"):
             lines.append("X-SHERLOQ-FAVORITE:1")
         if card.get("legacy_unverified"):

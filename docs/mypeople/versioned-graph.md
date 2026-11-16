@@ -112,6 +112,14 @@ Contact-card defaults are absence/display defaults, not authority to erase anoth
 identity's information during merging. Unknown source properties and originals remain
 in graph metadata/source evidence and portable exports.
 
+### Photo candidates and selection
+
+Profile pictures are attributable `Asset` candidates sharing content-addressed
+blobs. `Person.photo_choice` pins an Asset UUID or explicitly selects Automatic;
+concurrent choices remain explicit alternatives. Merges and splits preserve the
+original candidate associations. Both native apps expose a source-labelled photo
+chooser. [Policy, compatibility, APIs and verification](photos.md).
+
 ### Conversation storage
 
 Raw messages are losslessly stored in `InteractionBatch` objects: at most 256 records,

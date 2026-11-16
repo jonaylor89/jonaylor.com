@@ -1,0 +1,369 @@
+{
+  "uid": "4d25e851-a16f-4b8b-a959-9a0450ebd8b7",
+  "bundle": {
+    "collection": "33138ae2-bc0a-48aa-b6a8-abb818e4c50e",
+    "heads": [
+      "fb903c0c-17de-4c9b-87c0-826b88fe3d40"
+    ],
+    "commits": [
+      {
+        "collection": "33138ae2-bc0a-48aa-b6a8-abb818e4c50e",
+        "id": "8633f161-8248-486b-a563-4c575f53f8b3",
+        "operations": [
+          {
+            "id": "30b25de8-e748-46eb-9ea1-c49c5d837da3",
+            "kind": "create_object",
+            "payload": {
+              "properties": {
+                "attribution_quality": "asserted",
+                "card_metadata": {
+                  "legacy_unverified": true
+                },
+                "created_at": "2026-11-16 05:15:31",
+                "is_me": false
+              },
+              "type": "Person"
+            },
+            "replaces": [],
+            "target": "4d25e851-a16f-4b8b-a959-9a0450ebd8b7"
+          },
+          {
+            "id": "0186eed0-4fed-4482-8d14-88907a49b0b7",
+            "kind": "create_object",
+            "payload": {
+              "properties": {
+                "display": "Synthetic Photo Person"
+              },
+              "type": "Name"
+            },
+            "replaces": [],
+            "target": "fe9710db-555c-4280-b1b8-e1c9adc04d59"
+          },
+          {
+            "id": "691a3584-396f-4802-b155-036be11c851d",
+            "kind": "create_edge",
+            "payload": {
+              "from": "4d25e851-a16f-4b8b-a959-9a0450ebd8b7",
+              "properties": {
+                "card_order": 0,
+                "origin": "contact_card",
+                "preferred": true
+              },
+              "to": "fe9710db-555c-4280-b1b8-e1c9adc04d59",
+              "type": "has_name"
+            },
+            "replaces": [],
+            "target": "94fb91de-4811-4ca1-a35e-c5392a40aab6"
+          },
+          {
+            "id": "4f8dde3d-1325-4b09-9142-b8a156451618",
+            "kind": "create_object",
+            "payload": {
+              "properties": {
+                "body": "",
+                "origin": "contact_card_notes"
+              },
+              "type": "Note"
+            },
+            "replaces": [],
+            "target": "b60fc5e2-6a7a-48ab-8246-089bf8788c11"
+          },
+          {
+            "id": "1e27ac23-0e2c-49cb-b55e-0158cf6cd8cc",
+            "kind": "create_edge",
+            "payload": {
+              "from": "4d25e851-a16f-4b8b-a959-9a0450ebd8b7",
+              "properties": {
+                "card_order": 1,
+                "origin": "contact_card",
+                "preferred": false
+              },
+              "to": "b60fc5e2-6a7a-48ab-8246-089bf8788c11",
+              "type": "has_note"
+            },
+            "replaces": [],
+            "target": "7488b269-a080-49ba-b5da-1ac36df5f382"
+          },
+          {
+            "id": "8f705b00-e41f-44a6-a2a6-297aa85ef609",
+            "kind": "create_object",
+            "payload": {
+              "properties": {
+                "asserted_by": "contact_card",
+                "predicate": "birthday",
+                "value": ""
+              },
+              "type": "Claim"
+            },
+            "replaces": [],
+            "target": "6ee175f7-fc6e-47f8-9bca-93cb68c9af20"
+          },
+          {
+            "id": "a746ff1e-4823-4830-b472-90356d94d4f6",
+            "kind": "create_edge",
+            "payload": {
+              "from": "4d25e851-a16f-4b8b-a959-9a0450ebd8b7",
+              "properties": {
+                "card_order": 2,
+                "origin": "contact_card",
+                "preferred": false
+              },
+              "to": "6ee175f7-fc6e-47f8-9bca-93cb68c9af20",
+              "type": "subject_of"
+            },
+            "replaces": [],
+            "target": "6f219fb2-e037-4c75-ba4c-fa937d7c63a0"
+          },
+          {
+            "id": "9219a505-166f-4319-b3d4-59b4ebcd827c",
+            "kind": "create_object",
+            "payload": {
+              "properties": {
+                "asserted_by": "contact_card",
+                "predicate": "organization",
+                "value": ""
+              },
+              "type": "Claim"
+            },
+            "replaces": [],
+            "target": "cde59b6e-6832-4f2b-9fa5-a017cbc9b2fb"
+          },
+          {
+            "id": "2dc42b1b-4f4d-4716-9f1b-308ac1d6132b",
+            "kind": "create_edge",
+            "payload": {
+              "from": "4d25e851-a16f-4b8b-a959-9a0450ebd8b7",
+              "properties": {
+                "card_order": 3,
+                "origin": "contact_card",
+                "preferred": false
+              },
+              "to": "cde59b6e-6832-4f2b-9fa5-a017cbc9b2fb",
+              "type": "subject_of"
+            },
+            "replaces": [],
+            "target": "61df203e-159f-4378-b4e4-f2ec01984832"
+          },
+          {
+            "id": "c06b9775-15b2-4452-8bea-1c2cbeaf55de",
+            "kind": "create_object",
+            "payload": {
+              "properties": {
+                "asserted_by": "contact_card",
+                "predicate": "title",
+                "value": ""
+              },
+              "type": "Claim"
+            },
+            "replaces": [],
+            "target": "bdb9c2d8-c955-42d3-bc5e-b47ba21c2117"
+          },
+          {
+            "id": "e802c21b-ee53-4e71-907e-baadaaf7add0",
+            "kind": "create_edge",
+            "payload": {
+              "from": "4d25e851-a16f-4b8b-a959-9a0450ebd8b7",
+              "properties": {
+                "card_order": 4,
+                "origin": "contact_card",
+                "preferred": false
+              },
+              "to": "bdb9c2d8-c955-42d3-bc5e-b47ba21c2117",
+              "type": "subject_of"
+            },
+            "replaces": [],
+            "target": "706e4db5-ba51-4c0b-b832-331b9501592d"
+          },
+          {
+            "id": "6612ab05-edd3-4545-b80a-b670f7303853",
+            "kind": "create_object",
+            "payload": {
+              "properties": {
+                "favorite": false,
+                "origin": "contact_card",
+                "preferred_channel": "",
+                "region": "US"
+              },
+              "type": "RelationshipPreferences"
+            },
+            "replaces": [],
+            "target": "203461e5-954f-456a-83ab-a14e3050ab14"
+          },
+          {
+            "id": "d52815e7-e7aa-4bdd-a543-ea083e7e497d",
+            "kind": "create_edge",
+            "payload": {
+              "from": "4d25e851-a16f-4b8b-a959-9a0450ebd8b7",
+              "properties": {
+                "card_order": 5,
+                "origin": "contact_card",
+                "preferred": false
+              },
+              "to": "203461e5-954f-456a-83ab-a14e3050ab14",
+              "type": "has_preferences"
+            },
+            "replaces": [],
+            "target": "64ba36a2-1921-4495-8ff7-048e26a25126"
+          }
+        ],
+        "parents": [],
+        "peer": "fd3b8387-2328-4b4e-b596-07770c55e3b0",
+        "recorded_at": "2026-11-16T05:15:31.749060+00:00",
+        "version": 1
+      },
+      {
+        "collection": "33138ae2-bc0a-48aa-b6a8-abb818e4c50e",
+        "id": "84570228-bda1-4249-9248-5c1ac9bcb0d2",
+        "operations": [
+          {
+            "id": "b37f6bf8-4c9a-4ef5-9e41-3b6d5a925de6",
+            "kind": "create_object",
+            "payload": {
+              "properties": {
+                "compat_table": "photos",
+                "content": {
+                  "blob_hash": "428377751b9ade544dbef8745576e0d460de19adf8be20a9adb0f4871ea4b3e9"
+                },
+                "first_observed": "2026-11-16T05:15:31.749938+00:00",
+                "height": 512,
+                "last_observed": "2026-11-16T05:15:31.749938+00:00",
+                "role": "profile_photo",
+                "source": "groupme",
+                "source_identity": "synthetic-user",
+                "source_updated_at": "2025-01-01T00:00:00Z",
+                "width": 512
+              },
+              "type": "Asset"
+            },
+            "replaces": [],
+            "target": "1cfbae92-1440-458a-adf0-ce65e7d988a4"
+          },
+          {
+            "id": "0e0f261e-dd78-4aee-9014-b4d9a33a47f2",
+            "kind": "create_edge",
+            "payload": {
+              "from": "4d25e851-a16f-4b8b-a959-9a0450ebd8b7",
+              "properties": {},
+              "to": "1cfbae92-1440-458a-adf0-ce65e7d988a4",
+              "type": "has_asset"
+            },
+            "replaces": [],
+            "target": "0f8c36d4-af40-49a9-9a64-9398c6686262"
+          }
+        ],
+        "parents": [
+          "8633f161-8248-486b-a563-4c575f53f8b3"
+        ],
+        "peer": "fd3b8387-2328-4b4e-b596-07770c55e3b0",
+        "recorded_at": "2026-11-16T05:15:31.749984+00:00",
+        "version": 1
+      },
+      {
+        "collection": "33138ae2-bc0a-48aa-b6a8-abb818e4c50e",
+        "id": "8abb7c64-7068-4b64-b735-75ed921982cd",
+        "operations": [
+          {
+            "id": "3c931045-e2a1-4a4f-89d6-e10c6c92c841",
+            "kind": "create_object",
+            "payload": {
+              "properties": {
+                "compat_table": "photos",
+                "content": {
+                  "blob_hash": "22b1718a6702445b48f09713a7e18466e283c09a3611d7e3397f2d58adba9595"
+                },
+                "first_observed": "2026-11-16T05:15:31.757751+00:00",
+                "height": 128,
+                "last_observed": "2026-11-16T05:15:31.757751+00:00",
+                "role": "profile_photo",
+                "source": "whatsapp",
+                "source_identity": "synthetic-user",
+                "source_updated_at": "2026-01-01T00:00:00Z",
+                "width": 128
+              },
+              "type": "Asset"
+            },
+            "replaces": [],
+            "target": "affd63c5-29f5-44d8-94ba-08b88d1c5683"
+          },
+          {
+            "id": "43da695d-30bc-4445-b441-ebdf0da30b63",
+            "kind": "create_edge",
+            "payload": {
+              "from": "4d25e851-a16f-4b8b-a959-9a0450ebd8b7",
+              "properties": {},
+              "to": "affd63c5-29f5-44d8-94ba-08b88d1c5683",
+              "type": "has_asset"
+            },
+            "replaces": [],
+            "target": "80482a0f-4ca6-4350-946c-03f09434c488"
+          }
+        ],
+        "parents": [
+          "84570228-bda1-4249-9248-5c1ac9bcb0d2"
+        ],
+        "peer": "fd3b8387-2328-4b4e-b596-07770c55e3b0",
+        "recorded_at": "2026-11-16T05:15:31.757786+00:00",
+        "version": 1
+      },
+      {
+        "collection": "33138ae2-bc0a-48aa-b6a8-abb818e4c50e",
+        "id": "fb903c0c-17de-4c9b-87c0-826b88fe3d40",
+        "operations": [
+          {
+            "id": "5be0110d-9310-4289-ae81-161d1f4640ce",
+            "kind": "create_object",
+            "payload": {
+              "properties": {
+                "compat_table": "photos",
+                "content": {
+                  "blob_hash": "1fd9ba9530d75815a4819948d56e26db064cf7d3eda14032d185dc07fabec79d"
+                },
+                "first_observed": "2026-11-16T05:15:31.758882+00:00",
+                "height": 32,
+                "last_observed": "2026-11-16T05:15:31.758882+00:00",
+                "role": "profile_photo",
+                "source": "google",
+                "source_identity": "synthetic-user",
+                "source_updated_at": "2027-01-01T00:00:00Z",
+                "width": 32
+              },
+              "type": "Asset"
+            },
+            "replaces": [],
+            "target": "44ecb244-b7c4-41cd-a18b-24cde892b9b8"
+          },
+          {
+            "id": "4edf88c5-0de9-4587-9433-99d5ba746dba",
+            "kind": "create_edge",
+            "payload": {
+              "from": "4d25e851-a16f-4b8b-a959-9a0450ebd8b7",
+              "properties": {},
+              "to": "44ecb244-b7c4-41cd-a18b-24cde892b9b8",
+              "type": "has_asset"
+            },
+            "replaces": [],
+            "target": "85013e12-ed31-47d2-8f71-07f1208e7688"
+          }
+        ],
+        "parents": [
+          "8abb7c64-7068-4b64-b735-75ed921982cd"
+        ],
+        "peer": "fd3b8387-2328-4b4e-b596-07770c55e3b0",
+        "recorded_at": "2026-11-16T05:15:31.758913+00:00",
+        "version": 1
+      }
+    ],
+    "blobs": {
+      "428377751b9ade544dbef8745576e0d460de19adf8be20a9adb0f4871ea4b3e9": "iVBORw0KGgoAAAAAAAAAAAAAAgAAAAIA",
+      "22b1718a6702445b48f09713a7e18466e283c09a3611d7e3397f2d58adba9595": "iVBORw0KGgoAAAAAAAAAAAAAAIAAAACA",
+      "1fd9ba9530d75815a4819948d56e26db064cf7d3eda14032d185dc07fabec79d": "iVBORw0KGgoAAAAAAAAAAAAAACAAAAAg"
+    }
+  },
+  "expected": {
+    "selected": "affd63c5-29f5-44d8-94ba-08b88d1c5683",
+    "preferred": "",
+    "automatic": true,
+    "conflict": false,
+    "unavailable_preference": false
+  }
+}

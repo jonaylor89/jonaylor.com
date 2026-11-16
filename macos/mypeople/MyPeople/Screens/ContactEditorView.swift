@@ -24,6 +24,7 @@ struct ContactEditorView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     var uid: String?
+    var startWithPhotoPicker = false
     var saved: (SavedContact) -> Void
 
     @State private var card = ContactCard(name: "", region: Locale.current.region?.identifier ?? "US")
@@ -77,7 +78,10 @@ struct ContactEditorView: View {
         }
         .frame(width: 560, height: 680)
         .interactiveDismissDisabled(isDirty || saving)
-        .task { await load() }
+        .task {
+            await load()
+            if startWithPhotoPicker && loadError == nil { choosingPhoto = true }
+        }
         .confirmationDialog("Discard unsaved changes?", isPresented: $confirmDiscard) {
             Button("Discard", role: .destructive) { dismiss() }
             Button("Keep Editing", role: .cancel) {}
@@ -104,7 +108,7 @@ struct ContactEditorView: View {
                     photoPreview
                     VStack(alignment: .leading) {
                         Button("Choose Photo…") { choosingPhoto = true }
-                        if !card.photo.isEmpty { Button("Remove Photo") { card.photo = "" } }
+                        if !card.photo.isEmpty { Button("Use Automatic Photo") { card.photo = "" } }
                     }
                 }
                 TextField("Display name", text: $card.name, prompt: Text("Required"))
@@ -169,6 +173,8 @@ struct ContactEditorView: View {
     @ViewBuilder private var photoPreview: some View {
         if !card.photo.isEmpty, let data = Data(base64Encoded: card.photo), let image = NSImage(data: data) {
             Image(nsImage: image).resizable().scaledToFill().frame(width: 72, height: 72).clipShape(Circle())
+        } else if let uid, let person = model.records.people.values.first(where: { $0.contactUid == uid }) {
+            Avatar(person, size: 72)
         } else {
             Avatar(name: card.name, seed: uid ?? card.name, size: 72)
         }

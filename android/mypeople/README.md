@@ -51,6 +51,7 @@ The visual direction is a **living address book**: warm paper, botanical green, 
 - People has pinned search/sorting, compact rows, a draggable A–Z/# rail with a letter preview, an accessible letter chooser, and instant top/bottom jumps. Single bottom-nav taps restore position; double taps return to the root/top without reviving a person detail page.
 - Home and Review keep their segmented tabs available while scrolling. Tabs become horizontally scrollable at large font sizes; content and actions reflow rather than using fixed-height cards.
 - Home combines a date-led daily page with recent contacts. Upcoming uses distinct calendar accents.
+- Person portraits open an offline, source-labelled photo chooser with previews, explicit Save/Cancel, Automatic, and the system Photo Picker. Pins survive imports and sync; identical pictures share a tile. [Photo model and policy](../../docs/mypeople/photos.md).
 - Person pages expose note/fact creation and relationship adjustments directly. Facts offer evidence and a confirmed forget action without requiring a long press.
 - Suggested profiles explicitly require identity confirmation. Assessment badges are not confirmation badges, and only confirmed profiles appear on a person’s page.
 - Settings puts offline storage, last sync, and queued edits before credential setup. A persistent status strip links failures and pending work to Settings, using the same top-level navigation behavior as the bottom bar.

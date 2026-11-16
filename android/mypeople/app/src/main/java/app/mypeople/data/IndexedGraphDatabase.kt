@@ -233,6 +233,7 @@ internal class IndexedGraphDatabase(val sql: GraphSql, val blobDirectory: File) 
         view.duplicateIndex?.takeUnless { it === previousView?.duplicateIndex }?.let { putMeta("duplicate_keys",json.encodeToString(it.persistedKeys())) }
         viewVersion = revision; putMeta("view_version",revision.toString())
         putMeta("person_codec","1")
+        putMeta("photo_policy", PHOTO_POLICY_VERSION)
         if (view === previousView) return view
         return view.copy(events=if ("event" in changed) viewMap("view","event",revision) else previousView?.events ?: view.events,
             profiles=if ("profile" in changed) viewMap("view","profile",revision) else previousView?.profiles ?: view.profiles).also { it.duplicateIndex=view.duplicateIndex }

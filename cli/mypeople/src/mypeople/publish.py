@@ -83,13 +83,21 @@ def records(
         rel = relationships.infer(conn, pid, today)
         used = channels.get(pid, [])
         photo = None
+        if graph_mode:
+            from . import photo_candidates
+            avatars = photo_candidates.view(history.graph, p["contact_uid"])
+            selected = next((c for c in avatars["candidates"] if c["id"] == avatars["selected"]), None)
+            if selected and (path := photo_candidates._path(conn, selected["hash"])):
+                best_photos[pid] = path
+            else:
+                best_photos.pop(pid, None)
         if pid in best_photos and (photo := hash_photo(best_photos[pid])):
             files[photo] = best_photos[pid]
         out[("person", str(pid))] = {
             "name": p["name"],
             "contact_uid": p["contact_uid"],
             "contact_aliases": redirects.get(pid, []),
-            "card": json.loads(p["contact_data"]) if p["contact_data"] else None,
+            "card": contact.card if graph_mode and contact else json.loads(p["contact_data"]) if p["contact_data"] else None,
             "trashed": bool(p["trashed"]),
             "can_undo_merge": bool(contact and len(contact.members) > 1) if graph_mode else contacts.merge_can_be_undone(conn, pid),
             "contact_conflicts": contact.conflicts if contact else {},

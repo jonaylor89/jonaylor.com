@@ -3,7 +3,7 @@ import MyPeopleKit
 import SwiftUI
 
 private enum PersonSheet: String, Identifiable {
-    case edit, rename, nicknames, fact, note, relationship, history, split
+    case edit, rename, nicknames, fact, note, relationship, history, split, photos, addPhoto
     var id: String { rawValue }
 }
 
@@ -78,6 +78,7 @@ struct PersonView: View {
             }
             Button { sheet = .edit } label: { Label("Edit Contact", systemImage: "pencil") }
             Menu {
+                Button("Change Photo…") { sheet = .photos }
                 Button("Rename…") { sheet = .rename }
                 Button("Nicknames…") { sheet = .nicknames }
                 Button("Add Fact…") { sheet = .fact }
@@ -110,6 +111,8 @@ struct PersonView: View {
     @ViewBuilder private func sheetContent(_ which: PersonSheet, _ id: Int, _ person: Person) -> some View {
         switch which {
         case .edit: ContactEditorView(uid: person.contactUid) { _ in }
+        case .photos: PhotoChooserSheet(person: person) { sheet = .addPhoto }
+        case .addPhoto: ContactEditorView(uid: person.contactUid, startWithPhotoPicker: true) { _ in }
         case .rename: RenameSheet(person: person)
         case .nicknames: NicknamesSheet(id: id)
         case .fact: AddFactSheet(id: id, name: person.name)
@@ -128,7 +131,7 @@ struct PersonView: View {
         let links = model.derived("links:\(id)") { $0.confirmedProfiles(id) }
         return ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Hero(person: person, profile: profile)
+                Hero(person: person, profile: profile) { sheet = .photos }
                 ReachActions(person: person) { legacyWarning = true }
                 HStack {
                     Button { sheet = .note } label: { Label("Add a Note", systemImage: "square.and.pencil") }
@@ -193,6 +196,7 @@ private struct Hero: View {
     @Environment(\.personPalette) private var palette
     var person: Person
     var profile: [String: Event]
+    var choosePhoto: () -> Void
 
     var body: some View {
         let card = person.contactCard
@@ -200,7 +204,14 @@ private struct Hero: View {
         let meta = !card.phonetic.isEmpty ? card.phonetic : !person.aliases.isEmpty ? person.aliases.joined(separator: " · ") : !work.isEmpty ? work : profile["job"]?.value
         let chips = [person.category == "unknown" ? nil : capitalized(person.category), person.isFavorite ? "Favorite" : nil, person.muted ? "Nudges muted" : nil].compactMap { $0 }
         VStack(spacing: 10) {
-            Avatar(person, size: 88)
+            Button(action: choosePhoto) {
+                VStack(spacing: 6) {
+                    Avatar(person, size: 88)
+                    Text("Change Photo").font(.caption)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Change photo for \(person.name)")
             Text(person.name).font(Kin.display(34)).multilineTextAlignment(.center).textSelection(.enabled)
             if let meta { Muted(meta).multilineTextAlignment(.center) }
             if !chips.isEmpty {

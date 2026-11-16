@@ -161,6 +161,8 @@ def import_card(
     import uuid
     data = card.contact or {"name": card.name, "birthday": card.birthday, "organization": card.org, "title": card.title,
                             "fields": [{"kind": kind, "value": value, "label": ""} for kind, values in (("phone", card.phones), ("email", card.emails)) for value in values]}
+    data = dict(data)
+    embedded_photo = data.pop("photo", "")
     data["name"] = card.name
     # Shared household identifiers are not proof that two named people are one.
     matches = contacts.match(conn, data)
@@ -205,6 +207,15 @@ def import_card(
     except ValueError:
         data.pop("photo", None)
     contacts.save(conn, existing["contact_uid"] or str(uuid.uuid4()), data, person_id)
+    if embedded_photo:
+        import base64
+        from .. import photos
+        try:
+            content = base64.b64decode(embedded_photo, validate=True)
+        except ValueError:
+            content = b""
+        source_identity = next((v for k, v in extra_ids if k not in ("phone", "email")), existing["contact_uid"])
+        photos.save(conn, person_id, source, content, source_identity=source_identity)
     if conn.execute("SELECT is_me FROM people WHERE id = ?", (person_id,)).fetchone()["is_me"]:
         return person_id, 0  # your own card
     new = []

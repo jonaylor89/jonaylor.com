@@ -26,7 +26,7 @@ internal object StoreCheckpoint {
     private fun hash(bytes: ByteArray, size: Int = bytes.size) = MessageDigest.getInstance("SHA-256").run { update(bytes, 0, size); digest() }
 
     data class Snapshot(val state: DiskState, val view: Records?)
-    private const val PROJECTION_VERSION = 3
+    private const val PROJECTION_VERSION = 4
 
     fun encode(state: DiskState, view: Records? = null, formatVersion: Int = 8): ByteArray {
         val bytes = ByteArrayOutputStream()

@@ -105,7 +105,7 @@ uv run mypeople import signal ~/signal-history.jsonl
 # 2j. GroupMe account export: pass the unzipped folder containing profile/ and conversation folders.
 #     In the Mac app: Import > From an Export > GroupMe, then choose that folder.
 uv run mypeople import groupme ~/Desktop/00001 --photos
-#     --photos downloads profile pictures from GroupMe\'s image CDN and adds them to the same
+#     --photos downloads profile pictures from GroupMe's image CDN and adds them to the same
 #     contacts, following merges. Re-import after extraction is safe: existing messages, facts,
 #     and extraction checkpoints are unchanged. Expired/failed photos are retried next time.
 #     The Mac app offers a Download profile pictures toggle (on by default).
@@ -141,6 +141,14 @@ uv run mypeople today
 Someone only becomes a Person if they're in your address book or you've written to them at least once, which keeps 2FA codes and newsletters out.
 
 Instagram HTML exports retain only minute-level timestamps (read as UTC), whereas JSON retains milliseconds. Re-importing the same format is safe; avoid importing both HTML and JSON versions of the same conversations, since they have different message keys. Instagram message requests are not imported.
+
+## Contact photos
+
+On Android and Mac, click **Change photo** on a person to preview their available
+pictures, pin one, or return to **Automatic**. Imports keep all photo candidates,
+share identical image bytes, and never override your pin. Choices sync as native
+contact edits; Android works offline and can add a photo using the system picker.
+[Photo selection, provenance, migration and sync](../../docs/mypeople/photos.md).
 
 ## Google Contacts
 
@@ -207,8 +215,8 @@ Your own and merged-away records are excluded, and addresses are never guessed
 from handles or names.
 
 JPEG/PNG images are cached under the separate `gravatar` photo source. Other
-sources are retained; only larger images replace an existing Gravatar. The normal
-largest-photo selection and Google Contacts sync pick these up automatically.
+sources and earlier candidates are retained; identical bytes share an image blob.
+Your pinned photo or Automatic selection is also used for Google Contacts sync.
 Successful lookups are cached for 24 hours and unavailable results for 15 minutes;
 `--again` retries now. No profile API is fetched, and no new email data is stored.
 Requests use HTTPS, DNS-checked/pinned public addresses, bounded timeouts and
@@ -277,10 +285,10 @@ are reported and skipped, not silently replaced with feed images.
 
 Images are downloaded from scoped HTTPS platform CDNs with public-IP validation,
 DNS pinning, bounded redirects, timeouts, and an 8 MB limit. JPEG/PNG photos are
-stored beside the database under `photos/`, separately as `linkedin` and
-`instagram` sources. Existing photos from other sources are retained, and only
-larger photos replace a photo from the same source. The existing largest-photo
-selection (including Google sync) automatically picks them up. Account URL,
+stored as graph-owned image blobs, with disposable files beside the database,
+separately attributed to `linkedin` and `instagram`. Existing photos, including
+smaller candidates from the same source, are retained. Your pinned photo or
+Automatic selection (including Google sync) picks among them. Account URL,
 attempt time, outcome, and transport are recorded locally; signed image URLs and
 raw page HTML are not persisted. Successful fetches are cached for 24 hours,
 failures for 15 minutes; `--again` retries now, and `--browser` immediately retries
@@ -393,7 +401,7 @@ Confirmed links appear in `mypeople show`. Suggestions and diagnostic evidence a
 | `show PERSON [--evidence]` | Current profile, relationship, and timeline, with the source of every fact. |
 | `note PERSON TEXT…` | Quick capture: "her daughter Maya starts kindergarten in September". Saves your words on the contact, then reads them for facts. If the model is unavailable the note is kept, and `extract` reads it later. |
 | `socials find [PERSON \| --person PERSON] [--closest N] [--osint \| --osint-only] [--flaresolverr]` / `socials review [--all]` | Discover public profiles, collect ownership evidence, then review; OSINT-only skips Exa entirely. |
-| `photos [--source S]` | Collect local/Google photos; `--source social` fetches known LinkedIn/Instagram avatars; `--source gravatar` looks up known email hashes without login. `--dry-run` previews accounts; `--browser` enables dedicated login sessions. Largest per source is kept. |
+| `photos [--source S]` | Collect local/Google photos; `--source social` fetches known LinkedIn/Instagram avatars; `--source gravatar` looks up known email hashes without login. `--dry-run` previews accounts; `--browser` enables dedicated login sessions. All candidates are kept; identical bytes share storage, and pins take precedence. |
 | `google login` / `google sync [--photos] [--create] [--person NAME_OR_ID] [--show-fields] [--apply]` | Export current contact cards and enrich Google Contacts; selection bypasses creation's message gate (dry run unless `--apply`). |
 | `ask QUESTION…` | "who do I know in Lisbon?", "what's Priya's daughter's name?" |
 | `add PERSON TYPE VALUE [--date D]` | Record an event by hand. |

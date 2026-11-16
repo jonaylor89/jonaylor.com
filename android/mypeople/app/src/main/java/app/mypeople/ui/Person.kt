@@ -85,6 +85,7 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
     // Never display another person's rows while a new keyed load starts.
     val rows = loadedRows?.takeIf { it.source === records && it.owner == id }
     var editContact by rememberSaveable(routeId) { mutableStateOf(false) }
+    var choosingPhoto by rememberSaveable(routeId) { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     var dialog by rememberSaveable(id) { mutableStateOf<String?>(null) }
     var evidence by remember { mutableStateOf<Event?>(null) }
@@ -165,7 +166,7 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
                         Text(person.name, style = MaterialTheme.typography.titleLarge)
                         Text("Details, accounts & memories", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                } else ContactHero(person, profile, graph)
+                } else ContactHero(person, profile, graph) { if (state.replicatedContacts) choosingPhoto = true else editContact = true }
             }
             if (!organizing) item { Box(Modifier.padding(top = KinSpace.s4)) { ContactActions(person, graph, edit = { editContact = true }) } }
             item {
@@ -260,6 +261,7 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
                 }
             }
         }
+        if (choosingPhoto) PhotoChooser(person, graph) { choosingPhoto = false }
         if (editContact) ContactEditor(graph, id, person.contactCard(), close = { editContact = false })
         dialog?.let { mode -> PersonEditor(mode, id, person, graph) { dialog = null } }
         evidence?.let { event ->
@@ -302,7 +304,7 @@ fun PersonScreen(routeId: Int?, state: StoreState, graph: AppGraph, onBack: () -
  * up to three chips, on their wash. Actions live below it, never inside.
  */
 @Composable
-private fun ContactHero(person: Person, profile: Map<String, Event>, graph: AppGraph) {
+private fun ContactHero(person: Person, profile: Map<String, Event>, graph: AppGraph, onPhotos: () -> Unit) {
     val palette = LocalPersonPalette.current
     val fontScale = LocalDensity.current.fontScale
     // The palette blooms in on first open.
@@ -320,7 +322,12 @@ private fun ContactHero(person: Person, profile: Map<String, Event>, graph: AppG
     }
     Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(KinRadius.xxl), color = wash) {
         Column(Modifier.padding(start = KinSpace.s6, end = KinSpace.s6, top = KinSpace.s8, bottom = KinSpace.s6), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(KinSpace.s4)) {
-            Avatar(person, graph, if (fontScale > 1.5f) KinSize.avatarLg else KinSize.avatarXl)
+            TextButton(onClick = onPhotos, modifier = Modifier.testTag("contact-photos")) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(KinSpace.s2)) {
+                    Avatar(person, graph, if (fontScale > 1.5f) KinSize.avatarLg else KinSize.avatarXl)
+                    Text("Change photo", style = MaterialTheme.typography.labelLarge)
+                }
+            }
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(KinSpace.s1)) {
                 Text(person.name, Modifier.semantics { heading() }, style = nameStyle, textAlign = TextAlign.Center, onTextLayout = { if (!wraps && it.lineCount > 1) wraps = true })
                 if (meta != null) Text(meta, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
