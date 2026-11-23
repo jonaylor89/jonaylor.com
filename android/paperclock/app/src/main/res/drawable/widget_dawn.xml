@@ -1,0 +1,11 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp" android:height="96dp" android:viewportWidth="96" android:viewportHeight="96">
+    <!-- Solar disc, fine orbital arcs, and a quiet engraved horizon. -->
+    <path android:fillColor="@color/widget_sun" android:pathData="M18,58a30,30 0,1 1,60 0Z" />
+    <path android:strokeColor="#918E8A" android:strokeWidth="0.6" android:fillColor="@android:color/transparent"
+        android:pathData="M8,58a40,40 0,1 1,80 0 M2,58a46,46 0,1 1,92 0" />
+    <path android:strokeColor="@color/widget_text" android:strokeWidth="1" android:fillColor="@android:color/transparent"
+        android:pathData="M0,58L96,58 M9,64L87,64 M19,70L77,70 M31,76L65,76" />
+    <path android:strokeColor="@color/widget_text" android:strokeWidth="0.8" android:fillColor="@android:color/transparent"
+        android:pathData="M48,1L48,7 M5,26L10,29 M86,29L91,26" />
+</vector>

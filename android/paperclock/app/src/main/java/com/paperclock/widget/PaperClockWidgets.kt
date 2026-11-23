@@ -7,7 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.SystemClock
+import android.text.format.DateFormat
 import android.view.View
 import android.widget.RemoteViews
 import com.paperclock.MainActivity
@@ -27,7 +27,7 @@ import java.util.Calendar
 import java.util.Locale
 import kotlin.math.roundToInt
 
-/** Keeps Paper Clock's three home-screen surfaces in sync with the offline database. */
+/** Keeps Paper Clock’s home-screen surfaces in sync with the offline database. */
 object WidgetUpdater {
     suspend fun updateAll(context: Context) {
         val app = context.applicationContext as PaperClockApp
@@ -45,28 +45,36 @@ object WidgetUpdater {
         val ids = manager.getAppWidgetIds(ComponentName(context, NextReasonWidgetProvider::class.java))
         if (ids.isEmpty()) return
         val next = rows.filter { it.alarm.enabled }.minByOrNull { nextOccurrence(it.alarm).timeInMillis }
-            ?: rows.minByOrNull { nextOccurrence(it.alarm).timeInMillis }
         val views = RemoteViews(context.packageName, R.layout.widget_next_reason)
         views.setOnClickPendingIntent(R.id.widget_next_root, openApp(context))
 
         if (next == null) {
             views.setTextViewText(R.id.widget_next_time, context.getString(R.string.widget_no_alarm))
-            views.setTextViewText(R.id.widget_next_reason, context.getString(R.string.widget_set_an_alarm))
+            views.setTextViewText(R.id.widget_next_reason, context.getString(R.string.widget_editorial_empty_reason))
+            views.setViewVisibility(R.id.widget_next_period, View.GONE)
+            views.setContentDescription(R.id.widget_next_toggle, context.getString(R.string.widget_set_an_alarm))
             views.setViewVisibility(R.id.widget_next_countdown, View.GONE)
             views.setTextViewText(R.id.widget_next_schedule, context.getString(R.string.widget_ready_when_you_are))
             views.setTextViewText(R.id.widget_next_toggle, context.getString(R.string.widget_set))
             views.setOnClickPendingIntent(R.id.widget_next_toggle, newAlarm(context))
         } else {
             val alarm = next.alarm
-            views.setTextViewText(R.id.widget_next_time, formatTime(alarm))
-            views.setTextViewText(R.id.widget_next_reason, (next.goal?.title ?: alarm.label.ifBlank { context.getString(R.string.widget_alarm) }).uppercase(Locale.getDefault()))
-            views.setTextViewText(R.id.widget_next_schedule, if (alarm.enabled) repeatLabel(alarm.repeatDays) else context.getString(R.string.widget_alarm_off))
-            views.setViewVisibility(R.id.widget_next_countdown, if (alarm.enabled) View.VISIBLE else View.GONE)
-            if (alarm.enabled) {
-                val until = (nextOccurrence(alarm).timeInMillis - System.currentTimeMillis()).coerceAtLeast(0L)
-                views.setChronometer(R.id.widget_next_countdown, SystemClock.elapsedRealtime() + until, context.getString(R.string.widget_countdown_format), true)
-                views.setChronometerCountDown(R.id.widget_next_countdown, true)
-            }
+            views.setTextViewText(R.id.widget_next_time, formatTime(context, alarm))
+            views.setTextViewText(R.id.widget_next_reason, next.goal?.title ?: alarm.label.ifBlank { context.getString(R.string.widget_editorial_default_reason) })
+            val is24Hour = DateFormat.is24HourFormat(context)
+            views.setViewVisibility(R.id.widget_next_period, if (is24Hour) View.GONE else View.VISIBLE)
+            views.setTextViewText(R.id.widget_next_period, java.text.DateFormatSymbols.getInstance().amPmStrings[if (alarm.hour < 12) 0 else 1])
+            views.setContentDescription(R.id.widget_next_toggle, context.getString(R.string.widget_turn_off_alarm))
+            views.setTextViewText(R.id.widget_next_schedule, repeatLabel(alarm.repeatDays))
+            views.setViewVisibility(R.id.widget_next_countdown, View.VISIBLE)
+            // An absolute day stays readable even if the launcher delays a refresh.
+            // A running Chronometer keeps counting below zero after its alarm fires.
+            val date = nextOccurrence(alarm).toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
+            views.setTextViewText(R.id.widget_next_countdown, when (date) {
+                LocalDate.now() -> context.getString(R.string.widget_today)
+                LocalDate.now().plusDays(1) -> context.getString(R.string.widget_tomorrow)
+                else -> date.format(java.time.format.DateTimeFormatter.ofPattern("EEE, d MMM", Locale.getDefault()))
+            })
             views.setTextViewText(R.id.widget_next_toggle, if (alarm.enabled) context.getString(R.string.widget_on) else context.getString(R.string.widget_off))
             views.setOnClickPendingIntent(R.id.widget_next_toggle, toggleAlarm(context, alarm.id))
         }
@@ -98,13 +106,13 @@ object WidgetUpdater {
             views.setTextViewText(R.id.widget_goal_linked, context.getString(R.string.widget_goals))
         } else {
             val remaining = ChronoUnit.DAYS.between(LocalDate.now(), LocalDate.ofEpochDay(goal.targetDateEpochDay))
-            val linked = rows.count { it.alarm.goalId == goal.id }
+            val linked = rows.count { it.alarm.enabled && it.alarm.goalId == goal.id }
             val createdDate = Instant.ofEpochMilli(goal.createdAtMillis).atZone(ZoneId.systemDefault()).toLocalDate()
             val total = (goal.targetDateEpochDay - createdDate.toEpochDay()).coerceAtLeast(1)
             val complete = ((1f - remaining.toFloat() / total) * 100).roundToInt().coerceIn(0, 100)
             views.setTextViewText(R.id.widget_goal_title, goal.title.uppercase(Locale.getDefault()))
             views.setTextViewText(R.id.widget_goal_days, countdownText(remaining))
-            views.setTextViewText(R.id.widget_goal_target, context.getString(R.string.widget_target_date, LocalDate.ofEpochDay(goal.targetDateEpochDay).toString()))
+            views.setTextViewText(R.id.widget_goal_target, context.getString(R.string.widget_target_date, LocalDate.ofEpochDay(goal.targetDateEpochDay).format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM))))
             views.setViewVisibility(R.id.widget_goal_progress, View.VISIBLE)
             views.setProgressBar(R.id.widget_goal_progress, 100, complete, false)
             views.setTextViewText(R.id.widget_goal_linked, context.resources.getQuantityString(R.plurals.widget_linked_alarms, linked, linked))
@@ -126,8 +134,8 @@ object WidgetUpdater {
             views.setTextViewText(R.id.widget_goal_focus_title, context.getString(R.string.widget_goal_focus_empty_title))
         } else {
             val remaining = ChronoUnit.DAYS.between(LocalDate.now(), LocalDate.ofEpochDay(goal.targetDateEpochDay))
-            views.setTextViewText(R.id.widget_goal_focus_days, if (remaining < 0) context.getString(R.string.widget_done) else remaining.toString())
-            views.setTextViewText(R.id.widget_goal_focus_unit, if (remaining < 0) "" else context.getString(R.string.widget_days_left))
+            views.setTextViewText(R.id.widget_goal_focus_days, if (remaining <= 0) context.getString(if (remaining == 0L) R.string.widget_today else R.string.widget_past) else remaining.toString())
+            views.setTextViewText(R.id.widget_goal_focus_unit, if (remaining <= 0) "" else context.resources.getQuantityString(R.plurals.widget_days_left_count, remaining.toInt()))
             views.setTextViewText(R.id.widget_goal_focus_title, goal.title.uppercase(Locale.getDefault()))
         }
         manager.updateAppWidget(ids, views)
@@ -203,8 +211,7 @@ class WidgetRefreshReceiver : android.content.BroadcastReceiver() {
     }
 }
 
-private fun nextOccurrence(alarm: AlarmEntity): Calendar {
-    val now = Calendar.getInstance()
+internal fun nextOccurrence(alarm: AlarmEntity, now: Calendar = Calendar.getInstance()): Calendar {
     val selectedDays = alarm.repeatDays.split(',').mapNotNull { it.toIntOrNull() }.toSet()
     repeat(8) { offset ->
         val candidate = (now.clone() as Calendar).apply {
@@ -219,10 +226,13 @@ private fun nextOccurrence(alarm: AlarmEntity): Calendar {
     return now
 }
 
-private fun formatTime(alarm: AlarmEntity): String {
-    val suffix = if (alarm.hour < 12) "AM" else "PM"
-    val hour = alarm.hour % 12
-    return String.format(Locale.getDefault(), "%d:%02d %s", if (hour == 0) 12 else hour, alarm.minute, suffix)
+private fun formatTime(context: Context, alarm: AlarmEntity): String {
+    val time = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, alarm.hour)
+        set(Calendar.MINUTE, alarm.minute)
+    }
+    // Keep the day period as a separate typographic element, without assuming English AM/PM.
+    return java.text.SimpleDateFormat(if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm", Locale.getDefault()).format(time.time)
 }
 
 private fun repeatLabel(days: String): String {

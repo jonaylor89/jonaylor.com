@@ -3,17 +3,24 @@
     <string name="alarm_channel">Active alarms</string>
     <string name="alarm_channel_description">Alerts shown while an alarm is ringing</string>
     <string name="widget_next_alarm">Next alarm</string>
+    <string name="widget_reason_to_rise">A REASON TO RISE</string>
+    <string name="widget_editorial_empty_reason">Make room for a good morning.</string>
+    <string name="widget_editorial_default_reason">A fresh start.</string>
+    <string name="widget_turn_off_alarm">Turn off this alarm</string>
     <string name="widget_no_alarm">NO ALARM</string>
     <string name="widget_set_an_alarm">SET AN ALARM</string>
     <string name="widget_ready_when_you_are">READY WHEN YOU ARE</string>
     <string name="widget_alarm">Alarm</string>
-    <string name="widget_countdown_format">IN %s</string>
+    <string name="widget_today">Today</string>
+    <string name="widget_tomorrow">Tomorrow</string>
+    <string name="widget_past">PAST</string>
+    <plurals name="widget_days_left_count"><item quantity="one">DAY LEFT</item><item quantity="other">DAYS LEFT</item></plurals>
     <string name="widget_on">ON</string>
     <string name="widget_off">OFF</string>
     <string name="widget_alarm_off">ALARM OFF</string>
     <string name="widget_set">SET</string>
     <string name="widget_set_alarm">Set alarm</string>
-    <string name="widget_quick_alarm_hint">Make tomorrow count</string>
+    <string name="widget_quick_alarm_hint">Choose a wake-up time</string>
     <string name="widget_next_reason_name">Next Reason</string>
     <string name="widget_quick_alarm_name">Set Alarm</string>
     <string name="widget_goal_countdown_name">Goal Countdown</string>
@@ -30,7 +37,7 @@
     <string name="widget_link_an_alarm">LINK IT TO AN ALARM</string>
     <string name="widget_goals">GOALS</string>
     <string name="widget_target_date">TARGET · %1$s</string>
-    <plurals name="widget_linked_alarms"><item quantity="one">%1$d LINKED ALARM</item><item quantity="other">%1$d LINKED ALARMS</item></plurals>
+    <plurals name="widget_linked_alarms"><item quantity="one">%1$d ACTIVE ALARM</item><item quantity="other">%1$d ACTIVE ALARMS</item></plurals>
     <string name="widget_next_reason_description">Shows the next alarm and the reason behind it.</string>
     <string name="widget_quick_alarm_description">Start a new Paper Clock alarm.</string>
     <string name="widget_goal_countdown_description">Shows the countdown to your nearest goal.</string>

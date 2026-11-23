@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
 import com.paperclock.PaperClockApp
+import com.paperclock.widget.WidgetUpdater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -19,8 +20,9 @@ class AlarmReceiver : BroadcastReceiver() {
                 val row = app.container.repository.alarm(id) ?: return@launch
                 if (!row.alarm.enabled) return@launch
                 ContextCompat.startForegroundService(context, Intent(context, AlarmSoundService::class.java).putExtra(EXTRA_ALARM_ID, id))
-                context.startActivity(Intent(context, AlarmActivity::class.java).putExtra(EXTRA_ALARM_ID, id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
                 if (row.alarm.repeatDays.isBlank()) app.container.repository.saveAlarm(row.alarm.copy(enabled = false)) else app.container.scheduler.reschedule(row.alarm)
+                WidgetUpdater.updateAll(context)
+                context.startActivity(Intent(context, AlarmActivity::class.java).putExtra(EXTRA_ALARM_ID, id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
             } finally { pending.finish() }
         }
     }

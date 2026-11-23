@@ -1,0 +1,7 @@
+<resources>
+    <color name="widget_surface">#1B1B1D</color>
+    <color name="widget_text">#F5F1E9</color>
+    <color name="widget_secondary_ink">#C2BFBA</color>
+    <color name="widget_rule">#45433C</color>
+    <color name="widget_sun">#FFC20A</color>
+</resources>

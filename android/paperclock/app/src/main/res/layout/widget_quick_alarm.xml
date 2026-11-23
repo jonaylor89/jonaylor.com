@@ -20,11 +20,11 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="-7dp"
+        android:layout_marginTop="0dp"
         android:text="@string/widget_set_alarm"
         android:textAllCaps="true"
         android:textColor="#F5F1E9"
-        android:textSize="12sp"
+        android:textSize="15sp"
         android:textStyle="bold"
         android:fontFamily="sans-serif-condensed"
         android:letterSpacing="0.06" />
@@ -34,8 +34,8 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="2dp"
         android:text="@string/widget_quick_alarm_hint"
-        android:textAllCaps="true"
-        android:textColor="#9E9A95"
-        android:textSize="9sp"
+        android:textColor="#C2BFBA"
+        android:textSize="11sp"
+        android:gravity="center"
         android:fontFamily="sans-serif-condensed" />
 </LinearLayout>

@@ -29,14 +29,14 @@ Paper Clock is a private, offline Android alarm clock for turning a meaningful g
 
 ## Home-screen widgets
 
-Paper Clock includes three offline Android home-screen widgets:
+Paper Clock includes four offline Android home-screen widgets:
 
-- **Next Reason** (4×2, resizable) shows the next alarm, its linked goal, a live countdown, and an on/off control.
+- **Next Reason** (4×2, resizable) pairs Paper Clock’s original charcoal-and-yellow palette and condensed typography with a large time readout, an engraved sunrise, and a reason-to-rise headline. It shows the next enabled alarm, its linked goal, a Today/Tomorrow/date label, and a large on/off control. It respects the device’s 12/24-hour setting; no ticking countdown can run negative after an alarm fires.
 - **Quick Alarm** (2×2, resizable) opens a new Paper Clock alarm immediately.
-- **Goal Countdown** (4×2, resizable) shows the nearest goal, target date, progress, and linked-alarm count.
+- **Goal Countdown** (4×2, resizable) shows the nearest goal, target date, elapsed-time progress, and active linked-alarm count.
 - **Goal Focus** (2×2, resizable) is a compact days-left tile for the nearest goal.
 
-Widget content refreshes when alarms or goals change, after reboot, and when the device date, time, or time zone changes.
+Widget content refreshes when alarms or goals change, immediately after an alarm fires, after reboot, and when the device date, time, or time zone changes.
 
 ## Build and install
 
