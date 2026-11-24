@@ -1,0 +1,75 @@
+name: Tattle macOS
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "macos/tattle/**"
+      - ".github/workflows/macos-tattle.yml"
+  push:
+    branches: [main]
+    paths:
+      - "macos/tattle/**"
+      - ".github/workflows/macos-tattle.yml"
+
+concurrency:
+  group: macos-tattle-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: macos/tattle
+
+# Builds and unit-tests without signing. GitHub runners can't activate system
+# extensions, so installed behaviour is covered by docs/QA.md.
+jobs:
+  test:
+    name: Build and test
+    # Xcode 27 runner (public preview); Xcode 26's Swift compiler crashes on the app target.
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Xcode 26's Swift compiler crashes (IRGen) on the app target; use the newest Xcode 27.
+      - name: Select Xcode 27
+        run: |
+          xcode=$(find /Applications -maxdepth 1 -name 'Xcode_27*.app' | sort -V | tail -n 1)
+          if [ -z "$xcode" ]; then
+            find /Applications -maxdepth 1 -name 'Xcode*.app'
+            echo "::error::Tattle needs Xcode 27; this runner has none."
+            exit 1
+          fi
+          sudo xcode-select --switch "$xcode/Contents/Developer"
+          xcodebuild -version
+
+      - name: Shared package tests
+        working-directory: macos/tattle/TattleShared
+        run: swift test
+
+      - name: Verdict benchmark (10k rules)
+        working-directory: macos/tattle/TattleShared
+        run: swift run -c release tattle-bench
+
+      - name: Lint integration script
+        run: |
+          if command -v shellcheck >/dev/null; then shellcheck scripts/integration-test.sh; else bash -n scripts/integration-test.sh; fi
+
+      - name: Debug build
+        run: |
+          xcodebuild -project Tattle.xcodeproj -scheme Tattle -configuration Debug \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Release build compiles
+        run: |
+          xcodebuild -project Tattle.xcodeproj -scheme Tattle -configuration Release \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            build

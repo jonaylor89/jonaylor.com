@@ -1,0 +1,18 @@
+// Signing and identifiers for every target. Forks: put your own values in
+// Config/Local.xcconfig (ignored by version control) instead of editing this file.
+//
+//   DEVELOPMENT_TEAM = ABCDE12345
+//   TATTLE_BUNDLE_PREFIX = com.example.Tattle
+//
+// The filter extension's bundle ID, app group and XPC Mach service name are all derived
+// from TATTLE_BUNDLE_PREFIX, so nothing in the Swift source needs to change.
+
+DEVELOPMENT_TEAM = 9HNXYM86C6
+TATTLE_BUNDLE_PREFIX = dev.jonaylor.Tattle
+TATTLE_APP_GROUP = group.$(TATTLE_BUNDLE_PREFIX)
+
+// Empty for development signing (content-filter-provider). Set to -DeveloperID when
+// exporting with a Developer ID certificate, which needs the -systemextension variant.
+TATTLE_ENTITLEMENTS_SUFFIX =
+
+#include? "Local.xcconfig"

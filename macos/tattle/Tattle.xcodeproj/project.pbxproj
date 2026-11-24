@@ -1,0 +1,581 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		5E0000000000000000000019 /* FilterExtension.systemextension in Embed System Extensions */ = {isa = PBXBuildFile; fileRef = 5E000000000000000000000A /* FilterExtension.systemextension */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		5E000000000000000000001A /* NetworkExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5E000000000000000000000B /* NetworkExtension.framework */; };
+		5E000000000000000000001B /* NetworkExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5E000000000000000000000B /* NetworkExtension.framework */; };
+		5E000000000000000000001C /* TattleShared in Frameworks */ = {isa = PBXBuildFile; productRef = 5E000000000000000000002A /* TattleShared */; };
+		5E000000000000000000001D /* TattleShared in Frameworks */ = {isa = PBXBuildFile; productRef = 5E000000000000000000002B /* TattleShared */; };
+		5E0000000000000000000035 /* TattleShared in Frameworks */ = {isa = PBXBuildFile; productRef = 5E0000000000000000000036 /* TattleShared */; };
+		5E000000000000000000003A /* tattlectl in Embed Command Line Tool */ = {isa = PBXBuildFile; fileRef = 5E0000000000000000000030 /* tattlectl */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		5E000000000000000000001E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5E0000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5E0000000000000000000011;
+			remoteInfo = FilterExtension;
+		};
+		5E000000000000000000003C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5E0000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5E0000000000000000000032;
+			remoteInfo = tattlectl;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		5E0000000000000000000015 /* Embed System Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(SYSTEM_EXTENSIONS_FOLDER_PATH)";
+			dstSubfolderSpec = 16;
+			files = (
+				5E0000000000000000000019 /* FilterExtension.systemextension in Embed System Extensions */,
+			);
+			name = "Embed System Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5E000000000000000000003B /* Embed Command Line Tool */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 6;
+			files = (
+				5E000000000000000000003A /* tattlectl in Embed Command Line Tool */,
+			);
+			name = "Embed Command Line Tool";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		5E000000000000000000002C /* TattleShared */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = TattleShared; sourceTree = "<group>"; };
+		5E0000000000000000000005 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
+		5E0000000000000000000009 /* Tattle.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tattle.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5E000000000000000000000A /* FilterExtension.systemextension */ = {isa = PBXFileReference; explicitFileType = "wrapper.system-extension"; includeInIndex = 0; path = FilterExtension.systemextension; sourceTree = BUILT_PRODUCTS_DIR; };
+		5E000000000000000000000B /* NetworkExtension.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = NetworkExtension.framework; path = System/Library/Frameworks/NetworkExtension.framework; sourceTree = SDKROOT; };
+		5E0000000000000000000030 /* tattlectl */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = tattlectl; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		5E0000000000000000000008 /* Exceptions for "FilterExtension" folder in "FilterExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 5E0000000000000000000011 /* FilterExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		5E0000000000000000000006 /* App */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = App;
+			sourceTree = "<group>";
+		};
+		5E0000000000000000000007 /* FilterExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				5E0000000000000000000008 /* Exceptions for "FilterExtension" folder in "FilterExtension" target */,
+			);
+			path = FilterExtension;
+			sourceTree = "<group>";
+		};
+		5E0000000000000000000031 /* tattlectl */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = tattlectl;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		5E0000000000000000000013 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5E000000000000000000001B /* NetworkExtension.framework in Frameworks */,
+				5E000000000000000000001C /* TattleShared in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5E0000000000000000000017 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5E000000000000000000001A /* NetworkExtension.framework in Frameworks */,
+				5E000000000000000000001D /* TattleShared in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5E0000000000000000000034 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5E0000000000000000000035 /* TattleShared in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		5E0000000000000000000002 = {
+			isa = PBXGroup;
+			children = (
+				5E0000000000000000000006 /* App */,
+				5E0000000000000000000007 /* FilterExtension */,
+				5E0000000000000000000031 /* tattlectl */,
+				5E000000000000000000002C /* TattleShared */,
+				5E0000000000000000000004 /* Config */,
+				5E000000000000000000000C /* Frameworks */,
+				5E0000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		5E0000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				5E0000000000000000000009 /* Tattle.app */,
+				5E000000000000000000000A /* FilterExtension.systemextension */,
+				5E0000000000000000000030 /* tattlectl */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		5E0000000000000000000004 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				5E0000000000000000000005 /* Signing.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		5E000000000000000000000C /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				5E000000000000000000000B /* NetworkExtension.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		5E0000000000000000000010 /* Tattle */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5E0000000000000000000023 /* Build configuration list for PBXNativeTarget "Tattle" */;
+			buildPhases = (
+				5E0000000000000000000012 /* Sources */,
+				5E0000000000000000000013 /* Frameworks */,
+				5E0000000000000000000014 /* Resources */,
+				5E0000000000000000000015 /* Embed System Extensions */,
+				5E000000000000000000003B /* Embed Command Line Tool */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5E000000000000000000001F /* PBXTargetDependency */,
+				5E000000000000000000003D /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				5E0000000000000000000006 /* App */,
+			);
+			name = Tattle;
+			packageProductDependencies = (
+				5E000000000000000000002A /* TattleShared */,
+			);
+			productName = Tattle;
+			productReference = 5E0000000000000000000009 /* Tattle.app */;
+			productType = "com.apple.product-type.application";
+		};
+		5E0000000000000000000011 /* FilterExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5E0000000000000000000026 /* Build configuration list for PBXNativeTarget "FilterExtension" */;
+			buildPhases = (
+				5E0000000000000000000016 /* Sources */,
+				5E0000000000000000000017 /* Frameworks */,
+				5E0000000000000000000018 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				5E0000000000000000000007 /* FilterExtension */,
+			);
+			name = FilterExtension;
+			packageProductDependencies = (
+				5E000000000000000000002B /* TattleShared */,
+			);
+			productName = FilterExtension;
+			productReference = 5E000000000000000000000A /* FilterExtension.systemextension */;
+			productType = "com.apple.product-type.system-extension";
+		};
+		5E0000000000000000000032 /* tattlectl */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5E0000000000000000000037 /* Build configuration list for PBXNativeTarget "tattlectl" */;
+			buildPhases = (
+				5E0000000000000000000033 /* Sources */,
+				5E0000000000000000000034 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				5E0000000000000000000031 /* tattlectl */,
+			);
+			name = tattlectl;
+			packageProductDependencies = (
+				5E0000000000000000000036 /* TattleShared */,
+			);
+			productName = tattlectl;
+			productReference = 5E0000000000000000000030 /* tattlectl */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		5E0000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					5E0000000000000000000010 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					5E0000000000000000000011 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					5E0000000000000000000032 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+				};
+			};
+			buildConfigurationList = 5E0000000000000000000020 /* Build configuration list for PBXProject "Tattle" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 5E0000000000000000000002;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5E0000000000000000000029 /* XCLocalSwiftPackageReference "TattleShared" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 5E0000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				5E0000000000000000000010 /* Tattle */,
+				5E0000000000000000000011 /* FilterExtension */,
+				5E0000000000000000000032 /* tattlectl */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		5E0000000000000000000014 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5E0000000000000000000018 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		5E0000000000000000000012 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5E0000000000000000000016 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5E0000000000000000000033 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		5E000000000000000000001F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5E0000000000000000000011 /* FilterExtension */;
+			targetProxy = 5E000000000000000000001E /* PBXContainerItemProxy */;
+		};
+		5E000000000000000000003D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5E0000000000000000000032 /* tattlectl */;
+			targetProxy = 5E000000000000000000003C /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		5E0000000000000000000021 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5E0000000000000000000005 /* Signing.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 13;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		5E0000000000000000000022 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5E0000000000000000000005 /* Signing.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 13;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		5E0000000000000000000024 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "App/Tattle$(TATTLE_ENTITLEMENTS_SUFFIX).entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Tattle;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSLocationUsageDescription = "Tattle reads the name of your Wi-Fi network to switch profiles automatically. Your location is not used or stored.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Tattle reads the name of your Wi-Fi network to switch profiles automatically. Your location is not used or stored.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Johannes Naylor. MIT License.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TATTLE_BUNDLE_PREFIX)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+			};
+			name = Debug;
+		};
+		5E0000000000000000000025 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "App/Tattle$(TATTLE_ENTITLEMENTS_SUFFIX).entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Tattle;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSLocationUsageDescription = "Tattle reads the name of your Wi-Fi network to switch profiles automatically. Your location is not used or stored.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Tattle reads the name of your Wi-Fi network to switch profiles automatically. Your location is not used or stored.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Johannes Naylor. MIT License.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TATTLE_BUNDLE_PREFIX)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+			};
+			name = Release;
+		};
+		5E0000000000000000000027 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "FilterExtension/FilterExtension$(TATTLE_ENTITLEMENTS_SUFFIX).entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FilterExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TATTLE_BUNDLE_PREFIX).FilterExtension";
+				PRODUCT_MODULE_NAME = FilterExtension;
+				PRODUCT_NAME = "$(PRODUCT_BUNDLE_IDENTIFIER)";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
+		5E0000000000000000000028 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "FilterExtension/FilterExtension$(TATTLE_ENTITLEMENTS_SUFFIX).entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FilterExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TATTLE_BUNDLE_PREFIX).FilterExtension";
+				PRODUCT_MODULE_NAME = FilterExtension;
+				PRODUCT_NAME = "$(PRODUCT_BUNDLE_IDENTIFIER)";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
+		5E0000000000000000000038 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Johannes Naylor. MIT License.";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TATTLE_BUNDLE_PREFIX).ctl";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
+		5E0000000000000000000039 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Johannes Naylor. MIT License.";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TATTLE_BUNDLE_PREFIX).ctl";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		5E0000000000000000000020 /* Build configuration list for PBXProject "Tattle" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5E0000000000000000000021 /* Debug */,
+				5E0000000000000000000022 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5E0000000000000000000023 /* Build configuration list for PBXNativeTarget "Tattle" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5E0000000000000000000024 /* Debug */,
+				5E0000000000000000000025 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5E0000000000000000000026 /* Build configuration list for PBXNativeTarget "FilterExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5E0000000000000000000027 /* Debug */,
+				5E0000000000000000000028 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5E0000000000000000000037 /* Build configuration list for PBXNativeTarget "tattlectl" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5E0000000000000000000038 /* Debug */,
+				5E0000000000000000000039 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		5E0000000000000000000029 /* XCLocalSwiftPackageReference "TattleShared" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = TattleShared;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5E000000000000000000002A /* TattleShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5E0000000000000000000029 /* XCLocalSwiftPackageReference "TattleShared" */;
+			productName = TattleShared;
+		};
+		5E000000000000000000002B /* TattleShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5E0000000000000000000029 /* XCLocalSwiftPackageReference "TattleShared" */;
+			productName = TattleShared;
+		};
+		5E0000000000000000000036 /* TattleShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5E0000000000000000000029 /* XCLocalSwiftPackageReference "TattleShared" */;
+			productName = TattleShared;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 5E0000000000000000000001 /* Project object */;
+}

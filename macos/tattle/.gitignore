@@ -1,0 +1,10 @@
+xcuserdata/
+.build/
+.swiftpm/
+build/
+DerivedData/
+*.profraw
+Config/Local.xcconfig
+*.provisionprofile
+*.p12
+*.cer
