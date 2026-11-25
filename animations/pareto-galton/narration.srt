@@ -1,0 +1,103 @@
+1
+00:00:00,300 --> 00:00:10,400
+I recently learned that this thing is called a Galton board. Perhaps this is news to you too. But, like me, I'm sure you've seen one before, or at least the shape it makes.
+
+2
+00:00:11,400 --> 00:00:19,000
+Using little balls that fall from the top into bins, it's able to model the well known bell curve
+
+3
+00:00:22,300 --> 00:00:35,100
+But something I've been fixated on is how to represent different shapes or distributions? Like the distribution of wealth or follower counts. The normal distribution isn't the only one out there and arguably isn't even the most practical. 
+
+4
+00:00:36,300 --> 00:00:43,100
+Well that's what I want to explore today. Specifically, a Galton board for one of my personal favorite distributions, the Pareto curve.
+
+5
+00:00:43,800 --> 00:00:57,400
+Let's start with the original. A ball falls onto a peg and bounces left or right, fifty-fifty. Then it hits another peg, and another. After six rows, it lands in one of seven bins.
+
+6
+00:00:58,500 --> 00:01:22,900
+Here's the key. The bin a ball lands in depends only on how many times it went right. This one went right four times, so it lands in bin four. But lots of different paths have exactly four rights. Count the paths to every spot and you get Pascal's triangle, and along the bottom: one, six, fifteen, twenty, fifteen, six, one.
+
+7
+00:01:24,200 --> 00:01:41,400
+So when we drop hundreds of balls, the middle bins fill up the most, simply because there are more ways to get there. Every ball's position is the sum of six tiny random nudges, and the pile follows those path counts almost exactly.
+
+8
+00:01:47,333 --> 00:01:54,933
+Now give the board more rows. Twelve. Twenty-four. Sixty. The jagged histogram smooths out into one very familiar curve.
+
+9
+00:01:59,433 --> 00:02:13,033
+This is the Gaussian, or normal, distribution. While really familiar, the formula looks really crazy, but the part that matters is the exponent. Distance from the middle gets squared, and that square makes the tails collapse incredibly fast.
+
+10
+00:02:14,433 --> 00:02:24,833
+About sixty-eight percent of everything lies within one standard deviation of the middle. Ninety-five percent within two. And beyond five? Less than one in a million.
+
+11
+00:02:26,933 --> 00:02:42,133
+This shape appears whenever something is the sum of many small, independent pushes, like the ball's bounces. Heights, measurement errors, test scores. That's the central limit theorem. In a bell-curve world, nobody is ten times taller than average.
+
+12
+00:02:44,033 --> 00:02:55,233
+But a lot of the world doesn't look like that. Wealth, city populations, book sales, followers. A handful of giants, sitting beside a huge crowd of small values.
+
+13
+00:02:56,533 --> 00:03:08,133
+These follow a Pareto distribution, named after the economist Vilfredo Pareto. Its rule is beautifully simple: the chance of being at least x is x to the minus alpha.
+
+14
+00:03:09,533 --> 00:03:31,533
+Watch what that means. Start anywhere and double x. The share of things beyond it always shrinks by the same factor, two to the minus alpha. Going from one to two costs exactly as much as going from a thousand to two thousand. There's no typical size: the curve looks the same at every scale.
+
+15
+00:03:33,533 --> 00:03:42,733
+With alpha around one point one six, you get the famous eighty-twenty rule: the top twenty percent hold eighty percent of the total.
+
+16
+00:03:44,033 --> 00:03:58,033
+Interestingly, if we plot both curves on a log scale. The Pareto, being exponential, is straight line, with slope minus alpha. The Gaussian quickly falls 
+
+17
+00:04:00,033 --> 00:04:13,633
+So here's the puzzle. A Galton board adds up little bounces, and adding gives you a bell curve. To get a power law we need a different kind of process. Not adding, but surviving.
+
+18
+00:04:15,033 --> 00:04:36,633
+Take a small Galton board. Left alone, its balls land in a bell curve. Now put a knife edge right at the middle of that curve, at the median. Balls that land left of the knife stop in a bin. Balls that land right of it roll down a ramp, into another, identical board.
+
+19
+00:04:38,103 --> 00:04:46,103
+Notice the bell curve hasn't gone anywhere. It's still in there; we're just using it as a perfectly fair coin.
+
+20
+00:04:47,603 --> 00:04:59,603
+Now stack six of these stages into a staircase. Because each knife sits at the median, every stage stops half of the balls that reach it. Let's drop a thousand.
+
+21
+00:05:23,563 --> 00:05:35,963
+Half stop in the first bin. Half of what's left stop in the second. Then a quarter, an eighth, a sixteenth. Each bin gets half as many as the one before.
+
+22
+00:05:37,063 --> 00:06:00,263
+Now the last ingredient: the labels. We don't number these bins one, two, three. Each bin is worth the same factor more than the one before, about one point eight two. So the values are one, one point eight two, three point three, six, eleven, twenty, and beyond. And these labels are fixed before a single ball drops.
+
+23
+00:06:01,563 --> 00:06:34,763
+Now check the rule. To reach bin k, a ball has to survive k stages, which happens with probability one half to the k. The value of bin k is b to the k, so k is log x over log b. Substitute, and the chance of reaching a value x is x to the minus log two over log b. That's exactly a Pareto distribution. With b equal to one point eight two, alpha is one point one six: the eighty-twenty Pareto.
+
+24
+00:06:36,563 --> 00:06:45,363
+And the thousand simulated balls? On log-log axes, they land right on a straight line, with slope minus one point one six.
+
+25
+00:06:49,067 --> 00:07:06,267
+So the difference between these two shapes isn't really about pegs at all. When many small effects add up, you get a bell curve. When things have to survive round after round, with the same odds each time, you get a power law.
+
+26
+00:07:07,067 --> 00:07:14,667
+And this one board shows both: a bell curve hiding inside every stage, and a Pareto curve across them.

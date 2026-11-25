@@ -1,0 +1,14 @@
+# Local Python environment and caches
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+
+# Generated Manim output, timing marks, and render scratch files
+media/
+marks_*.json
+list.txt
+render-list.*
+pareto_galton*.mp4

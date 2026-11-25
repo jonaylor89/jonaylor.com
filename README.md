@@ -3,6 +3,7 @@
 Personal websites, experiments, and self-hosted services maintained by [Johannes Naylor](https://jonaylor.com).
 
 JavaScript apps live in [`apps`](apps), native Android apps in [`android`](android), native macOS apps in [`macos`](macos), Python CLIs in [`cli`](cli), Flutter apps in [`flutter`](flutter), and self-contained Rust services in [`services`](services).
+Manim animation projects live in [`animations`](animations).
 
 ## Getting started
 
@@ -11,7 +12,7 @@ JavaScript apps live in [`apps`](apps), native Android apps in [`android`](andro
 - Node.js 22.12 or later
 - [pnpm](https://pnpm.io/) 10.32.1 (the version pinned by `packageManager`)
 - Rust and Cargo, only when working on a service
-- uv, only when working on `cli/mypeople` (Python is pinned by that project's `.python-version`)
+- uv, only when working on Python projects (`cli/mypeople` or `animations/pareto-galton`; Python is pinned by each project's `.python-version`)
 
 ```bash
 git clone https://github.com/jonaylor89/jonaylor.com.git
@@ -93,6 +94,21 @@ The scoped CI runs synthetic tests and builds Python distributions without perso
 credentials. See [migration, configuration, and Android signing safety](docs/mypeople/monorepo.md)
 before switching an existing phone installation. Private credentials are loaded
 from `~/.mypeople/secrets.ini` or an explicit `MYPEOPLE_ENV_FILE`, never from the checkout.
+
+### Animations (Python/Manim)
+
+[`animations/pareto-galton`](animations/pareto-galton) explains Galton boards and
+Pareto distributions. It is an independent uv project, outside pnpm/Turbo.
+Install its native and TeX dependencies as described in its README, then:
+
+```bash
+cd animations/pareto-galton
+uv sync --locked
+./render.sh
+```
+
+Rendered videos, Manim caches, timing marks, and virtual environments are ignored;
+the Python source, narration subtitles, and uv lockfile are versioned.
 
 ### macOS
 
